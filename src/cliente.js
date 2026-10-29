@@ -45,11 +45,13 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
     const grupo = new THREE.Group();
     grupo.name = `CLIENTE_SUPERMERCADO_${id}`;
+
     grupo.position.set(
         Number(config.posicion.x) || 0,
         Number(config.posicion.y) || 0,
         Number(config.posicion.z) || 0
     );
+
     grupo.userData.idCliente = id;
     scene.add(grupo);
 
@@ -61,18 +63,23 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     let mixer = null;
     let accionCaminar = null;
     let clips = [];
+
     let cargado = false;
     let eliminado = false;
     let detenido = Boolean(config.inactivo);
-    let estado = config.inactivo ? 'esperando' : 'caminando';
+
+    let estado = config.inactivo
+        ? 'esperando'
+        : 'caminando';
 
     let tiempoEstado = 0;
     let tiempoCompra = 0;
     let tiempoSinRuta = 0;
-    let faseCaminar = 0;
+    let faseCaminar = Math.random() * Math.PI * 2;
     let contadorCompras = 0;
 
     let velocidadActual = 0;
+    let velocidadExterna = 0;
     let rotacionObjetivo = grupo.rotation.y;
     let velocidadAnimacion = 0;
 
@@ -509,7 +516,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     function iniciarRegresoVehiculo(plaza, alTerminar = null) {
         if (eliminado || !plaza) return false;
 
-        // Confirma la compra antes de regresar al estacionamiento.
         if (!compraConfirmada && comprasCliente.length > 0) {
             const resultadoPago = confirmarCompra();
 
@@ -1118,10 +1124,36 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     // ANIMACIÓN DEL ESQUELETO
     // =========================================================
 
-    function normalizarNombre(n) {
-        return String(n ?? '')
+    function normalizarNombre(nombre) {
+        return String(nombre ?? '')
             .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
             .replace(/[^a-z0-9]/g, '');
+    }
+
+    function obtenerLado(nombre) {
+        const n = normalizarNombre(nombre);
+
+        if (
+            n.endsWith('left') ||
+            n.endsWith('l') ||
+            n.includes('izquierdo') ||
+            n.includes('izquierda')
+        ) {
+            return 'L';
+        }
+
+        if (
+            n.endsWith('right') ||
+            n.endsWith('r') ||
+            n.includes('derecho') ||
+            n.includes('derecha')
+        ) {
+            return 'R';
+        }
+
+        return null;
     }
 
     function registrarHuesos() {
@@ -1133,61 +1165,87 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         rotacionesBase.clear();
 
-        modelo.traverse(o => {
-            if (!o.isBone) return;
+        modelo.traverse(objeto => {
+            if (!objeto.isBone) return;
 
-            const original = String(o.name ?? '').toLowerCase();
-            const n = normalizarNombre(original);
+            const nombreOriginal = objeto.name || '';
+            const nombre = normalizarNombre(nombreOriginal);
+            const lado = obtenerLado(nombreOriginal);
 
-            rotacionesBase.set(o, o.rotation.clone());
-
-            let lado = null;
-
-            if (
-                /left|izquierd[oa]/.test(n) ||
-                /(^|[^a-z0-9])l($|[^a-z0-9])/.test(original) ||
-                /(^|[^a-z0-9])l$/.test(original)
-            ) {
-                lado = 'L';
-            } else if (
-                /right|derech[oa]/.test(n) ||
-                /(^|[^a-z0-9])r($|[^a-z0-9])/.test(original) ||
-                /(^|[^a-z0-9])r$/.test(original)
-            ) {
-                lado = 'R';
-            }
+            rotacionesBase.set(
+                objeto,
+                objeto.rotation.clone()
+            );
 
             if (!lado) return;
 
-            if (/thigh|upleg|upperleg|legupper|muslo/.test(n)) {
-                huesos[`thigh${lado}`] = o;
-            } else if (/shin|calf|lowerleg|leglower|knee|pantorrilla/.test(n)) {
-                huesos[`shin${lado}`] = o;
-            } else if (/upperarm|armupper|uparm|brazo/.test(n)) {
-                huesos[`arm${lado}`] = o;
-            } else if (/forearm|lowerarm|loarm|antebrazo/.test(n)) {
-                huesos[`forearm${lado}`] = o;
+            // Piernas
+            if (
+                /thigh|upleg|upperleg|legupper|muslo/.test(nombre)
+            ) {
+                huesos[`thigh${lado}`] = objeto;
+            } else if (
+                /shin|calf|lowerleg|leglower|knee|pantorrilla/.test(nombre)
+            ) {
+                huesos[`shin${lado}`] = objeto;
+            } else if (/foot|pie/.test(nombre)) {
+                huesos[`foot${lado}`] = objeto;
+            } else if (/toe|dedo/.test(nombre)) {
+                huesos[`toe${lado}`] = objeto;
+            }
+
+            // Brazos
+            else if (
+                /shoulder|clavicle|hombro/.test(nombre)
+            ) {
+                huesos[`shoulder${lado}`] = objeto;
+            } else if (
+                /upperarm|armupper|uparm|brazo/.test(nombre)
+            ) {
+                huesos[`arm${lado}`] = objeto;
+            } else if (
+                /forearm|lowerarm|loarm|antebrazo/.test(nombre)
+            ) {
+                huesos[`forearm${lado}`] = objeto;
+            } else if (/hand|mano/.test(nombre)) {
+                huesos[`hand${lado}`] = objeto;
             }
         });
 
         console.info(
-            `[CLIENTE ${id}] Huesos para animación manual:`,
+            `[CLIENTE ${id}] Huesos detectados:`,
             Object.keys(huesos)
+        );
+
+        console.info(
+            `[CLIENTE ${id}] Nombres reales del esqueleto:`,
+            Object.keys(huesos).map(k => ({
+                clave: k,
+                hueso: huesos[k].name
+            }))
         );
     }
 
-    function animarManual(dt) {
-        if (!modelo || accionCaminar) return;
+    function animarManual(dt, velocidadForzada = null) {
+        if (!modelo) return;
+
+        // Si existe una animación GLB de caminar, el mixer la controla.
+        if (accionCaminar && velocidadForzada === null) {
+            return;
+        }
 
         const caminando =
             estado === 'caminando' ||
             estado === 'llegando' ||
             estado === 'regresando';
 
-        const movimiento = caminando
+        const velocidad = velocidadForzada !== null
+            ? Math.max(0, velocidadForzada)
+            : velocidadActual;
+
+        const movimiento = caminando || velocidadForzada !== null
             ? THREE.MathUtils.clamp(
-                velocidadActual /
-                Math.max(config.velocidad, 0.01),
+                velocidad / Math.max(config.velocidad, 0.01),
                 0,
                 1
             )
@@ -1196,42 +1254,89 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         velocidadAnimacion = THREE.MathUtils.damp(
             velocidadAnimacion,
             movimiento,
-            8,
+            9,
             dt
         );
 
-        faseCaminar +=
-            dt * (5 + velocidadAnimacion * 7);
+        faseCaminar += dt * (
+            4.5 + velocidadAnimacion * 8
+        );
 
         const balanceo =
             Math.sin(faseCaminar) *
+            0.58 *
+            velocidadAnimacion;
+
+        const flexionPierna =
+            Math.max(0, Math.cos(faseCaminar)) *
             0.48 *
             velocidadAnimacion;
 
-        const rotar = (nombre, valor) => {
-            const h = huesos[nombre];
-            const b = h && rotacionesBase.get(h);
+        const rotar = (nombre, x = 0, y = 0, z = 0) => {
+            const hueso = huesos[nombre];
+            const base = hueso && rotacionesBase.get(hueso);
 
-            if (h && b) {
-                h.rotation.x = b.x + valor;
-            }
+            if (!hueso || !base) return;
+
+            hueso.rotation.set(
+                base.x + x,
+                base.y + y,
+                base.z + z,
+                hueso.rotation.order
+            );
         };
 
+        // Piernas: movimiento alternado.
         rotar('thighL', balanceo);
         rotar('thighR', -balanceo);
 
         rotar(
             'shinL',
-            Math.max(0, -balanceo) * 0.65
+            flexionPierna * (balanceo < 0 ? 1 : 0.25)
         );
 
         rotar(
             'shinR',
-            Math.max(0, balanceo) * 0.65
+            flexionPierna * (balanceo > 0 ? 1 : 0.25)
         );
 
-        rotar('armL', -balanceo * 0.6);
-        rotar('armR', balanceo * 0.6);
+        // Pies y dedos.
+        rotar('footL', -balanceo * 0.22);
+        rotar('footR', balanceo * 0.22);
+        rotar('toeL', -balanceo * 0.12);
+        rotar('toeR', balanceo * 0.12);
+
+        // Brazos en oposición a las piernas.
+        rotar('shoulderL', -balanceo * 0.25);
+        rotar('shoulderR', balanceo * 0.25);
+
+        rotar('armL', -balanceo * 0.72);
+        rotar('armR', balanceo * 0.72);
+
+        rotar('forearmL', -flexionPierna * 0.25);
+        rotar('forearmR', -flexionPierna * 0.25);
+
+        rotar('handL', -balanceo * 0.12);
+        rotar('handR', balanceo * 0.12);
+    }
+
+    // Para personajes que se desplazan desde main.js.
+    function animarMovimientoExterno(delta, velocidad = config.velocidad) {
+        if (eliminado || !Number.isFinite(delta)) return;
+
+        const dt = Math.min(Math.max(delta, 0), 0.05);
+
+        velocidadExterna = Math.max(0, Number(velocidad) || 0);
+
+        if (mixer) {
+            mixer.update(dt);
+        }
+
+        if (velocidadExterna > 0.01) {
+            animarManual(dt, velocidadExterna);
+        } else {
+            animarManual(dt, 0);
+        }
     }
 
     // =========================================================
@@ -1247,6 +1352,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
             modelo = gltf.scene;
             modelo.name = `CLIENTE_SUPERMERCADO_RIG_${id}`;
+
             modelo.scale.setScalar(config.escala);
             modelo.updateMatrixWorld(true);
 
@@ -1256,10 +1362,10 @@ export function crearClienteSupermercado(scene, opciones = {}) {
                 modelo.position.y -= caja.min.y;
             }
 
-            modelo.traverse(o => {
-                if (o.isMesh) {
-                    o.castShadow = true;
-                    o.receiveShadow = true;
+            modelo.traverse(objeto => {
+                if (objeto.isMesh) {
+                    objeto.castShadow = true;
+                    objeto.receiveShadow = true;
                 }
             });
 
@@ -1267,37 +1373,57 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
             clips = gltf.animations ?? [];
 
-            if (clips.length) {
+            if (clips.length > 0) {
                 mixer = new THREE.AnimationMixer(modelo);
 
-                const clip = clips.find(c =>
-                    /walk|walking|caminar|andar|locomotion/i.test(
-                        c.name
+                const clipCaminar = clips.find(clip =>
+                    /walk|walking|caminar|andar|locomotion|run|running|correr/i.test(
+                        clip.name
                     )
                 );
 
-                if (clip) {
-                    accionCaminar = mixer.clipAction(clip);
+                if (clipCaminar) {
+                    accionCaminar = mixer.clipAction(clipCaminar);
+                    accionCaminar.setLoop(
+                        THREE.LoopRepeat,
+                        Infinity
+                    );
+
+                    accionCaminar.clampWhenFinished = false;
 
                     if (!detenido) {
                         accionCaminar.play();
                     }
+
+                    console.info(
+                        `[CLIENTE ${id}] Animación GLB seleccionada:`,
+                        clipCaminar.name
+                    );
                 }
             }
 
             registrarHuesos();
+
             cargado = true;
 
             console.info(
-                `Cliente ${id} cargado: ${config.modelo}; ` +
-                `animaciones: ${clips.length}`
+                `[CLIENTE ${id}] Modelo cargado: ${config.modelo}`
             );
+
+            console.info(
+                `[CLIENTE ${id}] Animaciones GLB: ${clips.length}`
+            );
+
+            if (!accionCaminar) {
+                console.info(
+                    `[CLIENTE ${id}] Se utilizará animación manual.`
+                );
+            }
         },
         undefined,
         error => {
             console.error(
-                `No se pudo cargar ${config.modelo}. ` +
-                `Verifica public${config.modelo}`,
+                `[CLIENTE ${id}] No se pudo cargar ${config.modelo}.`,
                 error
             );
         }
@@ -1308,7 +1434,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     // =========================================================
 
     function actualizar(delta) {
-        if (eliminado || detenido || !Number.isFinite(delta)) {
+        if (eliminado || !Number.isFinite(delta)) {
             return;
         }
 
@@ -1318,11 +1444,27 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             mixer.update(dt);
         }
 
+        // Incluso detenido se actualiza la pose de reposo.
+        if (detenido) {
+            velocidadActual = 0;
+
+            if (!accionCaminar) {
+                animarManual(dt, 0);
+            }
+
+            return;
+        }
+
         tiempoEstado += dt;
         tiempoCompra += dt;
 
         if (estado === 'esperando') {
             velocidadActual = 0;
+
+            if (!accionCaminar) {
+                animarManual(dt, 0);
+            }
+
             return;
         }
 
@@ -1410,7 +1552,10 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         }
 
         actualizarRotacionSuave(dt);
-        animarManual(dt);
+
+        if (!accionCaminar) {
+            animarManual(dt);
+        }
     }
 
     // =========================================================
@@ -1420,6 +1565,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     function detenerAnimacion() {
         detenido = true;
         velocidadActual = 0;
+        velocidadExterna = 0;
 
         if (accionCaminar) {
             accionCaminar.stop();
@@ -1472,6 +1618,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         id,
         grupo,
         actualizar,
+        animarMovimientoExterno,
         establecerRuta,
         establecerPosicion,
         configurarCompras,
