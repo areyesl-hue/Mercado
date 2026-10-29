@@ -42,28 +42,36 @@ const CONFIG = {
     velocidadHuidaLadron: 5.8,
     productosRobadosLadron: 2,
 
-    modeloLadron: '/modelos/ladron3.glb',
+    // Este archivo sí existe en public/modelos.
+    modeloLadron: '/modelos/ladron.glb',
 
     tiempoCompraAuto: 32,
     tiempoCajaAuto: 5
 };
 
 // ============================================================
-// CONFIGURACIÓN DE CLIENTES
+// CLIENTES
+// Solo se utilizan archivos que existen en public/modelos.
 // ============================================================
 
 const CONFIG_CLIENTES = [
     {
         nombre: 'Cliente1',
-        modelo: '/modelos/Cliente1.glb',
+        modelo: '/modelos/cliente1.glb',
         ruta: [
             { x: -27, z: 18 },
             { x: -23, z: 15 },
-            { x: -21, z: 10.8 },
-            { x: -17, z: 6.5 },
-            { x: -12, z: 6.5 },
-            { x: -5, z: 6.5 },
-            { x: -5, z: 0 },
+            { x: -21.7, z: 10.8 },
+            { x: -20, z: 6 },
+            { x: -12, z: 6 },
+            { x: -5, z: 6 },
+            { x: 0, z: 6 },
+            { x: 12, z: 6 },
+            { x: 20, z: 6 },
+            { x: 24, z: 0 },
+            { x: 20, z: -6 },
+            { x: 12, z: -6 },
+            { x: 0, z: -6 },
             { x: -12, z: -6 }
         ]
     },
@@ -71,15 +79,14 @@ const CONFIG_CLIENTES = [
         nombre: 'Cliente2',
         modelo: '/modelos/Cliente2.glb',
         ruta: [
-            { x: -27.8, z: 12.2 },
-            { x: -29, z: 8 },
-            { x: -20, z: 6.5 },
-            { x: -12, z: 6.5 },
-            { x: 0, z: 6.5 },
-            { x: 12, z: 6.5 },
-            { x: 22, z: 6.5 },
-            { x: 26, z: 2 },
-            { x: 21, z: -6 },
+            { x: -27, z: 8 },
+            { x: -22, z: 6 },
+            { x: -12, z: 6 },
+            { x: 0, z: 6 },
+            { x: 12, z: 6 },
+            { x: 22, z: 6 },
+            { x: 25, z: 0 },
+            { x: 22, z: -6 },
             { x: 12, z: -6 },
             { x: 0, z: -6 },
             { x: -12, z: -6 },
@@ -91,14 +98,14 @@ const CONFIG_CLIENTES = [
         modelo: '/modelos/Cliente3.glb',
         ruta: [
             { x: -20, z: 4 },
-            { x: -12, z: 6.5 },
-            { x: -5, z: 6.5 },
+            { x: -12, z: 6 },
+            { x: -5, z: 6 },
             { x: 0, z: 0 },
             { x: 5, z: -6 },
             { x: 12, z: -6 },
             { x: 20, z: -6 },
             { x: 22, z: -10 },
-            { x: 12, z: -22 },
+            { x: 12, z: -20 },
             { x: 0, z: -22 }
         ]
     },
@@ -107,9 +114,9 @@ const CONFIG_CLIENTES = [
         modelo: '/modelos/Cliente4.glb',
         ruta: [
             { x: 20, z: 4 },
-            { x: 26, z: 2 },
-            { x: 22, z: 6.5 },
-            { x: 12, z: 6.5 },
+            { x: 25, z: 2 },
+            { x: 22, z: 6 },
+            { x: 12, z: 6 },
             { x: 5, z: 0 },
             { x: 12, z: -6 },
             { x: 20, z: -6 },
@@ -147,20 +154,6 @@ const CONFIG_CLIENTES = [
             { x: 17, z: -10 },
             { x: 20, z: -18 },
             { x: 12, z: -22 }
-        ]
-    },
-    {
-        nombre: 'Clienta3',
-        modelo: '/modelos/Clienta3.glb',
-        ruta: [
-            { x: 24, z: -6 },
-            { x: 17, z: -10 },
-            { x: 12, z: -18 },
-            { x: 20, z: -22 },
-            { x: 12, z: -18 },
-            { x: 17, z: -10 },
-            { x: 22, z: -6 },
-            { x: 24, z: 0 }
         ]
     }
 ];
@@ -319,10 +312,6 @@ function crearCamara() {
 
     camara.position.set(0, CONFIG.alturaJugador, 25);
 }
-
-// ============================================================
-// RENDERIZADOR
-// ============================================================
 
 function crearRenderizador() {
     renderizador = new THREE.WebGLRenderer({
@@ -487,7 +476,7 @@ function crearEstructuraSupermercado() {
 }
 
 // ============================================================
-// CREAR CARRITO
+// CARRITOS
 // ============================================================
 
 function crearCarritoParaCliente(cliente) {
@@ -506,7 +495,6 @@ function crearCarritoParaCliente(cliente) {
 
         if (!carrito) return null;
 
-        // Colocar el carrito cerca del cliente antes de seguirlo.
         const pos = cliente.grupo.position;
 
         carrito.establecerPosicion?.({
@@ -564,7 +552,10 @@ function crearClientesFijos() {
                 productos: productosLacteos,
                 carrito,
                 alRecoger: producto => {
-                    console.info(`${config.nombre} recogió un producto`, producto);
+                    console.info(
+                        `${config.nombre} recogió un producto`,
+                        producto
+                    );
                 }
             });
 
@@ -578,7 +569,7 @@ function crearClientesFijos() {
 }
 
 // ============================================================
-// SISTEMA DE VEHÍCULOS
+// VEHÍCULOS
 // ============================================================
 
 function crearSistemaVehiculos() {
@@ -627,7 +618,6 @@ function quitarCarritoDeLista(carrito) {
 
 // ============================================================
 // VISITANTES QUE LLEGAN EN AUTO
-// No tienen carrito hasta que entran a la tienda.
 // ============================================================
 
 function crearClienteParaVehiculo(datos) {
@@ -647,7 +637,10 @@ function crearClienteParaVehiculo(datos) {
 
     const visita = {
         id: datos.id,
-        plaza: { x: datos.plaza.x, z: datos.plaza.z },
+        plaza: {
+            x: datos.plaza.x,
+            z: datos.plaza.z
+        },
         cliente: null,
         carrito: null,
         fase: 'entrando',
@@ -675,7 +668,6 @@ function crearClienteParaVehiculo(datos) {
 
                 if (!actual || actual.fase !== 'entrando') return;
 
-                // El carrito se crea únicamente al entrar al supermercado.
                 actual.carrito = crearCarritoParaCliente(actual.cliente);
                 actual.carritoCreado = Boolean(actual.carrito);
 
@@ -698,20 +690,20 @@ function crearClienteParaVehiculo(datos) {
         });
 
         visita.cliente = cliente;
-
-        // Guardar la visita antes de iniciar su recorrido.
         visitantesPorVehiculo.set(datos.id, visita);
 
-        // Todavía no se le asigna un carrito.
+        // El carrito se crea cuando el visitante entra a la tienda.
         cliente.configurarCompras?.({
             productos: productosLacteos,
             alRecoger: producto => {
-                console.info(`${config.nombre} recogió un producto`, producto);
+                console.info(
+                    `${config.nombre} recogió un producto`,
+                    producto
+                );
             }
         });
 
         clientesSupermercado.push(cliente);
-
         cliente.iniciarDesdeVehiculo?.(posicion, visita.plaza);
     } catch (error) {
         console.error('No se pudo crear el visitante del vehículo:', error);
@@ -812,16 +804,19 @@ function crearInterfaz() {
             font-family: Arial, Helvetica, sans-serif;
             text-align: center;
         }
+
         #super-start h1 {
             margin: 0;
             font-size: clamp(28px, 5vw, 54px);
             letter-spacing: 2px;
         }
+
         #super-start p {
             max-width: 580px;
             line-height: 1.8;
             color: #d3e1e9;
         }
+
         #super-start button {
             padding: 14px 24px;
             border: 0;
@@ -831,6 +826,7 @@ function crearInterfaz() {
             font-weight: bold;
             cursor: pointer;
         }
+
         #super-message {
             position: fixed;
             z-index: 110;
@@ -846,6 +842,7 @@ function crearInterfaz() {
             text-align: center;
             pointer-events: none;
         }
+
         #super-camera-label {
             position: fixed;
             z-index: 110;
@@ -902,7 +899,9 @@ function mostrarMensaje(texto) {
     elemento.textContent = texto;
     elemento.style.display = 'block';
 
-    if (elemento._temporizador) clearTimeout(elemento._temporizador);
+    if (elemento._temporizador) {
+        clearTimeout(elemento._temporizador);
+    }
 
     elemento._temporizador = setTimeout(() => {
         elemento.style.display = 'none';
@@ -916,7 +915,10 @@ function ocultarPantallaInicio() {
 
 function mostrarPantallaInicio() {
     const pantalla = document.getElementById('super-start');
-    if (pantalla && !camarasAbiertas) pantalla.style.display = 'flex';
+
+    if (pantalla && !camarasAbiertas) {
+        pantalla.style.display = 'flex';
+    }
 }
 
 // ============================================================
@@ -955,8 +957,13 @@ function salirDeCamaras() {
 
     camarasAbiertas = false;
 
-    if (camaraAnteriorPosicion) camara.position.copy(camaraAnteriorPosicion);
-    if (camaraAnteriorQuaternion) camara.quaternion.copy(camaraAnteriorQuaternion);
+    if (camaraAnteriorPosicion) {
+        camara.position.copy(camaraAnteriorPosicion);
+    }
+
+    if (camaraAnteriorQuaternion) {
+        camara.quaternion.copy(camaraAnteriorQuaternion);
+    }
 
     camaraAnteriorPosicion = null;
     camaraAnteriorQuaternion = null;
@@ -977,6 +984,7 @@ function configurarEventos() {
         camara.updateProjectionMatrix();
 
         renderizador.setSize(window.innerWidth, window.innerHeight);
+
         renderizador.setPixelRatio(
             Math.min(window.devicePixelRatio || 1, CONFIG.pixelRatioMaximo)
         );
@@ -1005,7 +1013,9 @@ function configurarEventos() {
         }
 
         if (tecla === 'm') {
-            const resultado = sistemaVehiculos?.solicitarLlegada?.() ?? false;
+            const resultado =
+                sistemaVehiculos?.solicitarLlegada?.() ?? false;
+
             mostrarMensaje(
                 resultado
                     ? 'Vehículo solicitado.'
@@ -1039,7 +1049,10 @@ function configurarEventos() {
             jugadorEnSuelo = false;
         }
 
-        if (evento.code === 'ShiftLeft' || evento.code === 'ShiftRight') {
+        if (
+            evento.code === 'ShiftLeft' ||
+            evento.code === 'ShiftRight'
+        ) {
             corriendo = true;
         }
     });
@@ -1047,7 +1060,10 @@ function configurarEventos() {
     document.addEventListener('keyup', evento => {
         teclas[evento.code] = false;
 
-        if (evento.code === 'ShiftLeft' || evento.code === 'ShiftRight') {
+        if (
+            evento.code === 'ShiftLeft' ||
+            evento.code === 'ShiftRight'
+        ) {
             corriendo = false;
         }
     });
@@ -1061,7 +1077,9 @@ function configurarEventos() {
         reloj.getDelta();
     });
 
-    window.addEventListener('contextmenu', evento => evento.preventDefault());
+    window.addEventListener('contextmenu', evento => {
+        evento.preventDefault();
+    });
 }
 
 // ============================================================
@@ -1088,16 +1106,29 @@ function actualizarMovimiento(delta) {
         camara.getWorldDirection(vectorAdelante);
         vectorAdelante.y = 0;
 
-        if (vectorAdelante.lengthSq() > 0) vectorAdelante.normalize();
+        if (vectorAdelante.lengthSq() > 0) {
+            vectorAdelante.normalize();
+        }
 
-        vectorDerecha.crossVectors(vectorAdelante, ejeVertical).normalize();
+        vectorDerecha
+            .crossVectors(vectorAdelante, ejeVertical)
+            .normalize();
 
         movimientoTemporal.set(0, 0, 0);
-        movimientoTemporal.addScaledVector(vectorAdelante, direccion.z);
-        movimientoTemporal.addScaledVector(vectorDerecha, direccion.x);
+        movimientoTemporal.addScaledVector(
+            vectorAdelante,
+            direccion.z
+        );
+        movimientoTemporal.addScaledVector(
+            vectorDerecha,
+            direccion.x
+        );
 
         if (movimientoTemporal.lengthSq() > 0) {
-            movimientoTemporal.normalize().multiplyScalar(velocidad * delta);
+            movimientoTemporal
+                .normalize()
+                .multiplyScalar(velocidad * delta);
+
             controles.object.position.add(movimientoTemporal);
         }
     }
@@ -1143,7 +1174,9 @@ function iniciarSalidaVisitante(visita) {
 
     mostrarMensaje(`${visita.nombre} regresa a su auto.`);
 
-    if (typeof visita.cliente?.iniciarRegresoVehiculo !== 'function') {
+    if (
+        typeof visita.cliente?.iniciarRegresoVehiculo !== 'function'
+    ) {
         quitarClienteDeLista(visita.cliente);
         quitarCarritoDeLista(visita.carrito);
 
@@ -1155,10 +1188,16 @@ function iniciarSalidaVisitante(visita) {
     }
 
     visita.cliente.iniciarRegresoVehiculo(visita.plaza, () => {
-        if (visita.carrito?.grupo) visita.carrito.grupo.visible = false;
-        if (visita.cliente?.grupo) visita.cliente.grupo.visible = false;
+        if (visita.carrito?.grupo) {
+            visita.carrito.grupo.visible = false;
+        }
 
-        const salida = sistemaVehiculos?.solicitarSalida?.(visita.id) ?? false;
+        if (visita.cliente?.grupo) {
+            visita.cliente.grupo.visible = false;
+        }
+
+        const salida =
+            sistemaVehiculos?.solicitarSalida?.(visita.id) ?? false;
 
         if (!salida) {
             quitarClienteDeLista(visita.cliente);
@@ -1173,14 +1212,18 @@ function iniciarSalidaVisitante(visita) {
 }
 
 // ============================================================
-// ACTUALIZACIÓN DE CLIENTES, CARRITOS, VEHÍCULOS Y LADRONES
+// ACTUALIZACIÓN DE ENTIDADES
 // ============================================================
 
 function actualizarEntidades(delta) {
     sistemaVehiculos?.actualizar?.(delta);
 
     for (const cliente of clientesSupermercado) {
-        if (cliente && !cliente.eliminado && typeof cliente.actualizar === 'function') {
+        if (
+            cliente &&
+            !cliente.eliminado &&
+            typeof cliente.actualizar === 'function'
+        ) {
             cliente.actualizar(delta);
         }
     }
@@ -1203,7 +1246,6 @@ function actualizarEntidades(delta) {
                 visita.fase = 'caja';
                 visita.tiempo = 0;
 
-                // La ruta final debe ser interpretada por cliente.js.
                 visita.cliente.establecerRuta?.([
                     { x: 0, z: 20 }
                 ]);
@@ -1225,7 +1267,7 @@ function actualizarEntidades(delta) {
 }
 
 // ============================================================
-// BUCLE DE ANIMACIÓN
+// BUCLE PRINCIPAL
 // ============================================================
 
 function iniciarAnimacion() {
