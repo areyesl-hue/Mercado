@@ -1,6 +1,7 @@
 
 import * as THREE from 'three';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 import { crearMercado } from './mercado.js';
 import { crearMobiliario } from './mobiliario.js';
@@ -20,764 +21,250 @@ const CONFIG = {
     alturaJugador: 1.7,
     velocidadCaminar: 7,
     velocidadCorrer: 12,
-    velocidadSalto: 7,
     gravedad: 19,
+    fuerzaSalto: 7,
 
-    colorCieloDia: 0xa9c9e8,
-    colorCieloNoche: 0x101827,
-
-    pixelRatioMaximo: 1,
-
-    distanciaCarrito: 0.95,
-    suavizadoCarrito: 8,
-    correccionModeloCarrito: 0,
-
-    velocidadCliente: 1.8,
-    probabilidadCompra: 1,
-    tiempoExaminar: 1.25,
-    distanciaRecoger: 2,
-    pausaEntreCompras: 1.5,
-
-    velocidadLadron: 1.8,
-    velocidadHuidaLadron: 5.8,
-    productosRobadosLadron: 2,
-
-    // Este archivo sí existe en public/modelos.
     modeloLadron: '/modelos/ladron.glb',
 
     tiempoCompraAuto: 32,
-    tiempoCajaAuto: 5
+    tiempoCajaAuto: 5,
+
+    colorDia: 0xa9c9e8,
+    colorNoche: 0x101827,
+
+    limiteX: 30,
+    limiteZMin: -27,
+    limiteZMax: 27
 };
 
-// ============================================================
-// CLIENTES
-// Solo se utilizan archivos que existen en public/modelos.
-// ============================================================
-
+// Los nombres deben coincidir exactamente con public/modelos.
 const CONFIG_CLIENTES = [
     {
         nombre: 'Cliente1',
         modelo: '/modelos/cliente1.glb',
         ruta: [
-            { x: -27, z: 18 },
-            { x: -23, z: 15 },
-            { x: -21.7, z: 10.8 },
-            { x: -20, z: 6 },
-            { x: -12, z: 6 },
-            { x: -5, z: 6 },
-            { x: 0, z: 6 },
-            { x: 12, z: 6 },
-            { x: 20, z: 6 },
-            { x: 24, z: 0 },
-            { x: 20, z: -6 },
-            { x: 12, z: -6 },
-            { x: 0, z: -6 },
-            { x: -12, z: -6 }
+            { x: -25, z: 8 },
+            { x: -22, z: 5 },
+            { x: -17, z: 0 },
+            { x: -12, z: 5 },
+            { x: -7, z: 8 }
         ]
     },
     {
         nombre: 'Cliente2',
         modelo: '/modelos/Cliente2.glb',
         ruta: [
-            { x: -27, z: 8 },
-            { x: -22, z: 6 },
-            { x: -12, z: 6 },
-            { x: 0, z: 6 },
-            { x: 12, z: 6 },
-            { x: 22, z: 6 },
-            { x: 25, z: 0 },
-            { x: 22, z: -6 },
-            { x: 12, z: -6 },
-            { x: 0, z: -6 },
-            { x: -12, z: -6 },
-            { x: -20, z: -6 }
+            { x: -25, z: -5 },
+            { x: -21, z: -10 },
+            { x: -12, z: -16 },
+            { x: -5, z: -12 }
         ]
     },
     {
         nombre: 'Cliente3',
         modelo: '/modelos/Cliente3.glb',
         ruta: [
-            { x: -20, z: 4 },
-            { x: -12, z: 6 },
-            { x: -5, z: 6 },
-            { x: 0, z: 0 },
-            { x: 5, z: -6 },
-            { x: 12, z: -6 },
-            { x: 20, z: -6 },
-            { x: 22, z: -10 },
-            { x: 12, z: -20 },
-            { x: 0, z: -22 }
+            { x: 5, z: 8 },
+            { x: 12, z: 5 },
+            { x: 20, z: 7 },
+            { x: 24, z: 3 }
         ]
     },
     {
         nombre: 'Cliente4',
         modelo: '/modelos/Cliente4.glb',
         ruta: [
-            { x: 20, z: 4 },
-            { x: 25, z: 2 },
-            { x: 22, z: 6 },
-            { x: 12, z: 6 },
-            { x: 5, z: 0 },
-            { x: 12, z: -6 },
-            { x: 20, z: -6 },
-            { x: 22, z: -10 },
-            { x: 20, z: -18 },
-            { x: 12, z: -22 }
+            { x: 5, z: -5 },
+            { x: 12, z: -8 },
+            { x: 20, z: -12 },
+            { x: 24, z: -5 }
         ]
     },
     {
         nombre: 'Clienta1',
         modelo: '/modelos/Clienta1.glb',
         ruta: [
-            { x: -20, z: -6 },
-            { x: -26, z: -6 },
-            { x: -26, z: -18 },
-            { x: -20, z: -22 },
-            { x: -10, z: -22 },
-            { x: 0, z: -22 },
-            { x: 12, z: -22 },
-            { x: 20, z: -18 },
-            { x: 22, z: -10 },
-            { x: 12, z: -6 },
-            { x: 0, z: -6 }
+            { x: -25, z: 18 },
+            { x: -18, z: 18 },
+            { x: -12, z: 13 },
+            { x: -5, z: 16 }
         ]
     },
     {
         nombre: 'Clienta2',
         modelo: '/modelos/Clienta2.glb',
         ruta: [
-            { x: 20, z: 12 },
-            { x: 23, z: 15 },
-            { x: 18, z: 8 },
-            { x: 17, z: 0 },
-            { x: 12, z: -6 },
-            { x: 17, z: -10 },
-            { x: 20, z: -18 },
-            { x: 12, z: -22 }
+            { x: 5, z: 17 },
+            { x: 12, z: 17 },
+            { x: 20, z: 18 },
+            { x: 24, z: 15 }
         ]
     }
 ];
 
 // ============================================================
-// CÁMARAS DE SEGURIDAD
+// ESCENA Y RENDERIZADOR
 // ============================================================
 
-const CAMARAS_SEGURIDAD = [
-    {
-        nombre: 'Cámara 1: Frutas y verduras',
-        posicion: new THREE.Vector3(-29, 5.5, 24),
-        objetivo: new THREE.Vector3(-20, 0, 12)
-    },
-    {
-        nombre: 'Cámara 2: Refrigeradores',
-        posicion: new THREE.Vector3(29, 5.5, 24),
-        objetivo: new THREE.Vector3(23, 0, 8)
-    },
-    {
-        nombre: 'Cámara 3: Pasillo izquierdo',
-        posicion: new THREE.Vector3(-29, 5.5, -15),
-        objetivo: new THREE.Vector3(-10, 0, -5)
-    },
-    {
-        nombre: 'Cámara 4: Pasillo derecho',
-        posicion: new THREE.Vector3(29, 5.5, -15),
-        objetivo: new THREE.Vector3(10, 0, -5)
-    },
-    {
-        nombre: 'Cámara 5: Interior del almacén',
-        posicion: new THREE.Vector3(-24, 5.5, -35),
-        objetivo: new THREE.Vector3(0, 1, -43)
-    },
-    {
-        nombre: 'Cámara 6: Entrada principal',
-        posicion: new THREE.Vector3(0, 5.5, 27),
-        objetivo: new THREE.Vector3(0, 0, 15)
-    },
-    {
-        nombre: 'Cámara 7: Estacionamiento izquierdo',
-        posicion: new THREE.Vector3(-29, 7, 43),
-        objetivo: new THREE.Vector3(-8, 0, 43)
-    },
-    {
-        nombre: 'Cámara 8: Estacionamiento derecho',
-        posicion: new THREE.Vector3(29, 7, 43),
-        objetivo: new THREE.Vector3(8, 0, 43)
-    },
-    {
-        nombre: 'Cámara 9: Acceso vehicular',
-        posicion: new THREE.Vector3(0, 8, 68),
-        objetivo: new THREE.Vector3(0, 0, 43)
-    },
-    {
-        nombre: 'Cámara 10: Vista general exterior',
-        posicion: new THREE.Vector3(0, 12, 34),
-        objetivo: new THREE.Vector3(0, 0, 49)
-    }
-];
-
-// ============================================================
-// ESTADO GLOBAL
-// ============================================================
-
-let escena;
-let camara;
-let renderizador;
-let controles;
-let reloj;
-
-let mercado = null;
-let mobiliario = null;
-let almacen = null;
-let productosLacteos = null;
-let sistemaVehiculos = null;
-
-let luzAmbiente;
-let luzSol;
-let luzLuna;
-
-let modoNoche = false;
-let velocidadVertical = 0;
-let jugadorEnSuelo = true;
-let corriendo = false;
-
-let siguienteModeloCliente = 0;
-let siguienteLadron = 0;
-
-let camarasAbiertas = false;
-let camaraAnteriorPosicion = null;
-let camaraAnteriorQuaternion = null;
-
-const teclas = Object.create(null);
-const clientesSupermercado = [];
-const carritosClientes = [];
-const ladrones = [];
-const visitantesPorVehiculo = new Map();
-
-const direccion = new THREE.Vector3();
-const vectorAdelante = new THREE.Vector3();
-const vectorDerecha = new THREE.Vector3();
-const movimientoTemporal = new THREE.Vector3();
-const ejeVertical = new THREE.Vector3(0, 1, 0);
-
-// ============================================================
-// INICIO
-// ============================================================
-
-iniciar();
-
-function iniciar() {
-    crearEscena();
-    crearCamara();
-    crearRenderizador();
-
-    reloj = new THREE.Clock();
-
-    crearIluminacion();
-    crearSuelo();
-    crearEntorno();
-    crearControles();
-    crearInterfaz();
-
-    crearEstructuraSupermercado();
-    crearClientesFijos();
-    crearSistemaVehiculos();
-
-    configurarEventos();
-    actualizarIluminacion();
-    iniciarAnimacion();
-
-    console.info('Supermercado 3D iniciado.');
-    console.info('WASD: moverse | Shift: correr | Espacio: saltar');
-    console.info('L: día/noche | M: llegada de vehículo | N: ladrón | C: cámaras');
-}
-
-// ============================================================
-// ESCENA Y CÁMARA
-// ============================================================
-
-function crearEscena() {
-    escena = new THREE.Scene();
-    escena.name = 'ESCENA_SUPERMERCADO';
-    escena.background = new THREE.Color(CONFIG.colorCieloDia);
-    escena.fog = new THREE.Fog(0xc7d9e9, 65, 150);
-}
-
-function crearCamara() {
-    camara = new THREE.PerspectiveCamera(
-        75,
-        window.innerWidth / window.innerHeight,
-        0.1,
-        500
-    );
-
-    camara.position.set(0, CONFIG.alturaJugador, 25);
-}
-
-function crearRenderizador() {
-    renderizador = new THREE.WebGLRenderer({
-        antialias: false,
-        powerPreference: 'high-performance',
-        stencil: false
-    });
-
-    renderizador.setPixelRatio(
-        Math.min(window.devicePixelRatio || 1, CONFIG.pixelRatioMaximo)
-    );
-
-    renderizador.setSize(window.innerWidth, window.innerHeight);
-    renderizador.shadowMap.enabled = false;
-    renderizador.outputColorSpace = THREE.SRGBColorSpace;
-    renderizador.toneMapping = THREE.NoToneMapping;
-
-    document.body.style.margin = '0';
-    document.body.style.overflow = 'hidden';
-    document.body.appendChild(renderizador.domElement);
-
-    Object.assign(renderizador.domElement.style, {
-        position: 'fixed',
-        inset: '0',
-        width: '100%',
-        height: '100%',
-        display: 'block',
-        outline: 'none'
-    });
-}
-
-// ============================================================
-// ILUMINACIÓN
-// ============================================================
-
-function crearIluminacion() {
-    luzAmbiente = new THREE.HemisphereLight(0xe8f3ff, 0x6d6250, 1.8);
-    escena.add(luzAmbiente);
-
-    luzSol = new THREE.DirectionalLight(0xffedcf, 2.4);
-    luzSol.position.set(-35, 55, 35);
-    escena.add(luzSol);
-
-    luzLuna = new THREE.DirectionalLight(0x829bc9, 0.1);
-    luzLuna.position.set(20, 35, -25);
-    luzLuna.visible = false;
-    escena.add(luzLuna);
-}
-
-function actualizarIluminacion() {
-    escena.background.setHex(
-        modoNoche ? CONFIG.colorCieloNoche : CONFIG.colorCieloDia
-    );
-
-    escena.fog.color.setHex(modoNoche ? 0x17202e : 0xc7d9e9);
-
-    luzAmbiente.intensity = modoNoche ? 0.65 : 1.8;
-    luzSol.intensity = modoNoche ? 0.12 : 2.4;
-    luzLuna.intensity = modoNoche ? 0.75 : 0.1;
-
-    luzSol.visible = !modoNoche;
-    luzLuna.visible = modoNoche;
-}
-
-// ============================================================
-// SUELO Y ENTORNO
-// ============================================================
-
-function crearSuelo() {
-    const suelo = new THREE.Mesh(
-        new THREE.PlaneGeometry(180, 180),
-        new THREE.MeshStandardMaterial({
-            color: 0x62696d,
-            roughness: 0.88,
-            metalness: 0.05
-        })
-    );
-
-    suelo.name = 'SUELO_GENERAL';
-    suelo.rotation.x = -Math.PI / 2;
-    suelo.position.y = -0.025;
-    escena.add(suelo);
-
-    const piso = new THREE.Mesh(
-        new THREE.PlaneGeometry(64, 58),
-        new THREE.MeshStandardMaterial({
-            color: 0xbfc2c1,
-            roughness: 0.8
-        })
-    );
-
-    piso.name = 'PISO_INTERIOR';
-    piso.rotation.x = -Math.PI / 2;
-    piso.position.set(0, 0.005, 0);
-    escena.add(piso);
-
-    const grid = new THREE.GridHelper(64, 32, 0x92999c, 0xb3b8bb);
-    grid.position.y = 0.012;
-    grid.name = 'REFERENCIA_PISO';
-    grid.material.transparent = true;
-    grid.material.opacity = 0.14;
-    escena.add(grid);
-}
-
-function crearEntorno() {
-    const exterior = new THREE.Group();
-    exterior.name = 'ENTORNO_EXTERIOR';
-    escena.add(exterior);
-
-    const asfalto = new THREE.Mesh(
-        new THREE.PlaneGeometry(105, 105),
-        new THREE.MeshStandardMaterial({
-            color: 0x34393e,
-            roughness: 0.94
-        })
-    );
-
-    asfalto.name = 'AREA_EXTERIOR';
-    asfalto.rotation.x = -Math.PI / 2;
-    asfalto.position.set(0, -0.018, 42);
-    exterior.add(asfalto);
-
-    try {
-        crearEstacionamiento(escena);
-    } catch (error) {
-        console.error('Error al crear estacionamiento:', error);
-    }
-}
-
-// ============================================================
-// MERCADO, MOBILIARIO, ALMACÉN Y PRODUCTOS
-// ============================================================
-
-function crearEstructuraSupermercado() {
-    try {
-        mercado = crearMercado(escena);
-        console.info('Mercado creado.');
-    } catch (error) {
-        console.error('Error al crear mercado:', error);
-    }
-
-    try {
-        mobiliario = crearMobiliario(escena, mercado);
-        console.info('Mobiliario creado.');
-    } catch (error) {
-        console.error('Error al crear mobiliario:', error);
-    }
-
-    try {
-        almacen = crearAlmacen(escena, mercado);
-        console.info('Almacén creado.');
-    } catch (error) {
-        console.error('Error al crear almacén:', error);
-    }
-
-    try {
-        productosLacteos = crearProductosLacteos(escena);
-        console.info('Productos creados.');
-    } catch (error) {
-        console.error('Error al crear productos:', error);
-    }
-}
-
-// ============================================================
-// CARRITOS
-// ============================================================
-
-function crearCarritoParaCliente(cliente) {
-    if (!cliente?.grupo) return null;
-
-    let carrito = null;
-
-    try {
-        carrito = crearCarrito(escena, {
-            modelo: '/modelos/carrito.glb',
-            distancia: CONFIG.distanciaCarrito,
-            suavizado: CONFIG.suavizadoCarrito,
-            correccionModelo: CONFIG.correccionModeloCarrito,
-            escala: 1
-        });
-
-        if (!carrito) return null;
-
-        const pos = cliente.grupo.position;
-
-        carrito.establecerPosicion?.({
-            x: pos.x + 1.2,
-            y: 0,
-            z: pos.z + 0.8
-        });
-
-        carrito.seguirObjetivo?.(
-            cliente.grupo,
-            CONFIG.distanciaCarrito
-        );
-
-        carritosClientes.push(carrito);
-
-        return carrito;
-    } catch (error) {
-        console.error('No se pudo crear el carrito del cliente:', error);
-        carrito?.eliminar?.();
-        return null;
-    }
-}
-
-// ============================================================
-// CLIENTES FIJOS
-// ============================================================
-
-function crearClientesFijos() {
-    for (const config of CONFIG_CLIENTES) {
-        const inicio = config.ruta[0];
-
-        let cliente = null;
-        let carrito = null;
-
-        try {
-            cliente = crearClienteSupermercado(escena, {
-                modelo: config.modelo,
-                posicion: {
-                    x: inicio.x,
-                    y: 0,
-                    z: inicio.z
-                },
-                velocidad: CONFIG.velocidadCliente,
-                escala: 1,
-                ruta: config.ruta,
-                probabilidadCompra: CONFIG.probabilidadCompra,
-                tiempoExaminar: CONFIG.tiempoExaminar,
-                distanciaRecoger: CONFIG.distanciaRecoger,
-                pausaEntreCompras: CONFIG.pausaEntreCompras
-            });
-
-            carrito = crearCarritoParaCliente(cliente);
-
-            cliente.configurarCompras?.({
-                productos: productosLacteos,
-                carrito,
-                alRecoger: producto => {
-                    console.info(
-                        `${config.nombre} recogió un producto`,
-                        producto
-                    );
-                }
-            });
-
-            clientesSupermercado.push(cliente);
-        } catch (error) {
-            console.error(`No se pudo crear ${config.nombre}:`, error);
-            cliente?.eliminar?.();
-            carrito?.eliminar?.();
-        }
-    }
-}
-
-// ============================================================
-// VEHÍCULOS
-// ============================================================
-
-function crearSistemaVehiculos() {
-    try {
-        sistemaVehiculos = crearVehiculos(escena, {
-            modelos: [
-                '/modelos/auto.glb',
-                '/modelos/auto2.glb',
-                '/modelos/auto3.glb'
-            ],
-            escala: 1,
-            longitudVehiculo: 4.3,
-            velocidad: 5.5,
-            tiempoEntreLlegadas: 7,
-            cochesIniciales: 3,
-
-            alEstacionar: datos => crearClienteParaVehiculo(datos),
-
-            alSalir: datos => {
-                const visita = visitantesPorVehiculo.get(datos.id);
-                if (!visita) return;
-
-                quitarClienteDeLista(visita.cliente);
-                quitarCarritoDeLista(visita.carrito);
-
-                visita.cliente?.eliminar?.();
-                visita.carrito?.eliminar?.();
-
-                visitantesPorVehiculo.delete(datos.id);
-            }
-        });
-    } catch (error) {
-        console.error('Error al crear vehículos:', error);
-    }
-}
-
-function quitarClienteDeLista(cliente) {
-    const indice = clientesSupermercado.indexOf(cliente);
-    if (indice !== -1) clientesSupermercado.splice(indice, 1);
-}
-
-function quitarCarritoDeLista(carrito) {
-    const indice = carritosClientes.indexOf(carrito);
-    if (indice !== -1) carritosClientes.splice(indice, 1);
-}
-
-// ============================================================
-// VISITANTES QUE LLEGAN EN AUTO
-// ============================================================
-
-function crearClienteParaVehiculo(datos) {
-    const config = CONFIG_CLIENTES[
-        siguienteModeloCliente % CONFIG_CLIENTES.length
-    ];
-
-    siguienteModeloCliente++;
-
-    const posicion = {
-        x: datos.plaza.x,
-        y: 0,
-        z: datos.plaza.z
-    };
-
-    let cliente = null;
-
-    const visita = {
-        id: datos.id,
-        plaza: {
-            x: datos.plaza.x,
-            z: datos.plaza.z
-        },
-        cliente: null,
-        carrito: null,
-        fase: 'entrando',
-        tiempo: 0,
-        nombre: config.nombre,
-        salidaSolicitada: false,
-        carritoCreado: false
-    };
-
-    try {
-        cliente = crearClienteSupermercado(escena, {
-            modelo: config.modelo,
-            posicion,
-            velocidad: CONFIG.velocidadCliente,
-            escala: 1,
-            ruta: config.ruta,
-            inactivo: true,
-            probabilidadCompra: CONFIG.probabilidadCompra,
-            tiempoExaminar: CONFIG.tiempoExaminar,
-            distanciaRecoger: CONFIG.distanciaRecoger,
-            pausaEntreCompras: CONFIG.pausaEntreCompras,
-
-            alEntrar: () => {
-                const actual = visitantesPorVehiculo.get(datos.id);
-
-                if (!actual || actual.fase !== 'entrando') return;
-
-                actual.carrito = crearCarritoParaCliente(actual.cliente);
-                actual.carritoCreado = Boolean(actual.carrito);
-
-                actual.cliente.configurarCompras?.({
-                    productos: productosLacteos,
-                    carrito: actual.carrito,
-                    alRecoger: producto => {
-                        console.info(
-                            `${actual.nombre} recogió un producto`,
-                            producto
-                        );
-                    }
-                });
-
-                actual.fase = 'comprando';
-                actual.tiempo = 0;
-
-                mostrarMensaje(`${actual.nombre} entró al supermercado.`);
-            }
-        });
-
-        visita.cliente = cliente;
-        visitantesPorVehiculo.set(datos.id, visita);
-
-        // El carrito se crea cuando el visitante entra a la tienda.
-        cliente.configurarCompras?.({
-            productos: productosLacteos,
-            alRecoger: producto => {
-                console.info(
-                    `${config.nombre} recogió un producto`,
-                    producto
-                );
-            }
-        });
-
-        clientesSupermercado.push(cliente);
-        cliente.iniciarDesdeVehiculo?.(posicion, visita.plaza);
-    } catch (error) {
-        console.error('No se pudo crear el visitante del vehículo:', error);
-
-        if (cliente) quitarClienteDeLista(cliente);
-
-        cliente?.eliminar?.();
-        visitantesPorVehiculo.delete(datos.id);
-    }
-}
-
-// ============================================================
-// LADRÓN
-// ============================================================
-
-function agregarLadron() {
-    if (!productosLacteos) {
-        mostrarMensaje('Los productos todavía no están preparados.');
-        return;
-    }
-
-    const posiciones = [
-        { x: -25, y: 0, z: 20 },
-        { x: 25, y: 0, z: 20 },
-        { x: -20, y: 0, z: 5 },
-        { x: 20, y: 0, z: 5 },
-        { x: 0, y: 0, z: 18 },
-        { x: 0, y: 0, z: -18 }
-    ];
-
-    const posicion = posiciones[siguienteLadron % posiciones.length];
-    siguienteLadron++;
-
-    try {
-        const ladron = crearLadron(escena, productosLacteos, {
-            modelo: CONFIG.modeloLadron,
-            posicion: { ...posicion },
-            velocidadCaminar: CONFIG.velocidadLadron,
-            velocidadHuida: CONFIG.velocidadHuidaLadron,
-            productosRobados: CONFIG.productosRobadosLadron,
-            mobiliario
-        });
-
-        if (ladron) {
-            ladrones.push(ladron);
-            mostrarMensaje('Ladrón solicitado.');
-        } else {
-            console.error('crearLadron no devolvió un objeto. Revisa ladron.js.');
-            mostrarMensaje('No se pudo crear el ladrón.');
-        }
-    } catch (error) {
-        console.error('Error al crear el ladrón:', error);
-        mostrarMensaje('Error al crear el ladrón. Revisa la consola.');
-    }
-}
+const escena = new THREE.Scene();
+
+escena.background = new THREE.Color(CONFIG.colorDia);
+escena.fog = new THREE.Fog(0xc7d9e9, 65, 150);
+
+const camara = new THREE.PerspectiveCamera(
+    75,
+    window.innerWidth / window.innerHeight,
+    0.1,
+    500
+);
+
+camara.position.set(0, CONFIG.alturaJugador, 25);
+camara.lookAt(0, CONFIG.alturaJugador, 10);
+
+const renderizador = new THREE.WebGLRenderer({
+    antialias: true,
+    powerPreference: 'high-performance'
+});
+
+renderizador.setSize(window.innerWidth, window.innerHeight);
+renderizador.setPixelRatio(
+    Math.min(window.devicePixelRatio || 1, 1.75)
+);
+
+renderizador.shadowMap.enabled = true;
+renderizador.shadowMap.type = THREE.PCFSoftShadowMap;
+
+renderizador.toneMapping = THREE.ACESFilmicToneMapping;
+renderizador.toneMappingExposure = 1.1;
+renderizador.outputColorSpace = THREE.SRGBColorSpace;
+
+document.body.style.margin = '0';
+document.body.style.overflow = 'hidden';
+document.body.appendChild(renderizador.domElement);
 
 // ============================================================
 // CONTROLES DEL JUGADOR
 // ============================================================
 
-function crearControles() {
-    controles = new PointerLockControls(camara, renderizador.domElement);
-    escena.add(controles.object);
+const controles = new PointerLockControls(
+    camara,
+    renderizador.domElement
+);
 
-    controles.object.position.set(0, CONFIG.alturaJugador, 25);
+const jugador = {
+    velocidadY: 0,
+    enSuelo: true,
+    moviendo: false,
+    corriendo: false
+};
 
-    controles.addEventListener('lock', ocultarPantallaInicio);
+const teclas = {
+    KeyW: false,
+    KeyA: false,
+    KeyS: false,
+    KeyD: false,
+    ShiftLeft: false,
+    ShiftRight: false,
+    Space: false
+};
 
-    controles.addEventListener('unlock', () => {
-        if (!camarasAbiertas) mostrarPantallaInicio();
+let interfazCreada = false;
+let modoNoche = false;
+let camaraSeguridadActiva = false;
+let numeroCamara = 1;
 
-        for (const tecla in teclas) teclas[tecla] = false;
-        corriendo = false;
-    });
+// ============================================================
+// LUCES
+// ============================================================
+
+const luzAmbiente = new THREE.HemisphereLight(
+    0xe5f1ff,
+    0x6d6254,
+    2.0
+);
+
+escena.add(luzAmbiente);
+
+const luzSol = new THREE.DirectionalLight(0xfff0d6, 3.0);
+
+luzSol.position.set(-25, 40, 20);
+luzSol.castShadow = true;
+
+luzSol.shadow.mapSize.set(2048, 2048);
+luzSol.shadow.camera.left = -60;
+luzSol.shadow.camera.right = 60;
+luzSol.shadow.camera.top = 60;
+luzSol.shadow.camera.bottom = -60;
+luzSol.shadow.camera.near = 1;
+luzSol.shadow.camera.far = 120;
+
+escena.add(luzSol);
+
+// ============================================================
+// CONSTRUCCIÓN DEL SUPERMERCADO
+// ============================================================
+
+crearMercado(escena);
+
+const mobiliario = crearMobiliario(escena);
+const productos = crearProductosLacteos(escena);
+const almacen = crearAlmacen(escena);
+
+const estacionamiento = crearEstacionamiento(escena);
+
+console.info('[MAIN] Supermercado creado.');
+console.info('[MAIN] Mobiliario:', mobiliario);
+console.info('[MAIN] Productos:', productos);
+console.info('[MAIN] Almacén:', almacen);
+console.info('[MAIN] Estacionamiento:', estacionamiento);
+
+// ============================================================
+// TERRENO EXTERIOR
+// ============================================================
+
+const terreno = new THREE.Mesh(
+    new THREE.PlaneGeometry(300, 300),
+    new THREE.MeshStandardMaterial({
+        color: 0x687c59,
+        roughness: 1
+    })
+);
+
+terreno.rotation.x = -Math.PI / 2;
+terreno.position.y = -0.08;
+terreno.receiveShadow = true;
+
+escena.add(terreno);
+
+// Carretera exterior.
+const carretera = new THREE.Mesh(
+    new THREE.PlaneGeometry(24, 150),
+    new THREE.MeshStandardMaterial({
+        color: 0x34383d,
+        roughness: 0.95
+    })
+);
+
+carretera.rotation.x = -Math.PI / 2;
+carretera.position.set(0, -0.045, 95);
+carretera.receiveShadow = true;
+
+escena.add(carretera);
+
+// Líneas de la carretera.
+const materialLinea = new THREE.MeshStandardMaterial({
+    color: 0xe9e2c9,
+    roughness: 0.8
+});
+
+for (let z = 35; z < 160; z += 8) {
+    const linea = new THREE.Mesh(
+        new THREE.BoxGeometry(0.18, 0.025, 3.5),
+        materialLinea
+    );
+
+    linea.position.set(0, -0.01, z);
+    escena.add(linea);
 }
 
 // ============================================================
@@ -785,139 +272,232 @@ function crearControles() {
 // ============================================================
 
 function crearInterfaz() {
+    if (interfazCreada) return;
+
+    interfazCreada = true;
+
     const estilo = document.createElement('style');
 
     estilo.textContent = `
-        #super-start {
+        #hud-supermercado {
             position: fixed;
             inset: 0;
-            z-index: 100;
+            pointer-events: none;
+            color: white;
+            font-family: Arial, sans-serif;
+            z-index: 10;
+        }
+
+        #panel-superior {
+            position: absolute;
+            top: 14px;
+            left: 14px;
+            padding: 12px 16px;
+            background: rgba(10, 18, 28, .78);
+            border: 1px solid rgba(255,255,255,.2);
+            border-radius: 10px;
+            line-height: 1.7;
+            font-size: 13px;
+        }
+
+        #panel-derecho {
+            position: absolute;
+            top: 14px;
+            right: 14px;
             display: flex;
             flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 16px;
-            padding: 24px;
-            box-sizing: border-box;
+            gap: 8px;
+            align-items: flex-end;
+            pointer-events: auto;
+        }
+
+        .boton-supermercado {
             color: white;
-            background: rgba(7, 18, 28, 0.94);
-            font-family: Arial, Helvetica, sans-serif;
+            background: rgba(20, 30, 42, .92);
+            border: 1px solid rgba(255,255,255,.25);
+            border-radius: 8px;
+            padding: 10px 13px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .boton-supermercado:hover {
+            background: #247a55;
+        }
+
+        #mensaje-centro {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
             text-align: center;
+            padding: 24px;
+            background: rgba(8, 15, 24, .9);
+            border: 1px solid rgba(255,255,255,.2);
+            border-radius: 14px;
+            width: min(420px, 85vw);
+            pointer-events: auto;
         }
 
-        #super-start h1 {
-            margin: 0;
-            font-size: clamp(28px, 5vw, 54px);
-            letter-spacing: 2px;
+        #mensaje-centro h2 {
+            margin-top: 0;
         }
 
-        #super-start p {
-            max-width: 580px;
-            line-height: 1.8;
-            color: #d3e1e9;
-        }
-
-        #super-start button {
-            padding: 14px 24px;
+        #mensaje-centro button {
+            margin-top: 12px;
+            padding: 12px 18px;
+            color: white;
+            background: #198754;
             border: 0;
             border-radius: 8px;
-            color: white;
-            background: #1479e8;
-            font-weight: bold;
             cursor: pointer;
+            font-weight: bold;
         }
 
-        #super-message {
-            position: fixed;
-            z-index: 110;
+        #mensaje-centro.oculto {
+            display: none;
+        }
+
+        #punto-mira {
+            position: absolute;
             left: 50%;
-            bottom: 28px;
-            transform: translateX(-50%);
-            display: none;
-            padding: 10px 16px;
-            border-radius: 8px;
-            color: white;
-            background: rgba(0, 0, 0, 0.78);
-            font: 14px Arial, sans-serif;
-            text-align: center;
-            pointer-events: none;
+            top: 50%;
+            width: 5px;
+            height: 5px;
+            transform: translate(-50%, -50%);
+            border-radius: 50%;
+            background: white;
+            box-shadow: 0 0 4px black;
         }
 
-        #super-camera-label {
-            position: fixed;
-            z-index: 110;
-            left: 18px;
-            top: 18px;
-            display: none;
-            padding: 12px 16px;
-            border-radius: 8px;
-            color: white;
-            background: rgba(0, 0, 0, 0.8);
-            font: 14px/1.8 Arial, sans-serif;
-            pointer-events: none;
+        #estado-supermercado {
+            position: absolute;
+            left: 50%;
+            bottom: 18px;
+            transform: translateX(-50%);
+            background: rgba(10,18,28,.8);
+            padding: 8px 12px;
+            border-radius: 7px;
+            font-size: 12px;
+            white-space: nowrap;
         }
     `;
 
     document.head.appendChild(estilo);
 
-    const inicio = document.createElement('div');
-    inicio.id = 'super-start';
-    inicio.innerHTML = `
-        <h1>SUPERMERCADO 3D</h1>
-        <p>
-            W A S D: moverte<br>
-            Shift: correr · Espacio: saltar<br>
-            L: día/noche · M: agregar vehículo<br>
-            N: agregar ladrón · C: cámaras<br>
-            Teclas 1-9: cámaras 1-9 · Tecla 0: cámara 10<br>
-            C o Esc: salir de cámaras
-        </p>
-        <button id="super-enter">ENTRAR AL SUPERMERCADO</button>
+    const hud = document.createElement('div');
+    hud.id = 'hud-supermercado';
+
+    hud.innerHTML = `
+        <div id="panel-superior">
+            <strong>SUPERMERCADO 3D</strong><br>
+            WASD: moverse<br>
+            Shift: correr<br>
+            Espacio: saltar<br>
+            Esc: liberar cámara<br>
+            L: día/noche<br>
+            1-6: cámaras de seguridad<br>
+            C: volver a la entrada
+        </div>
+
+        <div id="panel-derecho">
+            <button class="boton-supermercado" id="btn-dia">
+                Cambiar día/noche
+            </button>
+            <button class="boton-supermercado" id="btn-entrada">
+                Volver a entrada
+            </button>
+            <button class="boton-supermercado" id="btn-camara">
+                Salir de cámaras
+            </button>
+        </div>
+
+        <div id="punto-mira"></div>
+
+        <div id="estado-supermercado">
+            Preparando supermercado...
+        </div>
+
+        <div id="mensaje-centro">
+            <h2>SUPERMERCADO 3D</h2>
+            <p>Explora los pasillos, observa los productos y visita el estacionamiento.</p>
+            <button id="btn-entrar">ENTRAR AL SUPERMERCADO</button>
+        </div>
     `;
 
-    document.body.appendChild(inicio);
+    document.body.appendChild(hud);
 
-    const mensaje = document.createElement('div');
-    mensaje.id = 'super-message';
-    document.body.appendChild(mensaje);
+    document.getElementById('btn-entrar').addEventListener(
+        'click',
+        () => controles.lock()
+    );
 
-    const etiquetaCamara = document.createElement('div');
-    etiquetaCamara.id = 'super-camera-label';
-    etiquetaCamara.textContent =
-        'CÁMARAS DE SEGURIDAD | 1-9: cambiar | 0: cámara 10 | C o ESC: salir';
-    document.body.appendChild(etiquetaCamara);
+    document.getElementById('btn-dia').addEventListener(
+        'click',
+        cambiarDiaNoche
+    );
 
-    document.getElementById('super-enter').addEventListener('click', () => {
-        controles.lock();
+    document.getElementById('btn-entrada').addEventListener(
+        'click',
+        volverEntrada
+    );
+
+    document.getElementById('btn-camara').addEventListener(
+        'click',
+        salirCamaraSeguridad
+    );
+
+    controles.addEventListener('lock', () => {
+        document.getElementById('mensaje-centro')
+            ?.classList.add('oculto');
+    });
+
+    controles.addEventListener('unlock', () => {
+        document.getElementById('mensaje-centro')
+            ?.classList.remove('oculto');
     });
 }
 
-function mostrarMensaje(texto) {
-    const elemento = document.getElementById('super-message');
-    if (!elemento) return;
+crearInterfaz();
 
-    elemento.textContent = texto;
-    elemento.style.display = 'block';
+// ============================================================
+// DÍA Y NOCHE
+// ============================================================
 
-    if (elemento._temporizador) {
-        clearTimeout(elemento._temporizador);
+function cambiarDiaNoche() {
+    modoNoche = !modoNoche;
+
+    if (modoNoche) {
+        escena.background.setHex(CONFIG.colorNoche);
+        escena.fog.color.setHex(CONFIG.colorNoche);
+
+        luzAmbiente.intensity = 0.45;
+        luzSol.intensity = 0.35;
+
+        renderizador.toneMappingExposure = 0.8;
+    } else {
+        escena.background.setHex(CONFIG.colorDia);
+        escena.fog.color.setHex(0xc7d9e9);
+
+        luzAmbiente.intensity = 2.0;
+        luzSol.intensity = 3.0;
+
+        renderizador.toneMappingExposure = 1.1;
     }
-
-    elemento._temporizador = setTimeout(() => {
-        elemento.style.display = 'none';
-    }, 2200);
 }
 
-function ocultarPantallaInicio() {
-    const pantalla = document.getElementById('super-start');
-    if (pantalla) pantalla.style.display = 'none';
-}
+// ============================================================
+// REGRESO A LA ENTRADA
+// ============================================================
 
-function mostrarPantallaInicio() {
-    const pantalla = document.getElementById('super-start');
+function volverEntrada() {
+    camaraSeguridadActiva = false;
 
-    if (pantalla && !camarasAbiertas) {
-        pantalla.style.display = 'flex';
+    camara.position.set(0, CONFIG.alturaJugador, 25);
+    camara.rotation.set(0, 0, 0);
+
+    if (controles.isLocked) {
+        controles.unlock();
     }
 }
 
@@ -925,341 +505,471 @@ function mostrarPantallaInicio() {
 // CÁMARAS DE SEGURIDAD
 // ============================================================
 
-function entrarCamara(indice) {
-    const config = CAMARAS_SEGURIDAD[indice];
-    if (!config) return;
+const CAMARAS_SEGURIDAD = [
+    { x: -29, y: 5.5, z: 17, mirarX: -15, mirarZ: 8 },
+    { x: 29, y: 5.5, z: 17, mirarX: 15, mirarZ: 8 },
+    { x: -29, y: 5.5, z: -10, mirarX: -15, mirarZ: -10 },
+    { x: 29, y: 5.5, z: -10, mirarX: 15, mirarZ: -10 },
+    { x: -20, y: 5.1, z: -28, mirarX: -10, mirarZ: -15 },
+    { x: 0, y: 5.8, z: 53, mirarX: 0, mirarZ: 25 }
+];
 
-    if (!camarasAbiertas) {
-        camaraAnteriorPosicion = camara.position.clone();
-        camaraAnteriorQuaternion = camara.quaternion.clone();
+const camaraJugador = {
+    posicion: new THREE.Vector3(),
+    quaternion: new THREE.Quaternion()
+};
+
+function activarCamaraSeguridad(numero) {
+    const indice = numero - 1;
+    const datos = CAMARAS_SEGURIDAD[indice];
+
+    if (!datos) return;
+
+    if (!camaraSeguridadActiva) {
+        camaraJugador.posicion.copy(camara.position);
+        camaraJugador.quaternion.copy(camara.quaternion);
     }
 
-    camarasAbiertas = true;
+    camaraSeguridadActiva = true;
+    numeroCamara = numero;
 
-    if (controles.isLocked) controles.unlock();
+    camara.position.set(datos.x, datos.y, datos.z);
+    camara.lookAt(datos.mirarX, 1.4, datos.mirarZ);
 
-    camara.position.copy(config.posicion);
-    camara.lookAt(config.objetivo);
-
-    const etiqueta = document.getElementById('super-camera-label');
-
-    if (etiqueta) {
-        etiqueta.style.display = 'block';
-        etiqueta.textContent =
-            `${config.nombre} | 1-9: cambiar | 0: cámara 10 | C o ESC: salir`;
+    if (controles.isLocked) {
+        controles.unlock();
     }
-
-    mostrarMensaje(config.nombre);
 }
 
-function salirDeCamaras() {
-    if (!camarasAbiertas) return;
+function salirCamaraSeguridad() {
+    if (!camaraSeguridadActiva) return;
 
-    camarasAbiertas = false;
-
-    if (camaraAnteriorPosicion) {
-        camara.position.copy(camaraAnteriorPosicion);
-    }
-
-    if (camaraAnteriorQuaternion) {
-        camara.quaternion.copy(camaraAnteriorQuaternion);
-    }
-
-    camaraAnteriorPosicion = null;
-    camaraAnteriorQuaternion = null;
-
-    const etiqueta = document.getElementById('super-camera-label');
-    if (etiqueta) etiqueta.style.display = 'none';
-
-    if (!controles.isLocked) controles.lock();
+    camaraSeguridadActiva = false;
+    camara.position.copy(camaraJugador.posicion);
+    camara.quaternion.copy(camaraJugador.quaternion);
 }
 
 // ============================================================
-// EVENTOS DE TECLADO Y VENTANA
+// ENTRADAS DE TECLADO
 // ============================================================
 
-function configurarEventos() {
-    window.addEventListener('resize', () => {
-        camara.aspect = window.innerWidth / window.innerHeight;
-        camara.updateProjectionMatrix();
-
-        renderizador.setSize(window.innerWidth, window.innerHeight);
-
-        renderizador.setPixelRatio(
-            Math.min(window.devicePixelRatio || 1, CONFIG.pixelRatioMaximo)
-        );
-    });
-
-    document.addEventListener('keydown', evento => {
-        const tecla = evento.key.toLowerCase();
-
-        if (tecla === 'escape' && camarasAbiertas) {
-            salirDeCamaras();
-            return;
-        }
-
-        if (evento.repeat) return;
-
-        if (camarasAbiertas && /^[0-9]$/.test(tecla)) {
-            entrarCamara(tecla === '0' ? 9 : Number(tecla) - 1);
-            return;
-        }
-
-        if (tecla === 'l') {
-            modoNoche = !modoNoche;
-            actualizarIluminacion();
-            mostrarMensaje(modoNoche ? 'Modo nocturno' : 'Modo diurno');
-            return;
-        }
-
-        if (tecla === 'm') {
-            const resultado =
-                sistemaVehiculos?.solicitarLlegada?.() ?? false;
-
-            mostrarMensaje(
-                resultado
-                    ? 'Vehículo solicitado.'
-                    : 'No hay vehículos o plazas disponibles.'
-            );
-            return;
-        }
-
-        if (tecla === 'n') {
-            agregarLadron();
-            return;
-        }
-
-        if (tecla === 'c') {
-            if (camarasAbiertas) salirDeCamaras();
-            else entrarCamara(0);
-            return;
-        }
-
-        if (camarasAbiertas) return;
-
+document.addEventListener('keydown', evento => {
+    if (evento.code in teclas) {
         teclas[evento.code] = true;
+    }
 
-        if (
-            evento.code === 'Space' &&
-            jugadorEnSuelo &&
-            controles.isLocked
-        ) {
-            evento.preventDefault();
-            velocidadVertical = CONFIG.velocidadSalto;
-            jugadorEnSuelo = false;
-        }
+    if (evento.code === 'KeyL') {
+        cambiarDiaNoche();
+    }
 
-        if (
-            evento.code === 'ShiftLeft' ||
-            evento.code === 'ShiftRight'
-        ) {
-            corriendo = true;
-        }
-    });
+    if (evento.code === 'KeyC') {
+        volverEntrada();
+    }
 
-    document.addEventListener('keyup', evento => {
+    if (/^Digit[1-6]$/.test(evento.code)) {
+        activarCamaraSeguridad(
+            Number(evento.code.replace('Digit', ''))
+        );
+    }
+
+    if (evento.code === 'Escape') {
+        salirCamaraSeguridad();
+    }
+});
+
+document.addEventListener('keyup', evento => {
+    if (evento.code in teclas) {
         teclas[evento.code] = false;
+    }
+});
 
-        if (
-            evento.code === 'ShiftLeft' ||
-            evento.code === 'ShiftRight'
-        ) {
-            corriendo = false;
-        }
-    });
+// ============================================================
+// COLISIONES DEL JUGADOR
+// ============================================================
 
-    window.addEventListener('blur', () => {
-        for (const tecla in teclas) teclas[tecla] = false;
-        corriendo = false;
-    });
+function jugadorPuedeMoverse(x, z) {
+    if (
+        x < -31 ||
+        x > 31 ||
+        z < -29 ||
+        z > 110
+    ) {
+        return false;
+    }
 
-    document.addEventListener('visibilitychange', () => {
-        reloj.getDelta();
-    });
-
-    window.addEventListener('contextmenu', evento => {
-        evento.preventDefault();
-    });
+    return true;
 }
 
-// ============================================================
-// MOVIMIENTO DEL JUGADOR
-// ============================================================
+function actualizarJugador(delta) {
+    if (!controles.isLocked || camaraSeguridadActiva) {
+        return;
+    }
 
-function actualizarMovimiento(delta) {
-    if (!controles?.isLocked || camarasAbiertas) return;
+    const dt = Math.min(delta, 0.05);
 
-    const velocidad = corriendo
-        ? CONFIG.velocidadCorrer
-        : CONFIG.velocidadCaminar;
+    const direccion = new THREE.Vector3();
 
-    direccion.set(0, 0, 0);
+    const adelante = new THREE.Vector3();
+    camara.getWorldDirection(adelante);
 
-    if (teclas.KeyW || teclas.ArrowUp) direccion.z += 1;
-    if (teclas.KeyS || teclas.ArrowDown) direccion.z -= 1;
-    if (teclas.KeyA || teclas.ArrowLeft) direccion.x -= 1;
-    if (teclas.KeyD || teclas.ArrowRight) direccion.x += 1;
+    adelante.y = 0;
+    adelante.normalize();
 
-    if (direccion.lengthSq() > 0) {
+    const derecha = new THREE.Vector3()
+        .crossVectors(adelante, camara.up)
+        .normalize()
+        .negate();
+
+    if (teclas.KeyW) direccion.add(adelante);
+    if (teclas.KeyS) direccion.sub(adelante);
+    if (teclas.KeyD) direccion.add(derecha);
+    if (teclas.KeyA) direccion.sub(derecha);
+
+    jugador.moviendo = direccion.lengthSq() > 0;
+    jugador.corriendo =
+        teclas.ShiftLeft || teclas.ShiftRight;
+
+    if (jugador.moviendo) {
         direccion.normalize();
 
-        camara.getWorldDirection(vectorAdelante);
-        vectorAdelante.y = 0;
+        const velocidad = jugador.corriendo
+            ? CONFIG.velocidadCorrer
+            : CONFIG.velocidadCaminar;
 
-        if (vectorAdelante.lengthSq() > 0) {
-            vectorAdelante.normalize();
+        const paso = velocidad * dt;
+
+        const nx = camara.position.x + direccion.x * paso;
+        const nz = camara.position.z + direccion.z * paso;
+
+        if (jugadorPuedeMoverse(nx, camara.position.z)) {
+            camara.position.x = nx;
         }
 
-        vectorDerecha
-            .crossVectors(vectorAdelante, ejeVertical)
-            .normalize();
-
-        movimientoTemporal.set(0, 0, 0);
-        movimientoTemporal.addScaledVector(
-            vectorAdelante,
-            direccion.z
-        );
-        movimientoTemporal.addScaledVector(
-            vectorDerecha,
-            direccion.x
-        );
-
-        if (movimientoTemporal.lengthSq() > 0) {
-            movimientoTemporal
-                .normalize()
-                .multiplyScalar(velocidad * delta);
-
-            controles.object.position.add(movimientoTemporal);
+        if (jugadorPuedeMoverse(camara.position.x, nz)) {
+            camara.position.z = nz;
         }
     }
 
-    velocidadVertical -= CONFIG.gravedad * delta;
-    controles.object.position.y += velocidadVertical * delta;
-
-    if (controles.object.position.y <= CONFIG.alturaJugador) {
-        controles.object.position.y = CONFIG.alturaJugador;
-        velocidadVertical = 0;
-        jugadorEnSuelo = true;
+    if (teclas.Space && jugador.enSuelo) {
+        jugador.velocidadY = CONFIG.fuerzaSalto;
+        jugador.enSuelo = false;
     }
 
-    controles.object.position.x = THREE.MathUtils.clamp(
-        controles.object.position.x,
-        -50,
-        50
+    jugador.velocidadY -= CONFIG.gravedad * dt;
+    camara.position.y += jugador.velocidadY * dt;
+
+    if (camara.position.y <= CONFIG.alturaJugador) {
+        camara.position.y = CONFIG.alturaJugador;
+        jugador.velocidadY = 0;
+        jugador.enSuelo = true;
+    }
+}
+
+// ============================================================
+// CARRITOS Y CLIENTES
+// ============================================================
+
+const visitantes = new Map();
+const carritosCreados = [];
+let siguienteModeloCliente = 0;
+
+function crearCarritoVisitante(posicion) {
+    let resultado = null;
+
+    try {
+        resultado = crearCarrito(escena, {
+            posicion: {
+                x: posicion.x,
+                y: 0,
+                z: posicion.z
+            },
+            escala: 1
+        });
+    } catch (error) {
+        console.warn(
+            '[MAIN] No se pudo crear el carrito con crearCarrito().',
+            error
+        );
+    }
+
+    // Algunos módulos devuelven una API con .grupo y otros
+    // devuelven directamente un Object3D.
+    let grupoCarrito = resultado?.grupo;
+
+    if (resultado?.isObject3D) {
+        grupoCarrito = resultado;
+    }
+
+    // Fallback visual si crearCarrito no devuelve un grupo.
+    if (!grupoCarrito?.isObject3D) {
+        grupoCarrito = new THREE.Group();
+        grupoCarrito.name = 'CARRITO_VISITANTE_FALLBACK';
+
+        const materialMetal = new THREE.MeshStandardMaterial({
+            color: 0x9da9b1,
+            metalness: 0.65,
+            roughness: 0.35
+        });
+
+        const cesta = new THREE.Mesh(
+            new THREE.BoxGeometry(0.65, 0.32, 0.48),
+            materialMetal
+        );
+
+        cesta.position.y = 0.75;
+        grupoCarrito.add(cesta);
+
+        const manija = new THREE.Mesh(
+            new THREE.BoxGeometry(0.62, 0.05, 0.06),
+            materialMetal
+        );
+
+        manija.position.set(0, 0.96, -0.28);
+        grupoCarrito.add(manija);
+
+        for (const x of [-0.25, 0.25]) {
+            for (const z of [-0.17, 0.17]) {
+                const rueda = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.055, 0.055, 0.045, 12),
+                    new THREE.MeshStandardMaterial({
+                        color: 0x25282c
+                    })
+                );
+
+                rueda.rotation.z = Math.PI / 2;
+                rueda.position.set(x, 0.12, z);
+                grupoCarrito.add(rueda);
+            }
+        }
+
+        escena.add(grupoCarrito);
+    }
+
+    grupoCarrito.position.set(
+        posicion.x,
+        0,
+        posicion.z
     );
 
-    controles.object.position.z = THREE.MathUtils.clamp(
-        controles.object.position.z,
-        -55,
-        85
+    grupoCarrito.visible = true;
+
+    const carritoAPI = {
+        grupo: grupoCarrito,
+        original: resultado,
+        eliminar() {
+            if (resultado?.eliminar) {
+                resultado.eliminar();
+            } else if (grupoCarrito.parent) {
+                grupoCarrito.parent.remove(grupoCarrito);
+            }
+        }
+    };
+
+    carritosCreados.push(carritoAPI);
+
+    return carritoAPI;
+}
+
+function crearClienteParaVehiculo(datos) {
+    if (!datos?.plaza || !datos?.grupo) {
+        console.warn(
+            '[MAIN] El vehículo no entregó plaza o grupo al estacionarse.',
+            datos
+        );
+        return;
+    }
+
+    const configCliente =
+        CONFIG_CLIENTES[
+            siguienteModeloCliente % CONFIG_CLIENTES.length
+        ];
+
+    siguienteModeloCliente++;
+
+    const plaza = {
+        x: Number(datos.plaza.x),
+        z: Number(datos.plaza.z)
+    };
+
+    const idVehiculo = datos.id;
+
+    const posicion = {
+        x: plaza.x,
+        y: 0,
+        z: plaza.z
+    };
+
+    const carrito = crearCarritoVisitante({
+        x: posicion.x + 1.1,
+        z: posicion.z
+    });
+
+    const visita = {
+        id: idVehiculo,
+        plaza,
+        carrito,
+        cliente: null,
+        tiempoCompra: 0,
+        tiempoCaja: 0,
+        fase: 'creando',
+        resumen: null
+    };
+
+    visitantes.set(idVehiculo, visita);
+
+    const cliente = crearClienteSupermercado(escena, {
+        modelo: configCliente.modelo,
+        posicion,
+        escala: 1,
+        velocidad: 1.5,
+        ruta: configCliente.ruta,
+        inactivo: true,
+
+        alEntrar: clienteEntrado => {
+            visita.fase = 'comprando';
+            visita.tiempoCompra = 0;
+
+            console.info(
+                `[CLIENTES] ${configCliente.nombre} entró al supermercado.`
+            );
+
+            clienteEntrado.configurarCompras({
+                productos,
+                carrito
+            });
+        }
+    });
+
+    visita.cliente = cliente;
+
+    cliente.configurarCompras({
+        productos,
+        carrito
+    });
+
+    cliente.iniciarDesdeVehiculo?.(posicion, plaza);
+
+    visita.fase = 'entrando';
+
+    console.info(
+        `[CLIENTES] Creado ${configCliente.nombre} para el auto ${idVehiculo}.`,
+        configCliente.modelo
     );
 }
 
 // ============================================================
-// REGRESO DEL CLIENTE A SU VEHÍCULO
+// SISTEMA DE VEHÍCULOS
 // ============================================================
 
-function iniciarSalidaVisitante(visita) {
-    if (
-        !visita ||
-        visita.salidaSolicitada ||
-        visita.fase === 'regresando'
-    ) {
-        return;
-    }
+let sistemaVehiculos = null;
 
-    visita.fase = 'regresando';
-    visita.tiempo = 0;
-    visita.salidaSolicitada = true;
+function crearSistemaVehiculos() {
+    sistemaVehiculos = crearVehiculos(escena, {
+        modelos: [
+            '/modelos/auto.glb',
+            '/modelos/auto2.glb',
+            '/modelos/auto3.glb',
+            '/modelos/auto4.glb',
+            '/modelos/auto5.glb',
+            '/modelos/auto6.glb',
+            '/modelos/auto7.glb'
+        ],
 
-    mostrarMensaje(`${visita.nombre} regresa a su auto.`);
+        escala: 1,
+        longitudVehiculo: 4.3,
+        velocidad: 5.5,
+        tiempoEntreLlegadas: 7,
+        cochesIniciales: 3,
+        separacionInicial: 7,
 
-    if (
-        typeof visita.cliente?.iniciarRegresoVehiculo !== 'function'
-    ) {
-        quitarClienteDeLista(visita.cliente);
-        quitarCarritoDeLista(visita.carrito);
+        alEstacionar: datos => {
+            crearClienteParaVehiculo(datos);
+        },
 
-        visita.cliente?.eliminar?.();
-        visita.carrito?.eliminar?.();
+        alSalir: datos => {
+            const visita = visitantes.get(datos.id);
 
-        visitantesPorVehiculo.delete(visita.id);
-        return;
-    }
-
-    visita.cliente.iniciarRegresoVehiculo(visita.plaza, () => {
-        if (visita.carrito?.grupo) {
-            visita.carrito.grupo.visible = false;
-        }
-
-        if (visita.cliente?.grupo) {
-            visita.cliente.grupo.visible = false;
-        }
-
-        const salida =
-            sistemaVehiculos?.solicitarSalida?.(visita.id) ?? false;
-
-        if (!salida) {
-            quitarClienteDeLista(visita.cliente);
-            quitarCarritoDeLista(visita.carrito);
+            if (!visita) return;
 
             visita.cliente?.eliminar?.();
             visita.carrito?.eliminar?.();
 
-            visitantesPorVehiculo.delete(visita.id);
+            visitantes.delete(datos.id);
+
+            console.info(
+                `[CLIENTES] Visita terminada para el auto ${datos.id}.`
+            );
         }
     });
+
+    console.info('[MAIN] Sistema de vehículos iniciado.');
 }
 
+crearSistemaVehiculos();
+
 // ============================================================
-// ACTUALIZACIÓN DE ENTIDADES
+// CICLO DE COMPRA Y REGRESO AL AUTO
 // ============================================================
 
-function actualizarEntidades(delta) {
-    sistemaVehiculos?.actualizar?.(delta);
+function iniciarSalidaVisitante(visita) {
+    if (!visita || visita.fase === 'regresando') return;
 
-    for (const cliente of clientesSupermercado) {
-        if (
-            cliente &&
-            !cliente.eliminado &&
-            typeof cliente.actualizar === 'function'
-        ) {
-            cliente.actualizar(delta);
+    const cliente = visita.cliente;
+
+    if (!cliente || cliente.eliminado) {
+        sistemaVehiculos?.solicitarSalida?.(visita.id);
+        return;
+    }
+
+    const resumen = cliente.obtenerResumenCompra?.();
+
+    if (resumen?.cantidadArticulos > 0) {
+        visita.resumen = cliente.confirmarCompra?.();
+
+        console.info(
+            `[CAJA] Compra del cliente ${cliente.id}:`,
+            visita.resumen
+        );
+    }
+
+    visita.fase = 'regresando';
+
+    const iniciado = cliente.iniciarRegresoVehiculo?.(
+        visita.plaza,
+        () => {
+            visita.fase = 'esperandoSalida';
+            sistemaVehiculos?.solicitarSalida?.(visita.id);
         }
+    );
+
+    if (!iniciado) {
+        sistemaVehiculos?.solicitarSalida?.(visita.id);
     }
+}
 
-    for (const carrito of carritosClientes) {
-        carrito?.actualizar?.(delta);
-    }
-
-    for (const ladron of ladrones) {
-        ladron?.actualizar?.(delta);
-    }
-
-    for (const visita of visitantesPorVehiculo.values()) {
-        if (!visita.cliente || visita.cliente.eliminado) continue;
-
-        if (visita.fase === 'comprando') {
-            visita.tiempo += delta;
-
-            if (visita.tiempo >= CONFIG.tiempoCompraAuto) {
-                visita.fase = 'caja';
-                visita.tiempo = 0;
-
-                visita.cliente.establecerRuta?.([
-                    { x: 0, z: 20 }
-                ]);
-
-                mostrarMensaje(`${visita.nombre} se dirige a cajas.`);
-            }
-
+function actualizarVisitantes(delta) {
+    for (const visita of visitantes.values()) {
+        if (!visita.cliente || visita.cliente.eliminado) {
             continue;
         }
 
-        if (visita.fase === 'caja') {
-            visita.tiempo += delta;
+        visita.cliente.actualizar(delta);
 
-            if (visita.tiempo >= CONFIG.tiempoCajaAuto) {
+        if (visita.fase === 'comprando') {
+            visita.tiempoCompra += delta;
+
+            if (visita.tiempoCompra >= CONFIG.tiempoCompraAuto) {
+                visita.fase = 'caja';
+                visita.tiempoCaja = 0;
+
+                console.info(
+                    `[CAJA] Cliente ${visita.cliente.id} se dirige a pagar.`
+                );
+            }
+        } else if (visita.fase === 'caja') {
+            visita.tiempoCaja += delta;
+
+            if (visita.tiempoCaja >= CONFIG.tiempoCajaAuto) {
                 iniciarSalidaVisitante(visita);
             }
         }
@@ -1267,19 +977,116 @@ function actualizarEntidades(delta) {
 }
 
 // ============================================================
+// SISTEMA DE LADRONES
+// ============================================================
+
+let sistemaLadrones = null;
+
+function crearSistemaLadrones() {
+    try {
+        sistemaLadrones = crearLadron(escena, {
+            modelo: CONFIG.modeloLadron,
+            modelos: [
+                '/modelos/ladron.glb',
+                '/modelos/ladron1.glb',
+                '/modelos/ladron2.glb'
+            ],
+            productos,
+            velocidad: 1.6
+        });
+
+        console.info('[MAIN] Sistema de ladrones inicializado.');
+    } catch (error) {
+        console.error(
+            '[MAIN] No se pudo iniciar el sistema de ladrones. Revisa ladron.js.',
+            error
+        );
+    }
+}
+
+// El sistema de ladrones usa su propia API si la expone.
+crearSistemaLadrones();
+
+// ============================================================
+// ESTADO DEL HUD
+// ============================================================
+
+function actualizarHUD() {
+    const elemento = document.getElementById(
+        'estado-supermercado'
+    );
+
+    if (!elemento) return;
+
+    const clientesActivos = visitantes.size;
+    const coches = sistemaVehiculos?.cantidad ?? 0;
+    const plazasLibres = sistemaVehiculos?.plazasLibres ?? 0;
+
+    elemento.textContent =
+        `${modoNoche ? 'Noche' : 'Día'} | ` +
+        `Vehículos: ${coches} | ` +
+        `Visitantes: ${clientesActivos} | ` +
+        `Plazas libres: ${plazasLibres}` +
+        (camaraSeguridadActiva
+            ? ` | Cámara ${numeroCamara}`
+            : '');
+}
+
+// ============================================================
 // BUCLE PRINCIPAL
 // ============================================================
 
-function iniciarAnimacion() {
-    renderizador.setAnimationLoop(() => {
-        const delta = Math.min(reloj.getDelta(), 0.05);
+const reloj = new THREE.Clock();
 
-        try {
-            actualizarMovimiento(delta);
-            actualizarEntidades(delta);
-            renderizador.render(escena, camara);
-        } catch (error) {
-            console.error('Error durante la animación:', error);
-        }
-    });
+function animar() {
+    const delta = Math.min(reloj.getDelta(), 0.05);
+
+    actualizarJugador(delta);
+
+    sistemaVehiculos?.actualizar?.(delta);
+    actualizarVisitantes(delta);
+
+    sistemaLadrones?.actualizar?.(delta);
+
+    // Algunos módulos exponen actualizar() directamente,
+    // otros pueden devolver una API anidada.
+    sistemaLadrones?.sistema?.actualizar?.(delta);
+
+    actualizarHUD();
+
+    renderizador.render(escena, camara);
 }
+
+renderizador.setAnimationLoop(animar);
+
+// ============================================================
+// CAMBIO DE TAMAÑO DE VENTANA
+// ============================================================
+
+window.addEventListener('resize', () => {
+    camara.aspect = window.innerWidth / window.innerHeight;
+    camara.updateProjectionMatrix();
+
+    renderizador.setSize(
+        window.innerWidth,
+        window.innerHeight
+    );
+
+    renderizador.setPixelRatio(
+        Math.min(window.devicePixelRatio || 1, 1.75)
+    );
+});
+
+// ============================================================
+// ERRORES GLOBALES
+// ============================================================
+
+window.addEventListener('error', evento => {
+    console.error('[MAIN] Error JavaScript:', evento.error || evento.message);
+});
+
+window.addEventListener('unhandledrejection', evento => {
+    console.error('[MAIN] Promesa rechazada:', evento.reason);
+});
+
+console.info('[MAIN] Aplicación lista.');
