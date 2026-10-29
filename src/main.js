@@ -25,8 +25,9 @@ const CONFIG = {
     colorCieloDia: 0xa9c9e8,
     colorCieloNoche: 0x101827,
 
-    // Ajustes de rendimiento.
-    pixelRatioMaximo:  0.75,
+    // Rendimiento gráfico.
+    // 1.0 ofrece una imagen más nítida que 0.75.
+    pixelRatioMaximo: 1.0,
     sombras: false,
 
     // Carritos.
@@ -263,7 +264,10 @@ function crearRenderizador() {
     });
 
     renderizador.setPixelRatio(
-        Math.min(window.devicePixelRatio || 1, CONFIG.pixelRatioMaximo)
+        Math.min(
+            window.devicePixelRatio || 1,
+            CONFIG.pixelRatioMaximo
+        )
     );
 
     renderizador.setSize(
@@ -478,7 +482,6 @@ function crearCarritoVisitante(cliente, nombreCliente) {
     const posicionCliente = cliente.grupo.position;
     const rotacion = cliente.grupo.rotation.y;
 
-    // El carrito aparece detrás del cliente, no junto al automóvil.
     const posicionInicial = {
         x: posicionCliente.x - Math.sin(rotacion) * 1.15,
         y: 0,
@@ -572,8 +575,6 @@ function crearClientesFijos() {
                 pausaEntreCompras: CONFIG.pausaEntreCompras
             });
 
-            // Estos clientes ya aparecen dentro del supermercado.
-            // Por eso reciben su carrito desde el inicio.
             carrito = crearCarrito(escena, {
                 modelo: '/modelos/carrito.glb',
                 distancia: CONFIG.distanciaCarrito,
@@ -660,7 +661,6 @@ function crearSistemaVehiculos() {
                 visitantesPorVehiculo.delete(datos.id);
             }
 
-            // Solicitar otro vehículo cuando se libere el anterior.
             sistemaVehiculos?.solicitarLlegada();
         }
     });
@@ -684,9 +684,6 @@ function crearClienteParaVehiculo(datos) {
         z: datos.plaza.z
     };
 
-    // MUY IMPORTANTE:
-    // No se crea el carrito aquí.
-    // Se crea cuando el cliente termina de entrar.
     let carrito = null;
     let cliente = null;
 
@@ -713,7 +710,6 @@ function crearClienteParaVehiculo(datos) {
                     visita.tiempo = 0;
                 }
 
-                // Evita crear más de un carrito para el mismo cliente.
                 if (!carrito) {
                     carrito = crearCarritoVisitante(
                         clienteEntrado,
@@ -721,7 +717,6 @@ function crearClienteParaVehiculo(datos) {
                     );
                 }
 
-                // El cliente debe usar el mismo carrito que lo sigue.
                 clienteEntrado.configurarCompras({
                     productos: productosLacteos,
                     carrito,
@@ -756,8 +751,6 @@ function crearClienteParaVehiculo(datos) {
             }
         });
 
-        // El cliente comienza sin carrito porque todavía está
-        // caminando desde el estacionamiento hasta la entrada.
         cliente.configurarCompras({
             productos: productosLacteos,
             carrito: null
@@ -1358,7 +1351,6 @@ function actualizarEntidades(delta) {
             visita.fase = 'caja';
             visita.tiempo = 0;
 
-            // Destino provisional de cajas.
             visita.cliente.establecerRuta([
                 { x: 0, z: 20 }
             ]);
