@@ -12,7 +12,7 @@ import { crearVehiculos } from './vehiculos.js';
 import { crearEstacionamiento } from './estacionamiento.js';
 
 // ============================================================
-// CONFIGURACIÓN GENERAL
+// CONFIGURACIÓN
 // ============================================================
 
 const CONFIG = {
@@ -42,12 +42,12 @@ const CONFIG = {
     tiempoCompraAuto: 32,
     tiempoCajaAuto: 5,
 
-    distanciaRegistroTrayectoria: 0.5,
-    maximoRegistrosTrayectoria: 20000
+    distanciaRegistro: 0.5,
+    maximoRegistros: 20000
 };
 
 // ============================================================
-// CLIENTES NORMALES
+// CLIENTES
 // ============================================================
 
 const CONFIG_CLIENTES = [
@@ -161,7 +161,7 @@ const CONFIG_CLIENTES = [
 
 // ============================================================
 // TUS DOS LADRONES
-// Se conservan las rutas que aparecen en tu main.js.
+// Se usan estos nombres de archivo exactos.
 // ============================================================
 
 const CONFIG_LADRONES = [
@@ -205,51 +205,45 @@ const CONFIG_LADRONES = [
 ];
 
 // ============================================================
-// UBICACIONES DE LAS SEIS CÁMARAS DE SEGURIDAD
-// Posiciones conservadas de tu sistema de vigilancia.
+// TUS SEIS CÁMARAS ORIGINALES
+// No se crean cámaras físicas ni monitores adicionales.
 // ============================================================
 
 const CONFIG_CAMARAS = [
     {
-        id: 1,
-        nombre: 'Entrada izquierda',
+        nombre: 'Cámara 1',
         posicion: { x: -29, y: 5.5, z: 17 },
         objetivo: { x: -12, y: 1.1, z: 10 }
     },
     {
-        id: 2,
-        nombre: 'Entrada derecha',
+        nombre: 'Cámara 2',
         posicion: { x: 29, y: 5.5, z: 17 },
         objetivo: { x: 12, y: 1.1, z: 10 }
     },
     {
-        id: 3,
-        nombre: 'Pasillo izquierdo',
+        nombre: 'Cámara 3',
         posicion: { x: -29, y: 5.5, z: -10 },
         objetivo: { x: -12, y: 1.1, z: -6 }
     },
     {
-        id: 4,
-        nombre: 'Pasillo derecho',
+        nombre: 'Cámara 4',
         posicion: { x: 29, y: 5.5, z: -10 },
         objetivo: { x: 12, y: 1.1, z: -6 }
     },
     {
-        id: 5,
-        nombre: 'Zona posterior',
+        nombre: 'Cámara 5',
         posicion: { x: -20, y: 5.1, z: -28 },
         objetivo: { x: 0, y: 1.1, z: -17 }
     },
     {
-        id: 6,
-        nombre: 'Estacionamiento',
+        nombre: 'Cámara 6',
         posicion: { x: 0, y: 5.8, z: 53 },
         objetivo: { x: 0, y: 1.1, z: 27 }
     }
 ];
 
 // ============================================================
-// VARIABLES GLOBALES
+// VARIABLES
 // ============================================================
 
 let escena;
@@ -269,28 +263,29 @@ let luzSol;
 let luzLuna;
 
 let modoNoche = false;
+let juegoIniciado = false;
+
 let velocidadVertical = 0;
 let jugadorEnSuelo = true;
 
-// El juego comienza después de pulsar el botón de entrada.
-// El movimiento no depende de que Pointer Lock esté activo.
-let juegoIniciado = false;
+// Si es null, controlamos al jugador.
+// Si tiene un número, estamos viendo una cámara de seguridad.
+let vistaSeguridad = null;
+
+let posicionJugadorGuardada = null;
+let quaternionJugadorGuardado = null;
 
 const teclas = Object.create(null);
 
 const clientesSupermercado = [];
 const ladronesSupermercado = [];
 const carritosClientes = [];
-const camarasSeguridad = [];
-const trayectoriaJugador = [];
-
 const visitantesPorVehiculo = new Map();
+const trayectoriaJugador = [];
 
 let siguienteModeloCliente = 0;
 let contadorVisitantes = 0;
-let camaraSeguridadSeleccionada = 0;
-let cctvVisible = true;
-let ultimoRegistroTrayectoria = null;
+let ultimaPosicionRegistrada = null;
 let temporizadorMensaje = null;
 
 const LIMITE_JUGADOR = {
@@ -302,7 +297,7 @@ const LIMITE_JUGADOR = {
 
 const vectorAdelante = new THREE.Vector3();
 const vectorDerecha = new THREE.Vector3();
-const movimientoJugador = new THREE.Vector3();
+const movimiento = new THREE.Vector3();
 const ejeVertical = new THREE.Vector3(0, 1, 0);
 
 // ============================================================
@@ -323,8 +318,6 @@ function iniciar() {
     crearControles();
     crearInterfaz();
     crearEstructuraSupermercado();
-
-    crearCamarasSeguridad();
     crearLadrones();
     crearSistemaVehiculos();
 
@@ -332,11 +325,11 @@ function iniciar() {
     actualizarIluminacion();
     iniciarAnimacion();
 
-    console.info('Supermercado 3D iniciado correctamente.');
+    console.info('Supermercado 3D iniciado.');
 }
 
 // ============================================================
-// ESCENA
+// ESCENA Y CÁMARA DEL JUGADOR
 // ============================================================
 
 function crearEscena() {
@@ -345,10 +338,6 @@ function crearEscena() {
     escena.background = new THREE.Color(CONFIG.colorCieloDia);
     escena.fog = new THREE.Fog(0xc7d9e9, 65, 150);
 }
-
-// ============================================================
-// CÁMARA DEL JUGADOR
-// ============================================================
 
 function crearCamara() {
     camara = new THREE.PerspectiveCamera(
@@ -463,7 +452,7 @@ function crearSuelo() {
 }
 
 // ============================================================
-// ESTRUCTURA DEL SUPERMERCADO
+// MERCADO, MOBILIARIO, ALMACÉN Y PRODUCTOS
 // ============================================================
 
 function crearEstructuraSupermercado() {
@@ -492,101 +481,13 @@ function crearEstructuraSupermercado() {
         productosLacteos = crearProductosLacteos(escena);
         console.info('Productos iniciados.');
     } catch (error) {
-        console.error('Error al iniciar productos:', error);
+        console.error('Error al crear productos:', error);
     }
 }
 
 // ============================================================
-// CÁMARAS DE SEGURIDAD
-// Incluye objetos visibles en el escenario y cámaras de vigilancia.
-// ============================================================
-
-function crearCamarasSeguridad() {
-    const materialCuerpo = new THREE.MeshStandardMaterial({
-        color: 0x27313b,
-        metalness: 0.55,
-        roughness: 0.38
-    });
-
-    const materialLente = new THREE.MeshStandardMaterial({
-        color: 0x101820,
-        metalness: 0.7,
-        roughness: 0.2
-    });
-
-    CONFIG_CAMARAS.forEach(config => {
-        const posicion = new THREE.Vector3(
-            config.posicion.x,
-            config.posicion.y,
-            config.posicion.z
-        );
-
-        const objetivo = new THREE.Vector3(
-            config.objetivo.x,
-            config.objetivo.y,
-            config.objetivo.z
-        );
-
-        // Cámara virtual para observar el supermercado.
-        const camaraCCTV = new THREE.PerspectiveCamera(
-            72,
-            16 / 9,
-            0.1,
-            180
-        );
-
-        camaraCCTV.position.copy(posicion);
-        camaraCCTV.lookAt(objetivo);
-
-        // Modelo sencillo de la carcasa de la cámara física.
-        const grupo = new THREE.Group();
-        grupo.name = `CAMARA_SEGURIDAD_${config.id}`;
-        grupo.position.copy(posicion);
-        grupo.lookAt(objetivo);
-
-        const cuerpo = new THREE.Mesh(
-            new THREE.BoxGeometry(0.48, 0.22, 0.25),
-            materialCuerpo
-        );
-        grupo.add(cuerpo);
-
-        const lente = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.065, 0.065, 0.14, 16),
-            materialLente
-        );
-
-        lente.rotation.x = Math.PI / 2;
-        lente.position.z = 0.18;
-        grupo.add(lente);
-
-        const soporte = new THREE.Mesh(
-            new THREE.BoxGeometry(0.12, 0.24, 0.12),
-            materialCuerpo
-        );
-
-        soporte.position.y = 0.2;
-        grupo.add(soporte);
-
-        escena.add(grupo);
-
-        camarasSeguridad.push({
-            id: config.id,
-            nombre: config.nombre,
-            camara: camaraCCTV,
-            grupo,
-            objetivo
-        });
-    });
-
-    actualizarEtiquetaCCTV();
-
-    console.info(
-        `${camarasSeguridad.length} cámaras de seguridad creadas.`
-    );
-}
-
-// ============================================================
-// CONTROLES DEL JUGADOR
+// POINTER LOCK
+// ESC LIBERA EL MOUSE, NO VUELVE A MOSTRAR LA PORTADA.
 // ============================================================
 
 function crearControles() {
@@ -595,29 +496,32 @@ function crearControles() {
         renderizador.domElement
     );
 
-    controles.addEventListener('lock', () => {
-        mostrarMensaje('Control de cámara activado.');
-    });
-
     controles.addEventListener('unlock', () => {
-        // No se vuelve a mostrar la pantalla de entrada al pulsar ESC.
         if (juegoIniciado) {
             mostrarMensaje(
-                'Mouse liberado. Puedes seguir usando WASD.'
+                'Mouse liberado. WASD sigue funcionando.'
             );
         }
     });
 
-    // Si el jugador pulsa el escenario, puede volver a capturar el mouse.
+    // Un clic sobre el escenario vuelve a habilitar la cámara del mouse.
     renderizador.domElement.addEventListener('click', () => {
-        if (juegoIniciado && !controles.isLocked) {
-            controles.lock();
+        if (
+            juegoIniciado &&
+            vistaSeguridad === null &&
+            !controles.isLocked
+        ) {
+            try {
+                controles.lock();
+            } catch (error) {
+                console.warn('No fue posible bloquear el mouse:', error);
+            }
         }
     });
 }
 
 // ============================================================
-// INTERFAZ Y ESTILOS
+// INTERFAZ
 // ============================================================
 
 function crearInterfaz() {
@@ -632,7 +536,9 @@ function crearInterfaz() {
             align-items: center;
             justify-content: center;
             flex-direction: column;
-            gap: 16px;
+            gap: 14px;
+            padding: 20px;
+            box-sizing: border-box;
             background: linear-gradient(
                 135deg,
                 rgba(8, 18, 30, .96),
@@ -645,32 +551,28 @@ function crearInterfaz() {
 
         #portada-supermercado h1 {
             margin: 0;
-            padding: 0 20px;
-            font-size: clamp(28px, 5vw, 52px);
+            font-size: clamp(28px, 5vw, 50px);
             letter-spacing: 2px;
         }
 
         #portada-supermercado p {
             margin: 0;
-            padding: 0 20px;
             line-height: 1.7;
         }
 
         .boton-supermercado {
             border: 1px solid rgba(255,255,255,.3);
-            border-radius: 8px;
-            padding: 10px 13px;
+            border-radius: 7px;
+            padding: 9px 12px;
             background: rgba(14, 105, 76, .94);
             color: white;
             font-size: 12px;
             font-weight: bold;
             cursor: pointer;
-            transition: background .2s, transform .2s;
         }
 
         .boton-supermercado:hover {
             background: #16875f;
-            transform: translateY(-1px);
         }
 
         #hud-supermercado {
@@ -678,15 +580,13 @@ function crearInterfaz() {
             left: 12px;
             top: 12px;
             z-index: 100;
-            max-width: 290px;
-            padding: 11px 13px;
+            max-width: 270px;
+            padding: 10px 12px;
             color: white;
-            background: rgba(8, 16, 24, .82);
+            background: rgba(8, 16, 24, .8);
             border: 1px solid rgba(255,255,255,.2);
-            border-radius: 9px;
-            font-family: Arial, sans-serif;
-            font-size: 12px;
-            line-height: 1.65;
+            border-radius: 8px;
+            font: 12px/1.65 Arial, sans-serif;
             pointer-events: none;
         }
 
@@ -698,153 +598,91 @@ function crearInterfaz() {
             display: flex;
             flex-wrap: wrap;
             justify-content: flex-end;
-            gap: 6px;
+            gap: 5px;
             max-width: 390px;
+        }
+
+        #controles-camaras {
+            position: fixed;
+            left: 50%;
+            bottom: 12px;
+            z-index: 150;
+            transform: translateX(-50%);
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 5px;
+            max-width: 95vw;
+            padding: 7px;
+            border-radius: 7px;
+            background: rgba(8,16,24,.78);
         }
 
         #mensaje-supermercado {
             position: fixed;
             left: 50%;
-            bottom: 14px;
-            z-index: 180;
+            bottom: 67px;
+            z-index: 200;
             transform: translateX(-50%);
             max-width: 80vw;
-            padding: 9px 12px;
+            padding: 8px 12px;
             border-radius: 7px;
             color: white;
-            background: rgba(0,0,0,.78);
-            font-family: Arial, sans-serif;
-            font-size: 12px;
+            background: rgba(0,0,0,.8);
+            font: 12px Arial, sans-serif;
             pointer-events: none;
             text-align: center;
         }
 
-        #panel-camaras {
-            position: fixed;
-            right: 12px;
-            bottom: 48px;
-            z-index: 130;
-            width: 310px;
-            max-width: calc(100vw - 24px);
-            color: white;
-            font-family: Arial, sans-serif;
-            pointer-events: auto;
-        }
-
-        #cabecera-cctv {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 8px;
-            padding: 8px 10px;
-            background: rgba(8, 16, 24, .92);
-            border: 1px solid rgba(255,255,255,.2);
-            border-bottom: none;
-            border-radius: 8px 8px 0 0;
-            font-size: 11px;
-        }
-
-        #cctv-feed {
-            width: 100%;
-            height: 174px;
-            box-sizing: border-box;
-            position: relative;
-            background: rgba(0,0,0,.04);
-            border: 1px solid rgba(255,255,255,.28);
-            overflow: hidden;
-            pointer-events: none;
-        }
-
-        #cctv-info {
-            padding: 6px 9px;
-            background: rgba(8, 16, 24, .9);
-            font-size: 11px;
-        }
-
-        #botones-camaras {
-            display: grid;
-            grid-template-columns: repeat(6, 1fr);
-            gap: 4px;
-            padding: 7px;
-            background: rgba(8, 16, 24, .94);
-            border-radius: 0 0 8px 8px;
-        }
-
-        .boton-cctv {
-            border: 1px solid rgba(255,255,255,.25);
-            padding: 7px 0;
-            border-radius: 5px;
-            background: #283744;
-            color: white;
-            cursor: pointer;
-            font-weight: bold;
-        }
-
-        .boton-cctv.activa {
-            background: #16875f;
-            border-color: #8ef0bf;
-        }
-
-        @media (max-width: 700px) {
-            #panel-camaras {
-                width: 240px;
-                right: 7px;
-                bottom: 38px;
-            }
-
-            #cctv-feed {
-                height: 135px;
-            }
-
+        @media (max-width: 650px) {
             #hud-supermercado {
-                top: 7px;
-                left: 7px;
-                font-size: 10px;
+                top: 6px;
+                left: 6px;
+                max-width: 160px;
                 padding: 7px;
-                max-width: 175px;
+                font-size: 10px;
             }
 
             #acciones-supermercado {
-                top: 7px;
-                right: 7px;
+                top: 6px;
+                right: 6px;
                 max-width: 190px;
             }
 
+            #controles-camaras {
+                bottom: 6px;
+                gap: 3px;
+                padding: 4px;
+            }
+
             .boton-supermercado {
-                padding: 7px 8px;
+                padding: 7px;
                 font-size: 10px;
+            }
+
+            #mensaje-supermercado {
+                bottom: 52px;
             }
         }
     `;
 
     document.head.appendChild(estilo);
 
-    // Pantalla inicial.
     const portada = document.createElement('div');
     portada.id = 'portada-supermercado';
 
     portada.innerHTML = `
         <h1>SUPERMERCADO 3D</h1>
-
-        <p>
-            Explora los pasillos, los productos y el estacionamiento.
-        </p>
-
+        <p>Explora el supermercado y sus departamentos.</p>
         <p>
             <strong>W A S D</strong>: mover |
             <strong>SHIFT</strong>: correr |
             <strong>ESPACIO</strong>: saltar
         </p>
-
         <p>
-            <strong>1 a 6</strong>: seleccionar cámara |
-            <strong>C</strong>: mostrar u ocultar cámaras
+            <strong>1-6</strong>: cámaras de seguridad |
+            <strong>0</strong>: volver al jugador
         </p>
-
-        <p>
-            Si pulsas ESC, podrás seguir moviéndote con el teclado.
-        </p>
-
         <button id="btn-entrar" class="boton-supermercado">
             ENTRAR AL SUPERMERCADO
         </button>
@@ -852,24 +690,27 @@ function crearInterfaz() {
 
     document.body.appendChild(portada);
 
-    // HUD.
     const hud = document.createElement('div');
     hud.id = 'hud-supermercado';
-
     hud.innerHTML = `
         <strong>SUPERMERCADO 3D</strong><br>
-        W A S D: movimiento<br>
-        SHIFT: correr | ESPACIO: saltar<br>
-        1-6: cámaras | C: ocultar cámaras
-        <div id="estado-entidades" style="margin-top:6px">
-            Clientes: 0 | Ladrones: 0<br>
-            Recorrido registrado: 0
+        WASD: mover<br>
+        SHIFT: correr<br>
+        ESPACIO: saltar<br>
+        ESC: liberar mouse<br>
+        <div id="estado-entidades">
+            Clientes: 0 | Ladrones: 0
+        </div>
+        <div id="estado-recorrido">
+            Recorrido: 0 puntos
+        </div>
+        <div id="estado-vista">
+            Vista: jugador
         </div>
     `;
 
     document.body.appendChild(hud);
 
-    // Botones principales.
     const acciones = document.createElement('div');
     acciones.id = 'acciones-supermercado';
 
@@ -877,19 +718,12 @@ function crearInterfaz() {
         <button id="btn-dia-noche" class="boton-supermercado">
             Día / Noche
         </button>
-
         <button id="btn-llegada-coche" class="boton-supermercado">
             Llega un coche
         </button>
-
         <button id="btn-entrada" class="boton-supermercado">
             Volver a entrada
         </button>
-
-        <button id="btn-camaras" class="boton-supermercado">
-            Ocultar cámaras
-        </button>
-
         <button id="btn-exportar-recorrido" class="boton-supermercado">
             Exportar recorrido
         </button>
@@ -897,52 +731,40 @@ function crearInterfaz() {
 
     document.body.appendChild(acciones);
 
-    // Panel de CCTV: una vista seleccionable entre seis cámaras.
-    const panel = document.createElement('div');
-    panel.id = 'panel-camaras';
+    // Controles simples de las seis vistas. No se crean cámaras físicas.
+    const controlesCamaras = document.createElement('div');
+    controlesCamaras.id = 'controles-camaras';
 
-    panel.innerHTML = `
-        <div id="cabecera-cctv">
-            <strong>CCTV · SEGURIDAD</strong>
-            <span id="cctv-numero">CAM 1</span>
-        </div>
-
-        <div id="cctv-feed"></div>
-
-        <div id="cctv-info">Entrada izquierda</div>
-
-        <div id="botones-camaras">
-            <button class="boton-cctv activa" data-camara="0">1</button>
-            <button class="boton-cctv" data-camara="1">2</button>
-            <button class="boton-cctv" data-camara="2">3</button>
-            <button class="boton-cctv" data-camara="3">4</button>
-            <button class="boton-cctv" data-camara="4">5</button>
-            <button class="boton-cctv" data-camara="5">6</button>
-        </div>
+    controlesCamaras.innerHTML = `
+        <button class="boton-supermercado" data-vista="1">CAM 1</button>
+        <button class="boton-supermercado" data-vista="2">CAM 2</button>
+        <button class="boton-supermercado" data-vista="3">CAM 3</button>
+        <button class="boton-supermercado" data-vista="4">CAM 4</button>
+        <button class="boton-supermercado" data-vista="5">CAM 5</button>
+        <button class="boton-supermercado" data-vista="6">CAM 6</button>
+        <button class="boton-supermercado" data-vista="0">JUGADOR</button>
     `;
 
-    document.body.appendChild(panel);
+    document.body.appendChild(controlesCamaras);
 
     const mensaje = document.createElement('div');
     mensaje.id = 'mensaje-supermercado';
     mensaje.textContent = 'Pulsa ENTRAR para comenzar.';
     document.body.appendChild(mensaje);
 
-    // Al pulsar entrar, oculta la portada aunque Pointer Lock falle.
     document.getElementById('btn-entrar').addEventListener('click', () => {
         juegoIniciado = true;
         portada.style.display = 'none';
 
+        // Si el navegador no puede bloquear el mouse,
+        // WASD seguirá moviendo al jugador.
         try {
             controles.lock();
         } catch (error) {
-            console.warn(
-                'El navegador no activó el bloqueo del mouse. Puedes usar WASD.',
-                error
-            );
+            console.warn('No se pudo bloquear el mouse:', error);
         }
 
-        mostrarMensaje('Usa WASD para moverte por el supermercado.');
+        mostrarMensaje('Usa WASD para moverte.');
     });
 
     document.getElementById('btn-dia-noche').addEventListener('click', () => {
@@ -951,8 +773,8 @@ function crearInterfaz() {
 
         mostrarMensaje(
             modoNoche
-                ? 'Iluminación nocturna activada.'
-                : 'Iluminación diurna activada.'
+                ? 'Iluminación nocturna.'
+                : 'Iluminación diurna.'
         );
     });
 
@@ -962,37 +784,38 @@ function crearInterfaz() {
             mostrarMensaje('Se solicitó la llegada de un vehículo.');
         } else {
             mostrarMensaje(
-                'La función de llegada no está disponible en vehiculos.js.'
+                'Tu módulo vehiculos.js no expone solicitarLlegada().'
             );
         }
     });
 
     document.getElementById('btn-entrada').addEventListener('click', () => {
-        controles.unlock();
-
+        volverAlJugador(true);
         camara.position.set(0, CONFIG.alturaJugador, 25);
         camara.lookAt(0, CONFIG.alturaJugador, 15);
 
         velocidadVertical = 0;
         jugadorEnSuelo = true;
+        registrarTrayectoria(camara.position);
 
         mostrarMensaje('Has vuelto a la entrada.');
-    });
-
-    document.getElementById('btn-camaras').addEventListener('click', () => {
-        cambiarVisibilidadCCTV();
     });
 
     document.getElementById('btn-exportar-recorrido').addEventListener('click', () => {
         exportarTrayectoria();
     });
 
-    document.getElementById('botones-camaras').addEventListener('click', evento => {
-        const boton = evento.target.closest('[data-camara]');
-
+    controlesCamaras.addEventListener('click', evento => {
+        const boton = evento.target.closest('[data-vista]');
         if (!boton) return;
 
-        seleccionarCamara(Number(boton.dataset.camara));
+        const numero = Number(boton.dataset.vista);
+
+        if (numero === 0) {
+            volverAlJugador();
+        } else {
+            cambiarVistaSeguridad(numero);
+        }
     });
 }
 
@@ -1001,142 +824,92 @@ function crearInterfaz() {
 // ============================================================
 
 function mostrarMensaje(texto) {
-    const elemento = document.getElementById('mensaje-supermercado');
+    const mensaje = document.getElementById('mensaje-supermercado');
+    if (!mensaje) return;
 
-    if (!elemento) return;
-
-    elemento.textContent = texto;
-    elemento.style.display = 'block';
+    mensaje.textContent = texto;
+    mensaje.style.display = 'block';
 
     if (temporizadorMensaje) {
         clearTimeout(temporizadorMensaje);
     }
 
     temporizadorMensaje = setTimeout(() => {
-        elemento.style.display = 'none';
-    }, 2800);
+        mensaje.style.display = 'none';
+    }, 2500);
 }
 
 // ============================================================
-// SELECCIÓN DE CÁMARAS
+// CAMBIAR A UNA DE LAS SEIS VISTAS ORIGINALES
 // ============================================================
 
-function seleccionarCamara(indice) {
-    if (
-        !Number.isInteger(indice) ||
-        indice < 0 ||
-        indice >= camarasSeguridad.length
-    ) {
-        return;
+function cambiarVistaSeguridad(numero) {
+    if (numero < 1 || numero > CONFIG_CAMARAS.length) return;
+
+    const indice = numero - 1;
+    const config = CONFIG_CAMARAS[indice];
+
+    // Guardar una sola vez la posición y rotación reales del jugador.
+    if (vistaSeguridad === null) {
+        posicionJugadorGuardada = camara.position.clone();
+        quaternionJugadorGuardado = camara.quaternion.clone();
     }
 
-    camaraSeguridadSeleccionada = indice;
-    cctvVisible = true;
+    vistaSeguridad = numero;
 
-    const panel = document.getElementById('panel-camaras');
-    const botonCamaras = document.getElementById('btn-camaras');
-
-    if (panel) panel.style.display = 'block';
-    if (botonCamaras) botonCamaras.textContent = 'Ocultar cámaras';
-
-    actualizarEtiquetaCCTV();
-}
-
-function actualizarEtiquetaCCTV() {
-    const camaraSeleccionada =
-        camarasSeguridad[camaraSeguridadSeleccionada];
-
-    const numero = document.getElementById('cctv-numero');
-    const info = document.getElementById('cctv-info');
-
-    if (numero) {
-        numero.textContent = `CAM ${camaraSeguridadSeleccionada + 1}`;
+    try {
+        controles.unlock();
+    } catch (error) {
+        // La vista de seguridad sigue funcionando sin Pointer Lock.
     }
 
-    if (info) {
-        info.textContent = camaraSeleccionada
-            ? camaraSeleccionada.nombre
-            : 'Cámara no disponible';
-    }
-
-    document.querySelectorAll('.boton-cctv').forEach(boton => {
-        const indice = Number(boton.dataset.camara);
-
-        boton.classList.toggle(
-            'activa',
-            indice === camaraSeguridadSeleccionada
-        );
-    });
-}
-
-function cambiarVisibilidadCCTV() {
-    cctvVisible = !cctvVisible;
-
-    const panel = document.getElementById('panel-camaras');
-    const boton = document.getElementById('btn-camaras');
-
-    if (panel) {
-        panel.style.display = cctvVisible ? 'block' : 'none';
-    }
-
-    if (boton) {
-        boton.textContent = cctvVisible
-            ? 'Ocultar cámaras'
-            : 'Mostrar cámaras';
-    }
-}
-
-// ============================================================
-// RENDERIZAR LA VISTA CCTV DENTRO DE LA PANTALLA
-// ============================================================
-
-function renderizarVistaCCTV() {
-    if (!cctvVisible || camarasSeguridad.length === 0) return;
-
-    const feed = document.getElementById('cctv-feed');
-
-    if (!feed || feed.offsetWidth <= 0 || feed.offsetHeight <= 0) {
-        return;
-    }
-
-    const camaraSeleccionada =
-        camarasSeguridad[camaraSeguridadSeleccionada];
-
-    if (!camaraSeleccionada?.camara) return;
-
-    const rect = feed.getBoundingClientRect();
-    const rectCanvas = renderizador.domElement.getBoundingClientRect();
-
-    const x = rect.left - rectCanvas.left;
-    const y = rectCanvas.bottom - rect.bottom;
-    const ancho = rect.width;
-    const alto = rect.height;
-
-    if (ancho < 1 || alto < 1) return;
-
-    const camaraCCTV = camaraSeleccionada.camara;
-    camaraCCTV.aspect = ancho / alto;
-    camaraCCTV.updateProjectionMatrix();
-
-    // Renderiza únicamente dentro del área del monitor CCTV.
-    renderizador.setScissorTest(true);
-    renderizador.setViewport(x, y, ancho, alto);
-    renderizador.setScissor(x, y, ancho, alto);
-    renderizador.clear(true, true, true);
-    renderizador.render(escena, camaraCCTV);
-
-    // Devuelve el renderizador al tamaño completo de la pantalla.
-    renderizador.setScissorTest(false);
-    renderizador.setViewport(
-        0,
-        0,
-        window.innerWidth,
-        window.innerHeight
+    camara.position.set(
+        config.posicion.x,
+        config.posicion.y,
+        config.posicion.z
     );
+
+    camara.lookAt(
+        config.objetivo.x,
+        config.objetivo.y,
+        config.objetivo.z
+    );
+
+    actualizarEstadoVista();
+    mostrarMensaje(`Mostrando ${config.nombre}. Pulsa 0 para volver.`);
+}
+
+function volverAlJugador(volverAlInicio = false) {
+    if (vistaSeguridad !== null) {
+        if (posicionJugadorGuardada && quaternionJugadorGuardado) {
+            camara.position.copy(posicionJugadorGuardada);
+            camara.quaternion.copy(quaternionJugadorGuardado);
+        }
+
+        vistaSeguridad = null;
+        posicionJugadorGuardada = null;
+        quaternionJugadorGuardado = null;
+    }
+
+    if (volverAlInicio) {
+        camara.position.set(0, CONFIG.alturaJugador, 25);
+        camara.lookAt(0, CONFIG.alturaJugador, 15);
+    }
+
+    actualizarEstadoVista();
+}
+
+function actualizarEstadoVista() {
+    const elemento = document.getElementById('estado-vista');
+    if (!elemento) return;
+
+    elemento.textContent = vistaSeguridad === null
+        ? 'Vista: jugador'
+        : `Vista: cámara ${vistaSeguridad}`;
 }
 
 // ============================================================
-// DÍA / NOCHE
+// ILUMINACIÓN DÍA / NOCHE
 // ============================================================
 
 function actualizarIluminacion() {
@@ -1145,34 +918,30 @@ function actualizarIluminacion() {
     if (modoNoche) {
         escena.background.setHex(CONFIG.colorCieloNoche);
         escena.fog.color.setHex(CONFIG.colorCieloNoche);
-
         luzAmbiente.intensity = 0.65;
         luzSol.intensity = 0.15;
-
         luzLuna.visible = true;
         luzLuna.intensity = 0.8;
     } else {
         escena.background.setHex(CONFIG.colorCieloDia);
         escena.fog.color.setHex(0xc7d9e9);
-
         luzAmbiente.intensity = 1.8;
         luzSol.intensity = 2.4;
-
         luzLuna.visible = false;
     }
 }
 
 // ============================================================
-// CREAR LOS DOS LADRONES
+// CREAR LADRONES
 // ============================================================
 
 function crearLadrones() {
-    CONFIG_LADRONES.forEach(config => {
+    for (const config of CONFIG_LADRONES) {
         try {
             const ladron = crearClienteSupermercado(escena, {
                 modelo: config.modelo,
                 posicion: { ...config.posicion },
-                velocidad: config.velocidad || CONFIG.velocidadLadron,
+                velocidad: config.velocidad,
                 escala: 1,
                 ruta: config.ruta,
                 inactivo: false,
@@ -1191,7 +960,7 @@ function crearLadrones() {
                 console.error(
                     `[LADRÓN] No se pudo crear ${config.nombre}.`
                 );
-                return;
+                continue;
             }
 
             ladron.nombre = config.nombre;
@@ -1199,11 +968,9 @@ function crearLadrones() {
 
             ladronesSupermercado.push(ladron);
 
-            console.info(`[LADRÓN] ${config.nombre} inicializado.`, {
+            console.info(`[LADRÓN] ${config.nombre}`, {
                 modelo: config.modelo,
-                posicion: config.posicion,
-                cargado: ladron.cargado,
-                estado: ladron.estado
+                posicion: config.posicion
             });
         } catch (error) {
             console.error(
@@ -1211,7 +978,7 @@ function crearLadrones() {
                 error
             );
         }
-    });
+    }
 }
 
 // ============================================================
@@ -1243,33 +1010,26 @@ function crearSistemaVehiculos() {
                 if (visita) {
                     visita.cliente?.eliminar?.();
                     visita.carrito?.eliminar?.();
-
                     visitantesPorVehiculo.delete(datos.id);
                 }
 
-                if (
-                    typeof sistemaVehiculos?.solicitarLlegada === 'function'
-                ) {
-                    sistemaVehiculos.solicitarLlegada();
-                }
+                sistemaVehiculos?.solicitarLlegada?.();
             }
         });
 
         console.info('Sistema de vehículos iniciado.');
     } catch (error) {
-        console.error('Error al iniciar sistema de vehículos:', error);
+        console.error('Error al crear sistema de vehículos:', error);
     }
 }
 
 // ============================================================
-// CREAR CLIENTE CUANDO ESTACIONA UN VEHÍCULO
+// CLIENTE NORMAL QUE BAJA DEL VEHÍCULO
 // ============================================================
 
 function crearClienteParaVehiculo(datos) {
     if (!datos?.plaza) {
-        console.warn(
-            'El vehículo no proporcionó la posición de su plaza.'
-        );
+        console.warn('El vehículo no proporcionó datos de la plaza.');
         return;
     }
 
@@ -1332,14 +1092,10 @@ function crearClienteParaVehiculo(datos) {
             }
         });
 
-        if (!cliente) {
-            console.error(`No se pudo crear ${config.nombre}.`);
-            return;
-        }
+        if (!cliente) return;
 
         clientesSupermercado.push(cliente);
 
-        // Registrar la visita antes de iniciar su movimiento.
         visitantesPorVehiculo.set(idVisita, {
             id: idVisita,
             cliente,
@@ -1361,18 +1117,14 @@ function crearClienteParaVehiculo(datos) {
             config.modelo
         );
     } catch (error) {
-        console.error(
-            'Error al crear cliente desde vehículo:',
-            error
-        );
-
+        console.error('Error al crear cliente:', error);
         cliente?.eliminar?.();
         carrito?.eliminar?.();
     }
 }
 
 // ============================================================
-// CREAR CARRITO Y HACER QUE SIGA AL CLIENTE
+// CREAR CARRITO
 // ============================================================
 
 function crearCarritoVisitante(cliente, nombreCliente) {
@@ -1389,13 +1141,11 @@ function crearCarritoVisitante(cliente, nombreCliente) {
     try {
         carrito = crearCarrito(escena, {
             modelo: '/modelos/carrito.glb',
-
             posicion: {
                 x: posicion.x - CONFIG.distanciaCarrito,
                 y: 0,
                 z: posicion.z
             },
-
             escala: 1,
             distancia: CONFIG.distanciaCarrito,
             suavizado: CONFIG.suavizadoCarrito
@@ -1421,21 +1171,19 @@ function crearCarritoVisitante(cliente, nombreCliente) {
         }
 
         carritosClientes.push(carrito);
-
         return carrito;
     } catch (error) {
         console.error(
-            `Error al crear carrito de ${nombreCliente}:`,
+            `Error en el carrito de ${nombreCliente}:`,
             error
         );
-
         carrito?.eliminar?.();
         return null;
     }
 }
 
 // ============================================================
-// ACTUALIZAR ENTIDADES Y VISITAS
+// ACTUALIZACIÓN DE ENTIDADES
 // ============================================================
 
 function actualizarEntidades(delta) {
@@ -1445,8 +1193,17 @@ function actualizarEntidades(delta) {
         console.error('Error al actualizar vehículos:', error);
     }
 
-    actualizarListaEntidades(clientesSupermercado, delta, 'cliente');
-    actualizarListaEntidades(ladronesSupermercado, delta, 'ladrón');
+    actualizarListaEntidades(
+        clientesSupermercado,
+        delta,
+        'cliente'
+    );
+
+    actualizarListaEntidades(
+        ladronesSupermercado,
+        delta,
+        'ladrón'
+    );
 
     for (const carrito of carritosClientes) {
         try {
@@ -1465,7 +1222,7 @@ function actualizarEntidades(delta) {
     }
 
     actualizarFasesVisitantes(delta);
-    actualizarHudEntidades();
+    actualizarHUD();
 }
 
 function actualizarListaEntidades(lista, delta, tipo) {
@@ -1486,7 +1243,7 @@ function actualizarListaEntidades(lista, delta, tipo) {
 }
 
 // ============================================================
-// CICLO DE COMPRA Y CAJA DE LOS CLIENTES
+// CICLO DE CLIENTES: COMPRAS Y REGRESO AL VEHÍCULO
 // ============================================================
 
 function actualizarFasesVisitantes(delta) {
@@ -1500,14 +1257,9 @@ function actualizarFasesVisitantes(delta) {
                 visita.fase = 'caja';
                 visita.tiempo = 0;
 
-                // Punto aproximado de caja cerca de la entrada.
                 visita.cliente.establecerRuta?.([
                     { x: 0, z: 20 }
                 ]);
-
-                console.info(
-                    `[CLIENTE] ${visita.id}: dirigiéndose a caja.`
-                );
             }
         } else if (visita.fase === 'caja') {
             visita.tiempo += delta;
@@ -1517,7 +1269,8 @@ function actualizarFasesVisitantes(delta) {
                 visita.tiempo = 0;
 
                 if (
-                    typeof visita.cliente.iniciarRegresoVehiculo === 'function'
+                    typeof visita.cliente.iniciarRegresoVehiculo ===
+                    'function'
                 ) {
                     visita.cliente.iniciarRegresoVehiculo(
                         visita.plaza,
@@ -1528,10 +1281,6 @@ function actualizarFasesVisitantes(delta) {
                     );
                 } else {
                     visita.fase = 'esperandoSalida';
-
-                    console.warn(
-                        `El cliente ${visita.id} no tiene iniciarRegresoVehiculo().`
-                    );
                 }
             }
         }
@@ -1575,119 +1324,103 @@ function actualizarSeguimientoCarrito(carrito, objetivo, delta) {
 }
 
 // ============================================================
-// ACTUALIZAR HUD
-// ============================================================
-
-function actualizarHudEntidades() {
-    const estado = document.getElementById('estado-entidades');
-
-    if (!estado) return;
-
-    estado.innerHTML =
-        `Clientes: ${clientesSupermercado.length}` +
-        ` | Ladrones: ${ladronesSupermercado.length}<br>` +
-        `Cámaras: ${camarasSeguridad.length}` +
-        ` | Recorrido: ${trayectoriaJugador.length} puntos`;
-}
-
-// ============================================================
 // MOVIMIENTO DEL JUGADOR
-// CORREGIDO: NO REQUIERE QUE POINTER LOCK ESTÉ ACTIVO.
+//
+// CORRECCIÓN IMPORTANTE:
+// no se utiliza controles.getObject().
+// Se mueve directamente camara.position.
+// WASD sigue funcionando al pulsar ESC.
 // ============================================================
 
 function actualizarJugador(delta) {
-    if (!juegoIniciado || !controles) return;
+    if (!juegoIniciado || vistaSeguridad !== null) return;
 
-    const objeto = controles.getObject();
+    movimiento.set(0, 0, 0);
 
-    if (!objeto) return;
-
-    const velocidad =
-        (teclas.ShiftLeft || teclas.ShiftRight)
-            ? CONFIG.velocidadCorrer
-            : CONFIG.velocidadCaminar;
-
-    movimientoJugador.set(0, 0, 0);
-
-    controles.getDirection(vectorAdelante);
+    // Dirección horizontal de la cámara.
+    camara.getWorldDirection(vectorAdelante);
     vectorAdelante.y = 0;
 
     if (vectorAdelante.lengthSq() > 0) {
         vectorAdelante.normalize();
     }
 
+    // Derecha horizontal respecto de la dirección de la cámara.
     vectorDerecha.crossVectors(
         vectorAdelante,
         ejeVertical
     ).normalize();
 
+    const correr =
+        teclas.ShiftLeft ||
+        teclas.ShiftRight;
+
+    const velocidad = correr
+        ? CONFIG.velocidadCorrer
+        : CONFIG.velocidadCaminar;
+
     if (teclas.KeyW || teclas.ArrowUp) {
-        movimientoJugador.add(vectorAdelante);
+        movimiento.add(vectorAdelante);
     }
 
     if (teclas.KeyS || teclas.ArrowDown) {
-        movimientoJugador.sub(vectorAdelante);
+        movimiento.sub(vectorAdelante);
     }
 
     if (teclas.KeyD || teclas.ArrowRight) {
-        movimientoJugador.add(vectorDerecha);
+        movimiento.add(vectorDerecha);
     }
 
     if (teclas.KeyA || teclas.ArrowLeft) {
-        movimientoJugador.sub(vectorDerecha);
+        movimiento.sub(vectorDerecha);
     }
 
-    if (movimientoJugador.lengthSq() > 0) {
-        movimientoJugador.normalize();
+    if (movimiento.lengthSq() > 0) {
+        movimiento.normalize();
 
-        objeto.position.addScaledVector(
-            movimientoJugador,
+        camara.position.addScaledVector(
+            movimiento,
             velocidad * delta
         );
     }
 
     // Salto y gravedad.
     velocidadVertical -= CONFIG.gravedad * delta;
-    objeto.position.y += velocidadVertical * delta;
+    camara.position.y += velocidadVertical * delta;
 
-    if (objeto.position.y <= CONFIG.alturaJugador) {
-        objeto.position.y = CONFIG.alturaJugador;
+    if (camara.position.y <= CONFIG.alturaJugador) {
+        camara.position.y = CONFIG.alturaJugador;
         velocidadVertical = 0;
         jugadorEnSuelo = true;
     }
 
-    // Límites del escenario.
-    objeto.position.x = THREE.MathUtils.clamp(
-        objeto.position.x,
+    camara.position.x = THREE.MathUtils.clamp(
+        camara.position.x,
         LIMITE_JUGADOR.minX,
         LIMITE_JUGADOR.maxX
     );
 
-    objeto.position.z = THREE.MathUtils.clamp(
-        objeto.position.z,
+    camara.position.z = THREE.MathUtils.clamp(
+        camara.position.z,
         LIMITE_JUGADOR.minZ,
         LIMITE_JUGADOR.maxZ
     );
 
-    registrarTrayectoria(objeto.position);
+    registrarTrayectoria(camara.position);
 }
 
 // ============================================================
-// REGISTRO DEL RECORRIDO DEL JUGADOR
+// REGISTRO DE TRAYECTORIA
 // ============================================================
 
 function registrarTrayectoria(posicion) {
-    const ultima = ultimoRegistroTrayectoria;
-
-    if (ultima) {
-        const dx = posicion.x - ultima.x;
-        const dz = posicion.z - ultima.z;
+    if (ultimaPosicionRegistrada) {
+        const dx = posicion.x - ultimaPosicionRegistrada.x;
+        const dz = posicion.z - ultimaPosicionRegistrada.z;
 
         const distancia = Math.sqrt(dx * dx + dz * dz);
 
-        if (distancia < CONFIG.distanciaRegistroTrayectoria) {
-            return;
-        }
+        if (distancia < CONFIG.distanciaRegistro) return;
     }
 
     const registro = {
@@ -1698,58 +1431,74 @@ function registrarTrayectoria(posicion) {
     };
 
     trayectoriaJugador.push(registro);
-    ultimoRegistroTrayectoria = {
+
+    ultimaPosicionRegistrada = {
         x: posicion.x,
         y: posicion.y,
         z: posicion.z
     };
 
-    if (
-        trayectoriaJugador.length >
-        CONFIG.maximoRegistrosTrayectoria
-    ) {
+    if (trayectoriaJugador.length > CONFIG.maximoRegistros) {
         trayectoriaJugador.shift();
     }
 }
 
 function exportarTrayectoria() {
     if (trayectoriaJugador.length === 0) {
-        mostrarMensaje(
-            'Todavía no hay recorrido registrado. Muévete primero.'
-        );
+        mostrarMensaje('Muévete primero para registrar tu recorrido.');
         return;
     }
 
-    const cabecera = 'fecha,x,y,z';
+    const filas = [
+        'fecha,x,y,z',
+        ...trayectoriaJugador.map(p =>
+            `${p.fecha},${p.x},${p.y},${p.z}`
+        )
+    ];
 
-    const filas = trayectoriaJugador.map(punto => (
-        `${punto.fecha},${punto.x},${punto.y},${punto.z}`
-    ));
-
-    const contenido = [cabecera, ...filas].join('\n');
-
-    const archivo = new Blob(
-        [contenido],
+    const blob = new Blob(
+        [filas.join('\n')],
         { type: 'text/csv;charset=utf-8;' }
     );
 
-    const url = URL.createObjectURL(archivo);
+    const url = URL.createObjectURL(blob);
     const enlace = document.createElement('a');
 
     enlace.href = url;
     enlace.download = 'recorrido_supermercado.csv';
-
     document.body.appendChild(enlace);
     enlace.click();
     enlace.remove();
 
     URL.revokeObjectURL(url);
 
-    mostrarMensaje('Recorrido exportado a CSV.');
+    mostrarMensaje('Recorrido exportado.');
 }
 
 // ============================================================
-// EVENTOS DE TECLADO Y VENTANA
+// HUD
+// ============================================================
+
+function actualizarHUD() {
+    const entidades = document.getElementById('estado-entidades');
+    const recorrido = document.getElementById('estado-recorrido');
+
+    if (entidades) {
+        entidades.textContent =
+            `Clientes: ${clientesSupermercado.length}` +
+            ` | Ladrones: ${ladronesSupermercado.length}`;
+    }
+
+    if (recorrido) {
+        recorrido.textContent =
+            `Recorrido: ${trayectoriaJugador.length} puntos`;
+    }
+
+    actualizarEstadoVista();
+}
+
+// ============================================================
+// EVENTOS DE TECLADO
 // ============================================================
 
 function configurarEventos() {
@@ -1759,6 +1508,7 @@ function configurarEventos() {
         if (
             evento.code === 'Space' &&
             juegoIniciado &&
+            vistaSeguridad === null &&
             jugadorEnSuelo
         ) {
             velocidadVertical = CONFIG.velocidadSalto;
@@ -1767,19 +1517,27 @@ function configurarEventos() {
         }
 
         if (/^Digit[1-6]$/.test(evento.code)) {
-            seleccionarCamara(Number(evento.code.slice(-1)) - 1);
+            cambiarVistaSeguridad(
+                Number(evento.code.slice(-1))
+            );
         }
 
-        if (evento.code === 'KeyC') {
-            cambiarVisibilidadCCTV();
+        if (/^Numpad[1-6]$/.test(evento.code)) {
+            cambiarVistaSeguridad(
+                Number(evento.code.slice(-1))
+            );
         }
 
         if (
-            juegoIniciado &&
-            (
-                evento.code === 'Space' ||
-                evento.code.startsWith('Arrow')
-            )
+            evento.code === 'Digit0' ||
+            evento.code === 'Numpad0'
+        ) {
+            volverAlJugador();
+        }
+
+        if (
+            evento.code === 'Space' ||
+            evento.code.startsWith('Arrow')
         ) {
             evento.preventDefault();
         }
@@ -1819,26 +1577,11 @@ function configurarEventos() {
 
 function iniciarAnimacion() {
     renderizador.setAnimationLoop(() => {
-        const delta = Math.min(
-            reloj.getDelta(),
-            0.05
-        );
+        const delta = Math.min(reloj.getDelta(), 0.05);
 
         actualizarJugador(delta);
         actualizarEntidades(delta);
 
-        // Renderizado normal del supermercado.
-        renderizador.setScissorTest(false);
-        renderizador.setViewport(
-            0,
-            0,
-            window.innerWidth,
-            window.innerHeight
-        );
-
         renderizador.render(escena, camara);
-
-        // Renderizado adicional de la cámara de seguridad seleccionada.
-        renderizarVistaCCTV();
     });
 }
