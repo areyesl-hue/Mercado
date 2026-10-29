@@ -1,4 +1,3 @@
-
 import * as THREE from 'three';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 
@@ -12,11 +11,12 @@ import { crearVehiculos } from './vehiculos.js';
 import { crearEstacionamiento } from './estacionamiento.js';
 
 // ============================================================
-// CONFIGURACIÓN
+// CONFIGURACIÓN GENERAL
 // ============================================================
 
 const CONFIG = {
     alturaJugador: 1.7,
+
     velocidadCaminar: 7,
     velocidadCorrer: 12,
     velocidadSalto: 7,
@@ -25,8 +25,10 @@ const CONFIG = {
     colorCieloDia: 0xa9c9e8,
     colorCieloNoche: 0x101827,
 
-    pixelRatioMaximo: 1,
+    // Renderizado ligero para reducir carga de GPU.
+    pixelRatioMaximo: 0.85,
     sombras: false,
+    antialias: false,
 
     distanciaCarrito: 1.15,
     suavizadoCarrito: 6,
@@ -47,7 +49,7 @@ const CONFIG = {
 };
 
 // ============================================================
-// CLIENTES
+// CONFIGURACIÓN DE CLIENTES
 // ============================================================
 
 const CONFIG_CLIENTES = [
@@ -160,53 +162,55 @@ const CONFIG_CLIENTES = [
 ];
 
 // ============================================================
-// TUS DOS LADRONES
-// Se usan estos nombres de archivo exactos.
+// TUS LADRONES
+// Se conservan las rutas y los nombres de archivo indicados.
 // ============================================================
 
 const CONFIG_LADRONES = [
     {
         nombre: 'Ladron1',
         modelo: '/modelos/ladron1.glb',
-        posicion: { x: -2, y: 0, z: 34 },
+        posicion: { x: -2, y: 0, z: 24 },
         velocidad: 1.8,
         ruta: [
-            { x: -2, z: 24 },
-            { x: -7, z: 19 },
-            { x: -12, z: 6.5 },
+            { x: -2, z: 21 },
+            { x: -5, z: 19 },
             { x: -5, z: 6.5 },
-            { x: 5, z: 0 },
-            { x: 12, z: -6 },
-            { x: 17, z: -10 },
-            { x: 12, z: -18 },
+            { x: -5, z: -6 },
+            { x: -5, z: -19 },
             { x: 0, z: -22 },
-            { x: -12, z: -6 }
+            { x: 5, z: -19 },
+            { x: 5, z: -6 },
+            { x: 5, z: 6.5 },
+            { x: 0, z: 19 }
         ]
     },
     {
         nombre: 'Ladron2',
         modelo: '/modelos/ladron2.glb',
-        posicion: { x: 2, y: 0, z: 34 },
+        posicion: { x: 2, y: 0, z: 24 },
         velocidad: 2,
         ruta: [
-            { x: 2, z: 24 },
-            { x: 7, z: 19 },
-            { x: 12, z: 10 },
-            { x: 12, z: 6.5 },
-            { x: 17, z: 0 },
-            { x: 12, z: -6 },
-            { x: 0, z: -6 },
-            { x: -12, z: -6 },
-            { x: -20, z: -6 },
-            { x: -20, z: -22 },
-            { x: 0, z: -22 }
+            { x: 2, z: 21 },
+            { x: 5, z: 19 },
+            { x: 13, z: 19 },
+            { x: 13, z: 6.5 },
+            { x: 13, z: -6 },
+            { x: 13, z: -19 },
+            { x: 5, z: -19 },
+            { x: -5, z: -19 },
+            { x: -13, z: -19 },
+            { x: -13, z: -6 },
+            { x: -13, z: 6.5 },
+            { x: -13, z: 19 },
+            { x: -5, z: 19 }
         ]
     }
 ];
 
 // ============================================================
 // TUS SEIS CÁMARAS ORIGINALES
-// No se crean cámaras físicas ni monitores adicionales.
+// No se crean cámaras físicas ni un monitor de vigilancia.
 // ============================================================
 
 const CONFIG_CAMARAS = [
@@ -268,10 +272,8 @@ let juegoIniciado = false;
 let velocidadVertical = 0;
 let jugadorEnSuelo = true;
 
-// Si es null, controlamos al jugador.
-// Si tiene un número, estamos viendo una cámara de seguridad.
+// null = vista del jugador; 1-6 = cámara de seguridad.
 let vistaSeguridad = null;
-
 let posicionJugadorGuardada = null;
 let quaternionJugadorGuardado = null;
 
@@ -297,7 +299,7 @@ const LIMITE_JUGADOR = {
 
 const vectorAdelante = new THREE.Vector3();
 const vectorDerecha = new THREE.Vector3();
-const movimiento = new THREE.Vector3();
+const movimientoJugador = new THREE.Vector3();
 const ejeVertical = new THREE.Vector3(0, 1, 0);
 
 // ============================================================
@@ -352,13 +354,16 @@ function crearCamara() {
 }
 
 // ============================================================
-// RENDERIZADOR
+// RENDERIZADOR LIGERO
 // ============================================================
 
 function crearRenderizador() {
     renderizador = new THREE.WebGLRenderer({
-        antialias: false,
-        powerPreference: 'high-performance'
+        antialias: CONFIG.antialias,
+        powerPreference: 'high-performance',
+        alpha: false,
+        stencil: false,
+        depth: true
     });
 
     renderizador.setPixelRatio(
@@ -369,10 +374,12 @@ function crearRenderizador() {
     );
 
     renderizador.setSize(window.innerWidth, window.innerHeight);
+
+    // Se evita el tone mapping más costoso para aligerar el render.
     renderizador.outputColorSpace = THREE.SRGBColorSpace;
-    renderizador.toneMapping = THREE.ACESFilmicToneMapping;
-    renderizador.toneMappingExposure = 1.1;
-    renderizador.shadowMap.enabled = CONFIG.sombras;
+    renderizador.toneMapping = THREE.NoToneMapping;
+    renderizador.shadowMap.enabled = false;
+    renderizador.info.autoReset = true;
 
     document.body.style.margin = '0';
     document.body.style.overflow = 'hidden';
@@ -401,9 +408,9 @@ function crearIluminacion() {
     );
     escena.add(luzAmbiente);
 
-    luzSol = new THREE.DirectionalLight(0xffedcf, 2.4);
+    luzSol = new THREE.DirectionalLight(0xffedcf, 2.0);
     luzSol.position.set(-35, 55, 35);
-    luzSol.castShadow = CONFIG.sombras;
+    luzSol.castShadow = false;
     escena.add(luzSol);
 
     luzLuna = new THREE.DirectionalLight(0x829bc9, 0.15);
@@ -421,8 +428,8 @@ function crearSuelo() {
         new THREE.PlaneGeometry(180, 180),
         new THREE.MeshStandardMaterial({
             color: 0x62696d,
-            roughness: 0.88,
-            metalness: 0.05
+            roughness: 0.95,
+            metalness: 0
         })
     );
 
@@ -435,7 +442,8 @@ function crearSuelo() {
         new THREE.PlaneGeometry(64, 58),
         new THREE.MeshStandardMaterial({
             color: 0xbfc2c1,
-            roughness: 0.8
+            roughness: 0.9,
+            metalness: 0
         })
     );
 
@@ -452,7 +460,7 @@ function crearSuelo() {
 }
 
 // ============================================================
-// MERCADO, MOBILIARIO, ALMACÉN Y PRODUCTOS
+// ESTRUCTURA DEL SUPERMERCADO
 // ============================================================
 
 function crearEstructuraSupermercado() {
@@ -481,30 +489,24 @@ function crearEstructuraSupermercado() {
         productosLacteos = crearProductosLacteos(escena);
         console.info('Productos iniciados.');
     } catch (error) {
-        console.error('Error al crear productos:', error);
+        console.error('Error al iniciar productos:', error);
     }
 }
 
 // ============================================================
-// POINTER LOCK
-// ESC LIBERA EL MOUSE, NO VUELVE A MOSTRAR LA PORTADA.
+// CONTROLES DEL JUGADOR
 // ============================================================
 
 function crearControles() {
-    controles = new PointerLockControls(
-        camara,
-        renderizador.domElement
-    );
+    controles = new PointerLockControls(camara, renderizador.domElement);
 
     controles.addEventListener('unlock', () => {
         if (juegoIniciado) {
-            mostrarMensaje(
-                'Mouse liberado. WASD sigue funcionando.'
-            );
+            mostrarMensaje('Mouse liberado. WASD sigue funcionando.');
         }
     });
 
-    // Un clic sobre el escenario vuelve a habilitar la cámara del mouse.
+    // Un clic sobre el escenario permite recuperar el giro del mouse.
     renderizador.domElement.addEventListener('click', () => {
         if (
             juegoIniciado &&
@@ -514,7 +516,7 @@ function crearControles() {
             try {
                 controles.lock();
             } catch (error) {
-                console.warn('No fue posible bloquear el mouse:', error);
+                console.warn('No se pudo bloquear el mouse:', error);
             }
         }
     });
@@ -541,8 +543,8 @@ function crearInterfaz() {
             box-sizing: border-box;
             background: linear-gradient(
                 135deg,
-                rgba(8, 18, 30, .96),
-                rgba(15, 54, 70, .92)
+                rgba(8,18,30,.96),
+                rgba(15,54,70,.92)
             );
             color: white;
             font-family: Arial, sans-serif;
@@ -551,7 +553,7 @@ function crearInterfaz() {
 
         #portada-supermercado h1 {
             margin: 0;
-            font-size: clamp(28px, 5vw, 50px);
+            font-size: clamp(28px,5vw,50px);
             letter-spacing: 2px;
         }
 
@@ -561,10 +563,10 @@ function crearInterfaz() {
         }
 
         .boton-supermercado {
-            border: 1px solid rgba(255,255,255,.3);
+            border: 1px solid rgba(255,255,255,.28);
             border-radius: 7px;
             padding: 9px 12px;
-            background: rgba(14, 105, 76, .94);
+            background: rgba(14,105,76,.94);
             color: white;
             font-size: 12px;
             font-weight: bold;
@@ -577,43 +579,43 @@ function crearInterfaz() {
 
         #hud-supermercado {
             position: fixed;
-            left: 12px;
-            top: 12px;
+            left: 10px;
+            top: 10px;
             z-index: 100;
-            max-width: 270px;
-            padding: 10px 12px;
+            max-width: 260px;
+            padding: 9px 11px;
             color: white;
-            background: rgba(8, 16, 24, .8);
+            background: rgba(8,16,24,.8);
             border: 1px solid rgba(255,255,255,.2);
             border-radius: 8px;
-            font: 12px/1.65 Arial, sans-serif;
+            font: 12px/1.6 Arial, sans-serif;
             pointer-events: none;
         }
 
         #acciones-supermercado {
             position: fixed;
-            right: 12px;
-            top: 12px;
+            right: 10px;
+            top: 10px;
             z-index: 150;
             display: flex;
             flex-wrap: wrap;
             justify-content: flex-end;
             gap: 5px;
-            max-width: 390px;
+            max-width: 370px;
         }
 
         #controles-camaras {
             position: fixed;
             left: 50%;
-            bottom: 12px;
+            bottom: 10px;
             z-index: 150;
             transform: translateX(-50%);
             display: flex;
             flex-wrap: wrap;
             justify-content: center;
-            gap: 5px;
+            gap: 4px;
             max-width: 95vw;
-            padding: 7px;
+            padding: 6px;
             border-radius: 7px;
             background: rgba(8,16,24,.78);
         }
@@ -621,7 +623,7 @@ function crearInterfaz() {
         #mensaje-supermercado {
             position: fixed;
             left: 50%;
-            bottom: 67px;
+            bottom: 60px;
             z-index: 200;
             transform: translateX(-50%);
             max-width: 80vw;
@@ -636,32 +638,28 @@ function crearInterfaz() {
 
         @media (max-width: 650px) {
             #hud-supermercado {
-                top: 6px;
-                left: 6px;
-                max-width: 160px;
-                padding: 7px;
+                top: 5px;
+                left: 5px;
+                max-width: 155px;
+                padding: 6px;
                 font-size: 10px;
             }
 
             #acciones-supermercado {
-                top: 6px;
-                right: 6px;
-                max-width: 190px;
+                top: 5px;
+                right: 5px;
+                max-width: 185px;
             }
 
             #controles-camaras {
-                bottom: 6px;
+                bottom: 5px;
                 gap: 3px;
                 padding: 4px;
             }
 
             .boton-supermercado {
-                padding: 7px;
+                padding: 6px 7px;
                 font-size: 10px;
-            }
-
-            #mensaje-supermercado {
-                bottom: 52px;
             }
         }
     `;
@@ -692,21 +690,18 @@ function crearInterfaz() {
 
     const hud = document.createElement('div');
     hud.id = 'hud-supermercado';
+
     hud.innerHTML = `
         <strong>SUPERMERCADO 3D</strong><br>
         WASD: mover<br>
         SHIFT: correr<br>
         ESPACIO: saltar<br>
-        ESC: liberar mouse<br>
+        ESC: liberar mouse
         <div id="estado-entidades">
             Clientes: 0 | Ladrones: 0
         </div>
-        <div id="estado-recorrido">
-            Recorrido: 0 puntos
-        </div>
-        <div id="estado-vista">
-            Vista: jugador
-        </div>
+        <div id="estado-recorrido">Recorrido: 0 puntos</div>
+        <div id="estado-vista">Vista: jugador</div>
     `;
 
     document.body.appendChild(hud);
@@ -731,7 +726,6 @@ function crearInterfaz() {
 
     document.body.appendChild(acciones);
 
-    // Controles simples de las seis vistas. No se crean cámaras físicas.
     const controlesCamaras = document.createElement('div');
     controlesCamaras.id = 'controles-camaras';
 
@@ -756,8 +750,6 @@ function crearInterfaz() {
         juegoIniciado = true;
         portada.style.display = 'none';
 
-        // Si el navegador no puede bloquear el mouse,
-        // WASD seguirá moviendo al jugador.
         try {
             controles.lock();
         } catch (error) {
@@ -770,7 +762,6 @@ function crearInterfaz() {
     document.getElementById('btn-dia-noche').addEventListener('click', () => {
         modoNoche = !modoNoche;
         actualizarIluminacion();
-
         mostrarMensaje(
             modoNoche
                 ? 'Iluminación nocturna.'
@@ -783,21 +774,20 @@ function crearInterfaz() {
             sistemaVehiculos.solicitarLlegada();
             mostrarMensaje('Se solicitó la llegada de un vehículo.');
         } else {
-            mostrarMensaje(
-                'Tu módulo vehiculos.js no expone solicitarLlegada().'
-            );
+            mostrarMensaje('El módulo vehiculos.js no expone solicitarLlegada().');
         }
     });
 
     document.getElementById('btn-entrada').addEventListener('click', () => {
-        volverAlJugador(true);
+        volverAlJugador();
+
         camara.position.set(0, CONFIG.alturaJugador, 25);
         camara.lookAt(0, CONFIG.alturaJugador, 15);
 
         velocidadVertical = 0;
         jugadorEnSuelo = true;
-        registrarTrayectoria(camara.position);
 
+        registrarTrayectoria(camara.position);
         mostrarMensaje('Has vuelto a la entrada.');
     });
 
@@ -824,32 +814,30 @@ function crearInterfaz() {
 // ============================================================
 
 function mostrarMensaje(texto) {
-    const mensaje = document.getElementById('mensaje-supermercado');
-    if (!mensaje) return;
+    const elemento = document.getElementById('mensaje-supermercado');
+    if (!elemento) return;
 
-    mensaje.textContent = texto;
-    mensaje.style.display = 'block';
+    elemento.textContent = texto;
+    elemento.style.display = 'block';
 
     if (temporizadorMensaje) {
         clearTimeout(temporizadorMensaje);
     }
 
     temporizadorMensaje = setTimeout(() => {
-        mensaje.style.display = 'none';
+        elemento.style.display = 'none';
     }, 2500);
 }
 
 // ============================================================
-// CAMBIAR A UNA DE LAS SEIS VISTAS ORIGINALES
+// CAMBIAR VISTAS DE SEGURIDAD
 // ============================================================
 
 function cambiarVistaSeguridad(numero) {
     if (numero < 1 || numero > CONFIG_CAMARAS.length) return;
 
-    const indice = numero - 1;
-    const config = CONFIG_CAMARAS[indice];
+    const config = CONFIG_CAMARAS[numero - 1];
 
-    // Guardar una sola vez la posición y rotación reales del jugador.
     if (vistaSeguridad === null) {
         posicionJugadorGuardada = camara.position.clone();
         quaternionJugadorGuardado = camara.quaternion.clone();
@@ -860,7 +848,7 @@ function cambiarVistaSeguridad(numero) {
     try {
         controles.unlock();
     } catch (error) {
-        // La vista de seguridad sigue funcionando sin Pointer Lock.
+        // La vista de seguridad puede funcionar sin Pointer Lock.
     }
 
     camara.position.set(
@@ -876,10 +864,10 @@ function cambiarVistaSeguridad(numero) {
     );
 
     actualizarEstadoVista();
-    mostrarMensaje(`Mostrando ${config.nombre}. Pulsa 0 para volver.`);
+    mostrarMensaje(`${config.nombre}. Pulsa 0 para regresar.`);
 }
 
-function volverAlJugador(volverAlInicio = false) {
+function volverAlJugador() {
     if (vistaSeguridad !== null) {
         if (posicionJugadorGuardada && quaternionJugadorGuardado) {
             camara.position.copy(posicionJugadorGuardada);
@@ -889,11 +877,6 @@ function volverAlJugador(volverAlInicio = false) {
         vistaSeguridad = null;
         posicionJugadorGuardada = null;
         quaternionJugadorGuardado = null;
-    }
-
-    if (volverAlInicio) {
-        camara.position.set(0, CONFIG.alturaJugador, 25);
-        camara.lookAt(0, CONFIG.alturaJugador, 15);
     }
 
     actualizarEstadoVista();
@@ -909,7 +892,7 @@ function actualizarEstadoVista() {
 }
 
 // ============================================================
-// ILUMINACIÓN DÍA / NOCHE
+// DÍA / NOCHE
 // ============================================================
 
 function actualizarIluminacion() {
@@ -918,6 +901,7 @@ function actualizarIluminacion() {
     if (modoNoche) {
         escena.background.setHex(CONFIG.colorCieloNoche);
         escena.fog.color.setHex(CONFIG.colorCieloNoche);
+
         luzAmbiente.intensity = 0.65;
         luzSol.intensity = 0.15;
         luzLuna.visible = true;
@@ -925,14 +909,15 @@ function actualizarIluminacion() {
     } else {
         escena.background.setHex(CONFIG.colorCieloDia);
         escena.fog.color.setHex(0xc7d9e9);
+
         luzAmbiente.intensity = 1.8;
-        luzSol.intensity = 2.4;
+        luzSol.intensity = 2.0;
         luzLuna.visible = false;
     }
 }
 
 // ============================================================
-// CREAR LADRONES
+// LADRONES
 // ============================================================
 
 function crearLadrones() {
@@ -957,27 +942,106 @@ function crearLadrones() {
             });
 
             if (!ladron) {
-                console.error(
-                    `[LADRÓN] No se pudo crear ${config.nombre}.`
-                );
+                console.error(`[LADRÓN] No se pudo crear ${config.nombre}.`);
                 continue;
             }
 
             ladron.nombre = config.nombre;
             ladron._esLadron = true;
 
+            // Patrulla independiente: no depende de la ruta A* de cliente.js.
+            ladron._patrullaMain = {
+                x: config.posicion.x,
+                y: config.posicion.y,
+                z: config.posicion.z,
+                indice: 0,
+                velocidad: config.velocidad,
+                ruta: config.ruta
+            };
+
             ladronesSupermercado.push(ladron);
 
             console.info(`[LADRÓN] ${config.nombre}`, {
                 modelo: config.modelo,
-                posicion: config.posicion
+                posicion: config.posicion,
+                cargado: ladron.cargado
             });
         } catch (error) {
-            console.error(
-                `[LADRÓN] Error al crear ${config.nombre}:`,
-                error
-            );
+            console.error(`[LADRÓN] Error al crear ${config.nombre}:`, error);
         }
+    }
+}
+
+// ============================================================
+// PATRULLA INDEPENDIENTE DE LOS LADRONES
+// Fuerza el movimiento del grupo aunque cliente.js esté esperando.
+// ============================================================
+
+function actualizarPatrullaLadrones(delta) {
+    for (let i = ladronesSupermercado.length - 1; i >= 0; i--) {
+        const ladron = ladronesSupermercado[i];
+
+        if (!ladron || ladron.eliminado) {
+            ladronesSupermercado.splice(i, 1);
+            continue;
+        }
+
+        try {
+            // Actualiza el mezclador de animaciones y el estado interno.
+            ladron.actualizar?.(delta);
+        } catch (error) {
+            if (!ladron._errorActualizacionRegistrado) {
+                console.error(`Error al actualizar ${ladron.nombre}:`, error);
+                ladron._errorActualizacionRegistrado = true;
+            }
+        }
+
+        const patrulla = ladron._patrullaMain;
+        const grupo = ladron.grupo;
+
+        if (!patrulla || !grupo || patrulla.ruta.length === 0) {
+            continue;
+        }
+
+        let objetivo = patrulla.ruta[patrulla.indice];
+
+        let dx = objetivo.x - patrulla.x;
+        let dz = objetivo.z - patrulla.z;
+
+        let distancia = Math.sqrt(dx * dx + dz * dz);
+
+        // Cambiar al siguiente punto cuando se aproxima al actual.
+        if (distancia < 0.65) {
+            patrulla.indice =
+                (patrulla.indice + 1) % patrulla.ruta.length;
+
+            objetivo = patrulla.ruta[patrulla.indice];
+
+            dx = objetivo.x - patrulla.x;
+            dz = objetivo.z - patrulla.z;
+
+            distancia = Math.sqrt(dx * dx + dz * dz);
+        }
+
+        if (distancia > 0.001) {
+            const paso = Math.min(
+                patrulla.velocidad * delta,
+                distancia
+            );
+
+            patrulla.x += (dx / distancia) * paso;
+            patrulla.z += (dz / distancia) * paso;
+
+            // Orientación hacia el siguiente punto.
+            grupo.rotation.y = Math.atan2(dx, dz);
+        }
+
+        // La patrulla controla la posición final.
+        grupo.position.set(
+            patrulla.x,
+            patrulla.y,
+            patrulla.z
+        );
     }
 }
 
@@ -1010,6 +1074,7 @@ function crearSistemaVehiculos() {
                 if (visita) {
                     visita.cliente?.eliminar?.();
                     visita.carrito?.eliminar?.();
+
                     visitantesPorVehiculo.delete(datos.id);
                 }
 
@@ -1024,12 +1089,12 @@ function crearSistemaVehiculos() {
 }
 
 // ============================================================
-// CLIENTE NORMAL QUE BAJA DEL VEHÍCULO
+// CLIENTES QUE LLEGAN EN VEHÍCULOS
 // ============================================================
 
 function crearClienteParaVehiculo(datos) {
     if (!datos?.plaza) {
-        console.warn('El vehículo no proporcionó datos de la plaza.');
+        console.warn('El vehículo no proporcionó la posición de su plaza.');
         return;
     }
 
@@ -1073,10 +1138,7 @@ function crearClienteParaVehiculo(datos) {
                 }
 
                 if (!carrito) {
-                    carrito = crearCarritoVisitante(
-                        cliente,
-                        config.nombre
-                    );
+                    carrito = crearCarritoVisitante(cliente, config.nombre);
 
                     if (visita) {
                         visita.carrito = carrito;
@@ -1112,26 +1174,22 @@ function crearClienteParaVehiculo(datos) {
             cliente.establecerRuta?.(config.ruta);
         }
 
-        console.info(
-            `[CLIENTE] ${config.nombre} asignado al vehículo.`,
-            config.modelo
-        );
+        console.info(`[CLIENTE] ${config.nombre} asignado al vehículo.`);
     } catch (error) {
-        console.error('Error al crear cliente:', error);
+        console.error('Error al crear cliente desde vehículo:', error);
+
         cliente?.eliminar?.();
         carrito?.eliminar?.();
     }
 }
 
 // ============================================================
-// CREAR CARRITO
+// CARRITOS
 // ============================================================
 
 function crearCarritoVisitante(cliente, nombreCliente) {
     if (!cliente?.grupo) {
-        console.warn(
-            `No se pudo crear el carrito de ${nombreCliente}.`
-        );
+        console.warn(`No se pudo crear el carrito de ${nombreCliente}.`);
         return null;
     }
 
@@ -1171,19 +1229,45 @@ function crearCarritoVisitante(cliente, nombreCliente) {
         }
 
         carritosClientes.push(carrito);
+
         return carrito;
     } catch (error) {
-        console.error(
-            `Error en el carrito de ${nombreCliente}:`,
-            error
-        );
+        console.error(`Error al crear carrito de ${nombreCliente}:`, error);
+
         carrito?.eliminar?.();
         return null;
     }
 }
 
+function actualizarSeguimientoCarrito(carrito, objetivo, delta) {
+    if (!carrito?.grupo || !objetivo) return;
+
+    const giro = objetivo.rotation.y;
+    const distancia = CONFIG.distanciaCarrito;
+
+    const destinoX = objetivo.position.x - Math.sin(giro) * distancia;
+    const destinoZ = objetivo.position.z - Math.cos(giro) * distancia;
+
+    const factor = 1 - Math.exp(-CONFIG.suavizadoCarrito * delta);
+
+    carrito.grupo.position.x = THREE.MathUtils.lerp(
+        carrito.grupo.position.x,
+        destinoX,
+        factor
+    );
+
+    carrito.grupo.position.z = THREE.MathUtils.lerp(
+        carrito.grupo.position.z,
+        destinoZ,
+        factor
+    );
+
+    carrito.grupo.position.y = 0;
+    carrito.grupo.rotation.y = giro;
+}
+
 // ============================================================
-// ACTUALIZACIÓN DE ENTIDADES
+// ACTUALIZAR CLIENTES Y VEHÍCULOS
 // ============================================================
 
 function actualizarEntidades(delta) {
@@ -1199,17 +1283,22 @@ function actualizarEntidades(delta) {
         'cliente'
     );
 
-    actualizarListaEntidades(
-        ladronesSupermercado,
-        delta,
-        'ladrón'
-    );
+    // Los ladrones NO se actualizan dentro de esta lista.
+    // Su actualización se realiza en actualizarPatrullaLadrones().
+    actualizarPatrullaLadrones(delta);
 
-    for (const carrito of carritosClientes) {
+    for (let i = carritosClientes.length - 1; i >= 0; i--) {
+        const carrito = carritosClientes[i];
+
         try {
-            if (typeof carrito?.actualizar === 'function') {
+            if (!carrito || carrito.eliminado) {
+                carritosClientes.splice(i, 1);
+                continue;
+            }
+
+            if (typeof carrito.actualizar === 'function') {
                 carrito.actualizar(delta);
-            } else if (carrito?.grupo && carrito?._objetivoCliente) {
+            } else if (carrito.grupo && carrito._objetivoCliente) {
                 actualizarSeguimientoCarrito(
                     carrito,
                     carrito._objetivoCliente,
@@ -1243,7 +1332,7 @@ function actualizarListaEntidades(lista, delta, tipo) {
 }
 
 // ============================================================
-// CICLO DE CLIENTES: COMPRAS Y REGRESO AL VEHÍCULO
+// CICLO DE CLIENTES
 // ============================================================
 
 function actualizarFasesVisitantes(delta) {
@@ -1269,8 +1358,7 @@ function actualizarFasesVisitantes(delta) {
                 visita.tiempo = 0;
 
                 if (
-                    typeof visita.cliente.iniciarRegresoVehiculo ===
-                    'function'
+                    typeof visita.cliente.iniciarRegresoVehiculo === 'function'
                 ) {
                     visita.cliente.iniciarRegresoVehiculo(
                         visita.plaza,
@@ -1288,103 +1376,59 @@ function actualizarFasesVisitantes(delta) {
 }
 
 // ============================================================
-// SEGUIMIENTO DEL CARRITO
-// ============================================================
-
-function actualizarSeguimientoCarrito(carrito, objetivo, delta) {
-    if (!carrito?.grupo || !objetivo) return;
-
-    const giro = objetivo.rotation.y;
-    const distancia = CONFIG.distanciaCarrito;
-
-    const destinoX =
-        objetivo.position.x - Math.sin(giro) * distancia;
-
-    const destinoZ =
-        objetivo.position.z - Math.cos(giro) * distancia;
-
-    const factor = 1 - Math.exp(
-        -CONFIG.suavizadoCarrito * delta
-    );
-
-    carrito.grupo.position.x = THREE.MathUtils.lerp(
-        carrito.grupo.position.x,
-        destinoX,
-        factor
-    );
-
-    carrito.grupo.position.z = THREE.MathUtils.lerp(
-        carrito.grupo.position.z,
-        destinoZ,
-        factor
-    );
-
-    carrito.grupo.position.y = 0;
-    carrito.grupo.rotation.y = giro;
-}
-
-// ============================================================
 // MOVIMIENTO DEL JUGADOR
-//
-// CORRECCIÓN IMPORTANTE:
-// no se utiliza controles.getObject().
-// Se mueve directamente camara.position.
-// WASD sigue funcionando al pulsar ESC.
+// No utiliza controles.getObject() ni depende del Pointer Lock.
 // ============================================================
 
 function actualizarJugador(delta) {
     if (!juegoIniciado || vistaSeguridad !== null) return;
 
-    movimiento.set(0, 0, 0);
+    movimientoJugador.set(0, 0, 0);
 
-    // Dirección horizontal de la cámara.
-    camara.getWorldDirection(vectorAdelante);
+    controles.getDirection(vectorAdelante);
     vectorAdelante.y = 0;
 
     if (vectorAdelante.lengthSq() > 0) {
         vectorAdelante.normalize();
     }
 
-    // Derecha horizontal respecto de la dirección de la cámara.
     vectorDerecha.crossVectors(
         vectorAdelante,
         ejeVertical
     ).normalize();
 
-    const correr =
+    const velocidad = (
         teclas.ShiftLeft ||
-        teclas.ShiftRight;
-
-    const velocidad = correr
+        teclas.ShiftRight
+    )
         ? CONFIG.velocidadCorrer
         : CONFIG.velocidadCaminar;
 
     if (teclas.KeyW || teclas.ArrowUp) {
-        movimiento.add(vectorAdelante);
+        movimientoJugador.add(vectorAdelante);
     }
 
     if (teclas.KeyS || teclas.ArrowDown) {
-        movimiento.sub(vectorAdelante);
+        movimientoJugador.sub(vectorAdelante);
     }
 
     if (teclas.KeyD || teclas.ArrowRight) {
-        movimiento.add(vectorDerecha);
+        movimientoJugador.add(vectorDerecha);
     }
 
     if (teclas.KeyA || teclas.ArrowLeft) {
-        movimiento.sub(vectorDerecha);
+        movimientoJugador.sub(vectorDerecha);
     }
 
-    if (movimiento.lengthSq() > 0) {
-        movimiento.normalize();
+    if (movimientoJugador.lengthSq() > 0) {
+        movimientoJugador.normalize();
 
         camara.position.addScaledVector(
-            movimiento,
+            movimientoJugador,
             velocidad * delta
         );
     }
 
-    // Salto y gravedad.
     velocidadVertical -= CONFIG.gravedad * delta;
     camara.position.y += velocidadVertical * delta;
 
@@ -1410,27 +1454,24 @@ function actualizarJugador(delta) {
 }
 
 // ============================================================
-// REGISTRO DE TRAYECTORIA
+// REGISTRO Y EXPORTACIÓN DEL RECORRIDO
 // ============================================================
 
 function registrarTrayectoria(posicion) {
     if (ultimaPosicionRegistrada) {
         const dx = posicion.x - ultimaPosicionRegistrada.x;
         const dz = posicion.z - ultimaPosicionRegistrada.z;
-
         const distancia = Math.sqrt(dx * dx + dz * dz);
 
         if (distancia < CONFIG.distanciaRegistro) return;
     }
 
-    const registro = {
+    trayectoriaJugador.push({
         fecha: new Date().toISOString(),
         x: Number(posicion.x.toFixed(3)),
         y: Number(posicion.y.toFixed(3)),
         z: Number(posicion.z.toFixed(3))
-    };
-
-    trayectoriaJugador.push(registro);
+    });
 
     ultimaPosicionRegistrada = {
         x: posicion.x,
@@ -1445,7 +1486,7 @@ function registrarTrayectoria(posicion) {
 
 function exportarTrayectoria() {
     if (trayectoriaJugador.length === 0) {
-        mostrarMensaje('Muévete primero para registrar tu recorrido.');
+        mostrarMensaje('Muévete primero para registrar el recorrido.');
         return;
     }
 
@@ -1498,7 +1539,7 @@ function actualizarHUD() {
 }
 
 // ============================================================
-// EVENTOS DE TECLADO
+// EVENTOS
 // ============================================================
 
 function configurarEventos() {
@@ -1517,15 +1558,11 @@ function configurarEventos() {
         }
 
         if (/^Digit[1-6]$/.test(evento.code)) {
-            cambiarVistaSeguridad(
-                Number(evento.code.slice(-1))
-            );
+            cambiarVistaSeguridad(Number(evento.code.slice(-1)));
         }
 
         if (/^Numpad[1-6]$/.test(evento.code)) {
-            cambiarVistaSeguridad(
-                Number(evento.code.slice(-1))
-            );
+            cambiarVistaSeguridad(Number(evento.code.slice(-1)));
         }
 
         if (
@@ -1572,11 +1609,12 @@ function configurarEventos() {
 }
 
 // ============================================================
-// BUCLE PRINCIPAL
+// BUCLE DE RENDERIZADO
 // ============================================================
 
 function iniciarAnimacion() {
     renderizador.setAnimationLoop(() => {
+        // Delta limitado para evitar saltos tras una pausa.
         const delta = Math.min(reloj.getDelta(), 0.05);
 
         actualizarJugador(delta);
