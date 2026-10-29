@@ -131,6 +131,7 @@ camara.lookAt(0, CONFIG.alturaJugador, 10);
 
 // ============================================================
 // RENDERIZADOR OPTIMIZADO
+// RESOLUCIÓN FIJA EN 1.0
 // ============================================================
 
 const renderizador = new THREE.WebGLRenderer({
@@ -143,17 +144,15 @@ renderizador.setSize(
     window.innerHeight
 );
 
-renderizador.setPixelRatio(CONFIG.pixelRatioMaximo);
-
-// Desactivar sombras en tiempo real para reducir la carga gráfica.
+renderizador.setPixelRatio(1.0);
 renderizador.shadowMap.enabled = false;
-
 renderizador.toneMapping = THREE.ACESFilmicToneMapping;
 renderizador.toneMappingExposure = 1.0;
 renderizador.outputColorSpace = THREE.SRGBColorSpace;
 
 document.body.style.margin = '0';
 document.body.style.overflow = 'hidden';
+
 document.body.appendChild(renderizador.domElement);
 
 // ============================================================
@@ -446,25 +445,17 @@ function crearInterfaz() {
 
     document.body.appendChild(hud);
 
-    document.getElementById('btn-entrar').addEventListener(
-        'click',
-        () => controles.lock()
-    );
+    document.getElementById('btn-entrar')
+        .addEventListener('click', () => controles.lock());
 
-    document.getElementById('btn-dia').addEventListener(
-        'click',
-        cambiarDiaNoche
-    );
+    document.getElementById('btn-dia')
+        .addEventListener('click', cambiarDiaNoche);
 
-    document.getElementById('btn-entrada').addEventListener(
-        'click',
-        volverEntrada
-    );
+    document.getElementById('btn-entrada')
+        .addEventListener('click', volverEntrada);
 
-    document.getElementById('btn-camara').addEventListener(
-        'click',
-        salirCamaraSeguridad
-    );
+    document.getElementById('btn-camara')
+        .addEventListener('click', salirCamaraSeguridad);
 
     controles.addEventListener('lock', () => {
         document.getElementById('mensaje-centro')
@@ -556,8 +547,17 @@ function activarCamaraSeguridad(numero) {
     camaraSeguridadActiva = true;
     numeroCamara = numero;
 
-    camara.position.set(datos.x, datos.y, datos.z);
-    camara.lookAt(datos.mirarX, 1.4, datos.mirarZ);
+    camara.position.set(
+        datos.x,
+        datos.y,
+        datos.z
+    );
+
+    camara.lookAt(
+        datos.mirarX,
+        1.4,
+        datos.mirarZ
+    );
 
     if (controles.isLocked) {
         controles.unlock();
@@ -844,44 +844,60 @@ function crearClienteParaVehiculo(datos) {
 
     visitantes.set(idVehiculo, visita);
 
-    const cliente = crearClienteSupermercado(escena, {
-        modelo: configCliente.modelo,
-        posicion,
-        escala: 1,
-        velocidad: 1.5,
-        ruta: configCliente.ruta,
-        inactivo: true,
+    try {
+        const cliente = crearClienteSupermercado(escena, {
+            modelo: configCliente.modelo,
+            posicion,
+            escala: 1,
+            velocidad: 1.5,
+            ruta: configCliente.ruta,
+            inactivo: true,
 
-        alEntrar: clienteEntrado => {
-            visita.fase = 'comprando';
-            visita.tiempoCompra = 0;
+            alEntrar: clienteEntrado => {
+                visita.fase = 'comprando';
+                visita.tiempoCompra = 0;
 
-            console.info(
-                `[CLIENTES] ${configCliente.nombre} entró al supermercado.`
+                console.info(
+                    `[CLIENTES] ${configCliente.nombre} entró al supermercado.`
+                );
+
+                clienteEntrado.configurarCompras?.({
+                    productos,
+                    carrito
+                });
+            }
+        });
+
+        if (!cliente) {
+            throw new Error(
+                `No se pudo crear ${configCliente.nombre}.`
             );
-
-            clienteEntrado.configurarCompras({
-                productos,
-                carrito
-            });
         }
-    });
 
-    visita.cliente = cliente;
+        visita.cliente = cliente;
 
-    cliente.configurarCompras({
-        productos,
-        carrito
-    });
+        cliente.configurarCompras?.({
+            productos,
+            carrito
+        });
 
-    cliente.iniciarDesdeVehiculo?.(posicion, plaza);
+        cliente.iniciarDesdeVehiculo?.(posicion, plaza);
 
-    visita.fase = 'entrando';
+        visita.fase = 'entrando';
 
-    console.info(
-        `[CLIENTES] Creado ${configCliente.nombre} para el auto ${idVehiculo}.`,
-        configCliente.modelo
-    );
+        console.info(
+            `[CLIENTES] Creado ${configCliente.nombre} para el auto ${idVehiculo}.`,
+            configCliente.modelo
+        );
+    } catch (error) {
+        console.error(
+            `[CLIENTES] Error al crear ${configCliente.nombre}:`,
+            error
+        );
+
+        carrito?.eliminar?.();
+        visitantes.delete(idVehiculo);
+    }
 }
 
 // ============================================================
@@ -891,45 +907,52 @@ function crearClienteParaVehiculo(datos) {
 let sistemaVehiculos = null;
 
 function crearSistemaVehiculos() {
-    sistemaVehiculos = crearVehiculos(escena, {
-        modelos: [
-            '/modelos/auto.glb',
-            '/modelos/auto2.glb',
-            '/modelos/auto3.glb',
-            '/modelos/auto4.glb',
-            '/modelos/auto5.glb',
-            '/modelos/auto6.glb',
-            '/modelos/auto7.glb'
-        ],
+    try {
+        sistemaVehiculos = crearVehiculos(escena, {
+            modelos: [
+                '/modelos/auto.glb',
+                '/modelos/auto2.glb',
+                '/modelos/auto3.glb',
+                '/modelos/auto4.glb',
+                '/modelos/auto5.glb',
+                '/modelos/auto6.glb',
+                '/modelos/auto7.glb'
+            ],
 
-        escala: 1,
-        longitudVehiculo: 4.3,
-        velocidad: 5.5,
-        tiempoEntreLlegadas: 7,
-        cochesIniciales: 3,
-        separacionInicial: 7,
+            escala: 1,
+            longitudVehiculo: 4.3,
+            velocidad: 5.5,
+            tiempoEntreLlegadas: 7,
+            cochesIniciales: 3,
+            separacionInicial: 7,
 
-        alEstacionar: datos => {
-            crearClienteParaVehiculo(datos);
-        },
+            alEstacionar: datos => {
+                crearClienteParaVehiculo(datos);
+            },
 
-        alSalir: datos => {
-            const visita = visitantes.get(datos.id);
+            alSalir: datos => {
+                const visita = visitantes.get(datos.id);
 
-            if (!visita) return;
+                if (!visita) return;
 
-            visita.cliente?.eliminar?.();
-            visita.carrito?.eliminar?.();
+                visita.cliente?.eliminar?.();
+                visita.carrito?.eliminar?.();
 
-            visitantes.delete(datos.id);
+                visitantes.delete(datos.id);
 
-            console.info(
-                `[CLIENTES] Visita terminada para el auto ${datos.id}.`
-            );
-        }
-    });
+                console.info(
+                    `[CLIENTES] Visita terminada para el auto ${datos.id}.`
+                );
+            }
+        });
 
-    console.info('[MAIN] Sistema de vehículos iniciado.');
+        console.info('[MAIN] Sistema de vehículos iniciado.');
+    } catch (error) {
+        console.error(
+            '[MAIN] No se pudo iniciar el sistema de vehículos:',
+            error
+        );
+    }
 }
 
 crearSistemaVehiculos();
@@ -983,7 +1006,16 @@ function actualizarVisitantes(delta) {
             continue;
         }
 
-        visita.cliente.actualizar(delta);
+        try {
+            visita.cliente.actualizar?.(delta);
+        } catch (error) {
+            console.error(
+                `[CLIENTES] Error al actualizar al cliente ${visita.id}:`,
+                error
+            );
+
+            continue;
+        }
 
         if (visita.fase === 'comprando') {
             visita.tiempoCompra += delta;
@@ -1011,6 +1043,7 @@ function actualizarVisitantes(delta) {
 // ============================================================
 
 let sistemaLadrones = null;
+let sistemaLadronesActivo = false;
 
 function crearSistemaLadrones() {
     try {
@@ -1027,11 +1060,47 @@ function crearSistemaLadrones() {
             velocidad: 1.6
         });
 
-        console.info('[MAIN] Sistema de ladrones inicializado.');
+        sistemaLadronesActivo = Boolean(sistemaLadrones);
+
+        console.info(
+            '[MAIN] Sistema de ladrones inicializado.'
+        );
     } catch (error) {
+        sistemaLadrones = null;
+        sistemaLadronesActivo = false;
+
         console.error(
             '[MAIN] No se pudo iniciar el sistema de ladrones. Revisa ladron.js.',
             error
+        );
+    }
+}
+
+function actualizarSistemaLadrones(delta) {
+    if (!sistemaLadronesActivo || !sistemaLadrones) {
+        return;
+    }
+
+    try {
+        // Actualizar solamente una API para evitar duplicar el ciclo.
+        if (typeof sistemaLadrones.actualizar === 'function') {
+            sistemaLadrones.actualizar(delta);
+        } else if (
+            typeof sistemaLadrones.sistema?.actualizar === 'function'
+        ) {
+            sistemaLadrones.sistema.actualizar(delta);
+        }
+    } catch (error) {
+        // Detener las actualizaciones repetidas si el módulo falla.
+        sistemaLadronesActivo = false;
+
+        console.error(
+            '[LADRONES] Se detuvo la actualización para evitar errores repetidos.',
+            error
+        );
+
+        console.error(
+            '[LADRONES] Es necesario revisar la función actualizar() de ladron.js.'
         );
     }
 }
@@ -1068,7 +1137,7 @@ function actualizarHUD() {
 }
 
 // ============================================================
-// BUCLE PRINCIPAL
+// BUCLE PRINCIPAL OPTIMIZADO
 // ============================================================
 
 const reloj = new THREE.Clock();
@@ -1078,11 +1147,17 @@ function animar() {
 
     actualizarJugador(delta);
 
-    sistemaVehiculos?.actualizar?.(delta);
-    actualizarVisitantes(delta);
+    try {
+        sistemaVehiculos?.actualizar?.(delta);
+    } catch (error) {
+        console.error(
+            '[VEHICULOS] Error durante la actualización:',
+            error
+        );
+    }
 
-    sistemaLadrones?.actualizar?.(delta);
-    sistemaLadrones?.sistema?.actualizar?.(delta);
+    actualizarVisitantes(delta);
+    actualizarSistemaLadrones(delta);
 
     acumuladoHUD += delta;
 
@@ -1110,7 +1185,7 @@ window.addEventListener('resize', () => {
     );
 
     // Mantener la resolución en 1.0.
-    renderizador.setPixelRatio(CONFIG.pixelRatioMaximo);
+    renderizador.setPixelRatio(1.0);
 });
 
 // ============================================================
