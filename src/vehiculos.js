@@ -4,17 +4,18 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 // ============================================================
 // SISTEMA DE VEHÍCULOS DEL SUPERMERCADO
-// Compatible con Three.js + Vite
+// Three.js + Vite
 //
-// Características:
-// - 7 modelos de vehículos GLB.
-// - 24 plazas de estacionamiento.
-// - Llegadas automáticas.
-// - Rutas de entrada y salida.
+// - Cada GLB completo representa un solo vehículo.
+// - Carga de varios modelos de automóviles.
+// - 24 plazas exteriores.
+// - Tres llegadas iniciales por defecto.
+// - Llegadas automáticas de los vehículos restantes.
+// - Rutas de entrada y salida por el exterior.
 // - Reserva y liberación de plazas.
 // - Rotación suave.
-// - Reutilización de vehículos que salen.
-// - API pública compatible con main.js.
+// - Reutilización de vehículos.
+// - API compatible con main.js.
 // ============================================================
 
 export function crearVehiculos(scene, opciones = {}) {
@@ -41,17 +42,14 @@ export function crearVehiculos(scene, opciones = {}) {
 
         escala: 1,
         longitudVehiculo: 4.3,
-        velocidad: 7.5,
+        velocidad: 5.5,
         suavizadoRotacion: 5,
         correccionRotacionY: 0,
 
-        tiempoEntreLlegadas: 5,
-        cochesIniciales: 7,
+        tiempoEntreLlegadas: 10,
+        cochesIniciales: 3,
+        separacionInicial: 8,
 
-        // Distancia entre vehículos al comenzar su recorrido.
-        separacionInicial: 6,
-
-        // Evita iniciar llegadas cuando no hay plazas.
         alEstacionar: null,
         alSalir: null,
 
@@ -59,12 +57,12 @@ export function crearVehiculos(scene, opciones = {}) {
     };
 
     config.modelos = Array.isArray(config.modelos)
-        ? [...config.modelos]
+        ? [...new Set(config.modelos)]
         : [];
 
     config.tiempoEntreLlegadas = Math.max(
-        0.5,
-        Number(config.tiempoEntreLlegadas) || 7
+        1,
+        Number(config.tiempoEntreLlegadas) || 10
     );
 
     config.cochesIniciales = Math.max(
@@ -82,20 +80,23 @@ export function crearVehiculos(scene, opciones = {}) {
         Number(config.longitudVehiculo) || 4.3
     );
 
+    config.separacionInicial = Math.max(
+        5,
+        Number(config.separacionInicial) || 8
+    );
+
     // --------------------------------------------------------
     // GRUPO PRINCIPAL
     // --------------------------------------------------------
 
     const grupo = new THREE.Group();
-
     grupo.name = 'SISTEMA_VEHICULOS';
-
     scene.add(grupo);
 
     const loader = new GLTFLoader();
 
     // --------------------------------------------------------
-    // ESTADO INTERNO
+    // ESTADO
     // --------------------------------------------------------
 
     const plazas = [];
@@ -104,21 +105,25 @@ export function crearVehiculos(scene, opciones = {}) {
 
     let cargado = false;
     let errorCarga = null;
-
     let tiempoLlegada = 0;
     let inicialesIniciados = false;
     let eliminado = false;
     let cargasPendientes = config.modelos.length;
-
     let siguienteId = 1;
 
     // --------------------------------------------------------
-    // CREAR PLAZAS
+    // PLAZAS DE ESTACIONAMIENTO
+    // Todas permanecen fuera del edificio.
+    //
+    // El interior termina aproximadamente en z = 29.
+    // El estacionamiento ocupa la zona exterior z > 29.
     // --------------------------------------------------------
 
-    // Conservamos la distribución original del estacionamiento.
-    for (const z of [40, 49, 63, 72]) {
-        for (const x of [-24, -16, -8, 8, 16, 24]) {
+    const posicionesZ = [32, 39, 46, 53];
+    const posicionesX = [-24, -16, -8, 8, 16, 24];
+
+    for (const z of posicionesZ) {
+        for (const x of posicionesX) {
             plazas.push({
                 x,
                 z,
@@ -129,7 +134,9 @@ export function crearVehiculos(scene, opciones = {}) {
     }
 
     // --------------------------------------------------------
-    // PREPARAR MODELOS
+    // PREPARAR MODELO
+    // Un archivo GLB completo es un único automóvil.
+    // Nunca se separan sus piezas en vehículos independientes.
     // --------------------------------------------------------
 
     function prepararModelo(original, indice) {
@@ -138,24 +145,17 @@ export function crearVehiculos(scene, opciones = {}) {
         contenedor.name = `VEHICULO_${indice + 1}`;
 
         const modelo = original.clone(true);
-
         modelo.name = `MODELO_GLTF_${indice + 1}`;
 
         modelo.traverse(objeto => {
             if (!objeto.isMesh) return;
 
-            objeto.castShadow = true;
-            objeto.receiveShadow = true;
+            // Las sombras dinámicas se desactivan para reducir lag.
+            objeto.castShadow = false;
+            objeto.receiveShadow = false;
 
-            // Clonamos los materiales para evitar que los cambios
-            // en un vehículo afecten a los demás.
-            if (Array.isArray(objeto.material)) {
-                objeto.material = objeto.material.map(material =>
-                    material ? material.clone() : material
-                );
-            } else if (objeto.material) {
-                objeto.material = objeto.material.clone();
-            }
+            // No duplicar materiales innecesariamente.
+            // El sistema no modifica los materiales del modelo.
         });
 
         contenedor.add(modelo);
@@ -166,7 +166,7 @@ export function crearVehiculos(scene, opciones = {}) {
 
         if (caja.isEmpty()) {
             console.warn(
-                `[VEHICULOS] El modelo ${indice + 1} está vacío.`
+                `[VEHICULOS] Modelo vacío: ${config.modelos[indice] ?? indice}`
             );
 
             return contenedor;
@@ -180,20 +180,23 @@ export function crearVehiculos(scene, opciones = {}) {
             0.01
         );
 
+        const escalaUsuario = Math.max(
+            0.001,
+            Number(config.escala) || 1
+        );
+
         const factor =
             (config.longitudVehiculo / largoOriginal) *
-            Math.max(0.001, Number(config.escala) || 1);
+            escalaUsuario;
 
         modelo.scale.multiplyScalar(factor);
-
         modelo.updateMatrixWorld(true);
 
         caja = new THREE.Box3().setFromObject(modelo);
 
         const centro = caja.getCenter(new THREE.Vector3());
 
-        // Centrar el vehículo horizontalmente y apoyar sus ruedas
-        // sobre el suelo.
+        // Centrar horizontalmente y apoyar el modelo en el suelo.
         modelo.position.x -= centro.x;
         modelo.position.z -= centro.z;
         modelo.position.y -= caja.min.y;
@@ -213,9 +216,7 @@ export function crearVehiculos(scene, opciones = {}) {
     }
 
     function reservar(plaza, coche) {
-        if (!plaza || plaza.ocupada) {
-            return false;
-        }
+        if (!plaza || plaza.ocupada) return false;
 
         plaza.ocupada = true;
         plaza.vehiculoId = coche.id;
@@ -231,11 +232,14 @@ export function crearVehiculos(scene, opciones = {}) {
     }
 
     // --------------------------------------------------------
-    // RUTAS DE CIRCULACIÓN
+    // RUTAS EXTERIORES
+    //
+    // La circulación utiliza los carriles de la carretera.
+    // Ningún punto de circulación atraviesa el interior.
     // --------------------------------------------------------
 
     function crearRutaLlegada(plaza, lado) {
-        const xCarril = lado * 31;
+        const xCarril = lado * 10;
         const zPasillo = plaza.z + 3.2;
 
         return [
@@ -250,7 +254,7 @@ export function crearVehiculos(scene, opciones = {}) {
         const plaza = coche.plaza;
 
         const lado = plaza.x < 0 ? -1 : 1;
-        const xCarril = lado * 31;
+        const xCarril = lado * 10;
         const zPasillo = plaza.z + 3.2;
 
         return [
@@ -266,9 +270,7 @@ export function crearVehiculos(scene, opciones = {}) {
     // --------------------------------------------------------
 
     function notificarEstacionamiento(coche) {
-        if (typeof config.alEstacionar !== 'function') {
-            return;
-        }
+        if (typeof config.alEstacionar !== 'function') return;
 
         try {
             config.alEstacionar({
@@ -291,9 +293,7 @@ export function crearVehiculos(scene, opciones = {}) {
     }
 
     function notificarSalida(coche) {
-        if (typeof config.alSalir !== 'function') {
-            return;
-        }
+        if (typeof config.alSalir !== 'function') return;
 
         try {
             config.alSalir({
@@ -310,7 +310,7 @@ export function crearVehiculos(scene, opciones = {}) {
     }
 
     // --------------------------------------------------------
-    // ESTACIONAR VEHÍCULO
+    // ESTACIONAR
     // --------------------------------------------------------
 
     function estacionar(coche) {
@@ -333,16 +333,16 @@ export function crearVehiculos(scene, opciones = {}) {
             0
         );
 
-        coche.tiempoParado = 0;
-
         notificarEstacionamiento(coche);
 
         console.info(
             `[VEHICULOS] Auto ${coche.id} estacionado.`,
             {
                 modelo: coche.archivo,
-                x: coche.plaza.x,
-                z: coche.plaza.z
+                plaza: {
+                    x: coche.plaza.x,
+                    z: coche.plaza.z
+                }
             }
         );
     }
@@ -368,9 +368,7 @@ export function crearVehiculos(scene, opciones = {}) {
             return false;
         }
 
-        if (!reservar(plaza, coche)) {
-            return false;
-        }
+        if (!reservar(plaza, coche)) return false;
 
         coche.plaza = plaza;
 
@@ -380,8 +378,7 @@ export function crearVehiculos(scene, opciones = {}) {
         coche.indiceRuta = 0;
         coche.estado = 'circulando';
 
-        // Colocar los vehículos que llegan a distintas distancias
-        // para reducir las superposiciones al comenzar.
+        // Escalonar los autos para que no aparezcan amontonados.
         const cochesEnMarcha = vehiculos.filter(v =>
             !v.eliminado &&
             (
@@ -390,13 +387,10 @@ export function crearVehiculos(scene, opciones = {}) {
             )
         ).length;
 
-        const separacion = Math.max(
-            4.5,
-            Number(config.separacionInicial) || 6
-        );
+        const separacion = config.separacionInicial;
 
         coche.grupo.position.set(
-            lado * 31,
+            lado * 10,
             0,
             84 + cochesEnMarcha * separacion
         );
@@ -408,10 +402,10 @@ export function crearVehiculos(scene, opciones = {}) {
         );
 
         console.info(
-            `[VEHICULOS] Auto ${coche.id} inicia su llegada.`,
+            `[VEHICULOS] Auto ${coche.id} inicia llegada.`,
             {
                 modelo: coche.archivo,
-                plaza: {
+                destino: {
                     x: plaza.x,
                     z: plaza.z
                 }
@@ -427,7 +421,6 @@ export function crearVehiculos(scene, opciones = {}) {
 
     function crearVehiculo(original, indice, archivo) {
         const modelo = prepararModelo(original, indice);
-
         const id = siguienteId++;
 
         modelo.userData.archivoModelo = archivo;
@@ -438,18 +431,12 @@ export function crearVehiculos(scene, opciones = {}) {
         const coche = {
             id,
             archivo,
-
             grupo: modelo,
             plaza: null,
-
             ruta: [],
             indiceRuta: 0,
-
             estado: 'preparado',
-
             velocidad: config.velocidad,
-            tiempoParado: 0,
-
             eliminado: false
         };
 
@@ -464,11 +451,7 @@ export function crearVehiculos(scene, opciones = {}) {
     // --------------------------------------------------------
 
     function iniciarCochesIniciales() {
-        if (
-            inicialesIniciados ||
-            !cargado ||
-            eliminado
-        ) {
+        if (inicialesIniciados || !cargado || eliminado) {
             return;
         }
 
@@ -477,7 +460,7 @@ export function crearVehiculos(scene, opciones = {}) {
         const cantidad = Math.min(
             config.cochesIniciales,
             cola.length,
-            plazas.filter(plaza => !plaza.ocupada).length
+            plazas.filter(p => !p.ocupada).length
         );
 
         let iniciados = 0;
@@ -491,8 +474,15 @@ export function crearVehiculos(scene, opciones = {}) {
         }
 
         console.info(
-            `[VEHICULOS] Modelos disponibles: ${vehiculos.length}. ` +
-            `Llegadas iniciales: ${iniciados}.`
+            `[VEHICULOS] Carga completa: ${vehiculos.length} vehículos disponibles.`
+        );
+
+        console.info(
+            `[VEHICULOS] Llegadas iniciales: ${iniciados}.`
+        );
+
+        console.info(
+            `[VEHICULOS] Vehículos pendientes en cola: ${cola.length}.`
         );
     }
 
@@ -504,7 +494,7 @@ export function crearVehiculos(scene, opciones = {}) {
         if (
             !cargado ||
             eliminado ||
-            !cola.length ||
+            cola.length === 0 ||
             !plazaLibre()
         ) {
             return false;
@@ -512,9 +502,7 @@ export function crearVehiculos(scene, opciones = {}) {
 
         const coche = cola.shift();
 
-        if (!coche) {
-            return false;
-        }
+        if (!coche) return false;
 
         const resultado = iniciarLlegada(coche);
 
@@ -530,9 +518,7 @@ export function crearVehiculos(scene, opciones = {}) {
     // --------------------------------------------------------
 
     function solicitarSalida(id) {
-        if (eliminado) {
-            return false;
-        }
+        if (eliminado) return false;
 
         const coche = vehiculos.find(v =>
             v.id === id && !v.eliminado
@@ -558,7 +544,7 @@ export function crearVehiculos(scene, opciones = {}) {
     }
 
     // --------------------------------------------------------
-    // FINALIZAR SALIDA Y REUTILIZAR VEHÍCULO
+    // FINALIZAR SALIDA Y REUTILIZAR
     // --------------------------------------------------------
 
     function finalizarSalida(coche) {
@@ -567,16 +553,14 @@ export function crearVehiculos(scene, opciones = {}) {
         coche.plaza = null;
         coche.ruta = [];
         coche.indiceRuta = 0;
-
-        // El auto termina fuera del estacionamiento.
         coche.estado = 'esperando';
+
+        // Ocultar el vehículo mientras espera su próxima llegada.
+        // Así no queda estacionado en mitad de la carretera.
+        coche.grupo.visible = false;
 
         notificarSalida(coche);
 
-        // Mantener el vehículo en la escena, fuera del área de
-        // estacionamiento, hasta que vuelva a iniciar una llegada.
-        //
-        // Se reutiliza el mismo modelo, sin cargarlo otra vez.
         if (
             !coche.eliminado &&
             !eliminado &&
@@ -586,7 +570,7 @@ export function crearVehiculos(scene, opciones = {}) {
         }
 
         console.info(
-            `[VEHICULOS] Auto ${coche.id} salió y quedó disponible.`,
+            `[VEHICULOS] Auto ${coche.id} salió y quedó en espera.`,
             coche.archivo
         );
     }
@@ -620,7 +604,6 @@ export function crearVehiculos(scene, opciones = {}) {
 
         const dx = punto.x - coche.grupo.position.x;
         const dz = punto.z - coche.grupo.position.z;
-
         const distancia = Math.hypot(dx, dz);
 
         if (distancia < 0.35) {
@@ -642,7 +625,6 @@ export function crearVehiculos(scene, opciones = {}) {
             distancia
         );
 
-        // Orientación suave hacia el siguiente punto.
         const direccion = Math.atan2(dx, dz);
 
         const objetivo = new THREE.Quaternion()
@@ -659,15 +641,12 @@ export function crearVehiculos(scene, opciones = {}) {
             )
         );
 
-        coche.grupo.position.x +=
-            (dx / distancia) * paso;
-
-        coche.grupo.position.z +=
-            (dz / distancia) * paso;
+        coche.grupo.position.x += (dx / distancia) * paso;
+        coche.grupo.position.z += (dz / distancia) * paso;
     }
 
     // --------------------------------------------------------
-    // CARGAR MODELOS GLB
+    // CARGA DE MODELOS
     // --------------------------------------------------------
 
     function finalizarCarga(archivo, error = null) {
@@ -682,7 +661,7 @@ export function crearVehiculos(scene, opciones = {}) {
             );
 
             console.error(
-                `[VEHICULOS] Comprueba que exista: public${archivo}`
+                `[VEHICULOS] Comprueba que exista public${archivo}`
             );
         }
 
@@ -693,16 +672,14 @@ export function crearVehiculos(scene, opciones = {}) {
             cargado = true;
 
             console.info(
-                `[VEHICULOS] Carga finalizada. ` +
-                `${vehiculos.length} modelos cargados correctamente ` +
-                `de ${config.modelos.length} configurados.`
+                `[VEHICULOS] Se cargaron ${vehiculos.length} de ` +
+                `${config.modelos.length} modelos configurados.`
             );
 
             if (vehiculos.length === 0) {
                 console.error(
-                    '[VEHICULOS] No se pudo cargar ningún modelo.'
+                    '[VEHICULOS] No se pudo cargar ningún automóvil.'
                 );
-
                 return;
             }
 
@@ -729,21 +706,26 @@ export function crearVehiculos(scene, opciones = {}) {
                         finalizarCarga(
                             archivo,
                             new Error(
-                                'El archivo GLB no contiene una escena.'
+                                'El GLB no contiene una escena válida.'
                             )
                         );
-
                         return;
                     }
 
-                    crearVehiculo(
+                    // IMPORTANTE:
+                    // Se crea un solo vehículo por cada GLB.
+                    // No se recorren los hijos para crear más autos.
+                    const coche = crearVehiculo(
                         gltf.scene,
                         indice,
                         archivo
                     );
 
+                    // Los autos esperan fuera de escena hasta su turno.
+                    coche.grupo.visible = false;
+
                     console.info(
-                        `[VEHICULOS] Modelo cargado: ${archivo}`
+                        `[VEHICULOS] Modelo listo: ${archivo}`
                     );
 
                     finalizarCarga(archivo);
@@ -752,9 +734,7 @@ export function crearVehiculos(scene, opciones = {}) {
                 evento => {
                     if (evento.total > 0) {
                         const porcentaje = Math.round(
-                            evento.loaded /
-                            evento.total *
-                            100
+                            (evento.loaded / evento.total) * 100
                         );
 
                         console.info(
@@ -777,8 +757,6 @@ export function crearVehiculos(scene, opciones = {}) {
     function actualizar(delta) {
         if (eliminado) return;
 
-        // Limitar delta evita saltos grandes si el navegador
-        // se detiene temporalmente o cambia de pestaña.
         const dt = Math.min(
             Math.max(Number(delta) || 0, 0),
             0.05
@@ -788,7 +766,9 @@ export function crearVehiculos(scene, opciones = {}) {
             actualizarVehiculo(coche, dt);
         }
 
-        // Generar llegadas periódicas si existen plazas libres.
+        // Llegadas periódicas:
+        // un vehículo nuevo cada cierto tiempo mientras existan
+        // autos esperando y plazas disponibles.
         if (
             cargado &&
             cola.length > 0 &&
@@ -796,10 +776,7 @@ export function crearVehiculos(scene, opciones = {}) {
         ) {
             tiempoLlegada += dt;
 
-            if (
-                tiempoLlegada >=
-                config.tiempoEntreLlegadas
-            ) {
+            if (tiempoLlegada >= config.tiempoEntreLlegadas) {
                 tiempoLlegada = 0;
 
                 solicitarLlegada();
@@ -814,9 +791,7 @@ export function crearVehiculos(scene, opciones = {}) {
     // --------------------------------------------------------
 
     function obtenerVehiculo(id) {
-        return vehiculos.find(
-            coche => coche.id === id
-        ) ?? null;
+        return vehiculos.find(coche => coche.id === id) ?? null;
     }
 
     function obtenerPlazas() {
@@ -839,25 +814,16 @@ export function crearVehiculos(scene, opciones = {}) {
     // --------------------------------------------------------
 
     function eliminarVehiculo(id) {
-        const coche = vehiculos.find(
-            v => v.id === id
-        );
+        const coche = vehiculos.find(v => v.id === id);
 
-        if (!coche) {
-            return false;
-        }
+        if (!coche) return false;
 
         coche.eliminado = true;
 
         liberar(coche.plaza);
-
         coche.plaza = null;
 
         grupo.remove(coche.grupo);
-
-        // No liberamos aquí las geometrías compartidas de los
-        // GLB, porque otros vehículos pueden utilizar los mismos
-        // recursos internos.
         coche.grupo.clear();
 
         const indice = vehiculos.indexOf(coche);
@@ -899,10 +865,10 @@ export function crearVehiculos(scene, opciones = {}) {
         scene.remove(grupo);
         grupo.clear();
 
-        plazas.forEach(plaza => {
+        for (const plaza of plazas) {
             plaza.ocupada = false;
             plaza.vehiculoId = null;
-        });
+        }
     }
 
     // --------------------------------------------------------
