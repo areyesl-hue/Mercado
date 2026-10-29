@@ -3,35 +3,26 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 // ============================================================
-// PRODUCTOS DEL SUPERMERCADO
-// Archivo: productos.js
-//
-// Compatible con el mobiliario compartido:
-// - 12 góndolas centrales.
-// - 8 refrigeradores.
-// - 4 mesas de frutas y verduras.
-// - Estanterías perimetrales.
-// - Higiene, limpieza, cereales y bebidas.
-//
-// Todos los modelos se cargan desde public/modelos/.
-// Se reutilizan mediante clone() para llenar las repisas.
+// PRODUCTOS DEL SUPERMERCADO OPTIMIZADOS
+// Menos objetos, modelos reutilizados y colocación económica.
+// Compatible con el inventario y la recogida de productos.
 // ============================================================
 
 export function crearProductosLacteos(scene) {
-    if (!scene || !scene.isScene) {
+    if (!scene?.isScene) {
         throw new Error(
             'crearProductosLacteos necesita una escena THREE.Scene.'
         );
     }
 
-    const loader = new GLTFLoader();
     const productos = new THREE.Group();
-
     productos.name = 'PRODUCTOS_SUPERMERCADO';
     scene.add(productos);
 
+    const loader = new GLTFLoader();
+
     // --------------------------------------------------------
-    // PRECIOS DE DEMOSTRACIÓN EN PESOS MEXICANOS
+    // PRECIOS
     // --------------------------------------------------------
 
     const PRECIOS = {
@@ -40,7 +31,6 @@ export function crearProductosLacteos(scene) {
         PEPSI: 20,
         COCACOLA: 22,
         AGUA: 15,
-
         PERA: 8,
         PLATANO: 5,
         UVAS: 12,
@@ -49,10 +39,8 @@ export function crearProductosLacteos(scene) {
         BROCOLI: 18,
         PEPINO: 9,
         MANZANA: 7,
-
         POLLO: 85,
         FILETE: 65,
-
         PAPEL: 35,
         TOALLITAS_BEBE: 45,
         CEREAL: 55,
@@ -61,6 +49,10 @@ export function crearProductosLacteos(scene) {
         DETERGENTE_LIQUIDO: 75,
         DETERGENTE_POLVO: 60
     };
+
+    // --------------------------------------------------------
+    // MODELOS
+    // --------------------------------------------------------
 
     const MODELOS = {
         SANTA_CLARA: {
@@ -83,7 +75,6 @@ export function crearProductosLacteos(scene) {
             archivo: '/modelos/Agua.glb',
             altura: 0.28
         },
-
         PERA: {
             archivo: '/modelos/Pera.glb',
             altura: 0.15
@@ -117,7 +108,6 @@ export function crearProductosLacteos(scene) {
             alternativas: ['/modelos/Manzana.glb'],
             altura: 0.14
         },
-
         POLLO: {
             archivo: '/modelos/Pollo.glb',
             altura: 0.25
@@ -126,7 +116,6 @@ export function crearProductosLacteos(scene) {
             archivo: '/modelos/Filete.glb',
             altura: 0.22
         },
-
         PAPEL: {
             archivo: '/modelos/papel.glb',
             altura: 0.28
@@ -158,7 +147,7 @@ export function crearProductosLacteos(scene) {
     };
 
     // --------------------------------------------------------
-    // COORDENADAS DEL MOBILIARIO
+    // UBICACIONES
     // --------------------------------------------------------
 
     const GONDOLAS_X = [-17, -9, 9, 17];
@@ -183,47 +172,25 @@ export function crearProductosLacteos(scene) {
         pepino: { x: -21.7, z: 10.8 }
     };
 
-    const modelosCargados = {};
+    // Un modelo preparado por tipo de producto.
+    const modelosCargados = Object.create(null);
+
     let contador = 0;
 
     // --------------------------------------------------------
-    // CARGA DE MODELOS CON ALTERNATIVAS
+    // CARGA DE UN MODELO
     // --------------------------------------------------------
 
     function cargarArchivo(archivo) {
-        return new Promise((resolve) => {
+        return new Promise(resolve => {
             loader.load(
                 archivo,
-                (gltf) => {
-                    const modelo = gltf.scene;
-
-                    modelo.traverse((objeto) => {
-                        if (!objeto.isMesh) return;
-
-                        objeto.castShadow = true;
-                        objeto.receiveShadow = true;
-
-                        if (objeto.material) {
-                            const materiales = Array.isArray(
-                                objeto.material
-                            )
-                                ? objeto.material
-                                : [objeto.material];
-
-                            materiales.forEach((material) => {
-                                material.side = THREE.DoubleSide;
-                                material.needsUpdate = true;
-                            });
-                        }
-                    });
-
-                    resolve(modelo);
-                },
+                gltf => resolve(gltf.scene),
                 undefined,
-                (error) => {
+                error => {
                     console.warn(
                         `No se pudo cargar ${archivo}:`,
-                        error.message || error
+                        error?.message || error
                     );
                     resolve(null);
                 }
@@ -231,46 +198,98 @@ export function crearProductosLacteos(scene) {
         });
     }
 
+    // Se normaliza el modelo una sola vez.
+    // Las unidades compartirán geometrías y materiales.
     async function cargarModelo(config) {
         const archivos = [
             config.archivo,
             ...(config.alternativas || [])
         ];
 
-        for (const archivo of archivos) {
-            const modelo = await cargarArchivo(archivo);
+        let original = null;
 
-            if (modelo) {
-                return modelo;
-            }
+        for (const archivo of archivos) {
+            original = await cargarArchivo(archivo);
+            if (original) break;
         }
 
-        console.error(
-            `No se encontró el modelo ${config.archivo}.`
-        );
+        if (!original) {
+            console.error(
+                `No se encontró el modelo ${config.archivo}.`
+            );
+            return null;
+        }
 
-        return null;
+        original.updateMatrixWorld(true);
+
+        const caja = new THREE.Box3().setFromObject(original);
+        const tamano = new THREE.Vector3();
+        caja.getSize(tamano);
+
+        if (tamano.y <= 0.0001) {
+            console.warn(
+                `El modelo ${config.archivo} no tiene altura válida.`
+            );
+            return null;
+        }
+
+        const factor = config.altura / tamano.y;
+
+        original.scale.multiplyScalar(factor);
+        original.updateMatrixWorld(true);
+
+        const cajaEscalada = new THREE.Box3().setFromObject(original);
+        const centro = new THREE.Vector3();
+
+        cajaEscalada.getCenter(centro);
+
+        // Centrar horizontalmente y apoyar el modelo en el suelo.
+        original.position.x -= centro.x;
+        original.position.y -= cajaEscalada.min.y;
+        original.position.z -= centro.z;
+
+        // Las copias no generan sombras dinámicas.
+        original.traverse(objeto => {
+            if (!objeto.isMesh) return;
+
+            objeto.castShadow = false;
+            objeto.receiveShadow = false;
+
+            objeto.frustumCulled = true;
+        });
+
+        // Envolver el modelo normalizado permite posicionar
+        // las copias sin destruir su corrección de escala/origen.
+        const plantilla = new THREE.Group();
+        plantilla.name = `PLANTILLA_${config.archivo}`;
+        plantilla.add(original);
+
+        return plantilla;
     }
-
-    // --------------------------------------------------------
-    // PREPARAR MODELOS
-    // --------------------------------------------------------
 
     async function cargarTodosLosModelos() {
         const entradas = Object.entries(MODELOS);
 
-        await Promise.all(
+        // Cargar todos los tipos en paralelo.
+        const resultados = await Promise.all(
             entradas.map(async ([codigo, config]) => {
-                modelosCargados[codigo] = await cargarModelo(config);
+                return [
+                    codigo,
+                    await cargarModelo(config)
+                ];
             })
         );
+
+        for (const [codigo, modelo] of resultados) {
+            modelosCargados[codigo] = modelo;
+        }
     }
 
     // --------------------------------------------------------
-    // REGISTRO DE INVENTARIO
+    // INVENTARIO
     // --------------------------------------------------------
 
-    function registrarUnidad(modelo, codigo, nombre) {
+    function registrarUnidad(modelo, codigo) {
         contador++;
 
         modelo.userData = {
@@ -279,7 +298,7 @@ export function crearProductosLacteos(scene) {
             recogido: false,
             reservado: false,
             vendido: false,
-            nombreProducto: nombre,
+            nombreProducto: codigo,
             codigoProducto: codigo,
             indiceUnidad: contador,
             precio: PRECIOS[codigo] ?? 0,
@@ -288,7 +307,8 @@ export function crearProductosLacteos(scene) {
     }
 
     // --------------------------------------------------------
-    // CREAR UNA UNIDAD DESDE UN MODELO CARGADO
+    // CREAR UNA UNIDAD
+    // No calcula Box3 para cada copia.
     // --------------------------------------------------------
 
     function crearUnidad(
@@ -298,245 +318,151 @@ export function crearProductosLacteos(scene) {
         z,
         opciones = {}
     ) {
-        const original = modelosCargados[codigo];
+        const plantilla = modelosCargados[codigo];
 
-        if (!original) return null;
+        if (!plantilla) return null;
 
-        const config = MODELOS[codigo];
-        const modelo = original.clone(true);
+        const unidad = plantilla.clone(true);
 
-        modelo.name = `${codigo}_UNIDAD_${contador + 1}`;
+        unidad.name = `${codigo}_UNIDAD_${contador + 1}`;
 
-        // Normalizar la altura del modelo.
-        modelo.updateMatrixWorld(true);
+        unidad.position.set(x, y, z);
+        unidad.rotation.y = opciones.rotacionY ?? 0;
 
-        const cajaInicial = new THREE.Box3().setFromObject(modelo);
-        const tamano = new THREE.Vector3();
+        const escalaExtra = opciones.escala ?? 1;
+        unidad.scale.setScalar(escalaExtra);
 
-        cajaInicial.getSize(tamano);
+        registrarUnidad(unidad, codigo);
+        productos.add(unidad);
 
-        const alturaObjetivo = opciones.altura ?? config.altura;
-
-        if (tamano.y > 0.0001) {
-            const factor = alturaObjetivo / tamano.y;
-            modelo.scale.multiplyScalar(factor);
-        }
-
-        modelo.updateMatrixWorld(true);
-
-        const cajaFinal = new THREE.Box3().setFromObject(modelo);
-        const centro = new THREE.Vector3();
-
-        cajaFinal.getCenter(centro);
-
-        // Ajustar el centro horizontal y apoyar la base en la repisa.
-        modelo.position.x += x - centro.x;
-        modelo.position.y += y - cajaFinal.min.y;
-        modelo.position.z += z - centro.z;
-
-        modelo.rotation.y = opciones.rotacionY ?? 0;
-
-        registrarUnidad(modelo, codigo, codigo);
-
-        productos.add(modelo);
-
-        return modelo;
+        return unidad;
     }
 
     // --------------------------------------------------------
-    // DISTRIBUIR PRODUCTOS EN UNA REPISA
+    // COLOCAR UNA FILA DE PRODUCTOS
     // --------------------------------------------------------
 
-    function llenarRepisa(
-        codigo,
+    function llenarFila(
+        codigos,
         x,
         y,
-        z,
-        cantidad = 6,
+        centroZ,
         opciones = {}
     ) {
-        const anchoFila = opciones.anchoFila ?? 0.46;
-        const inicioZ = opciones.inicioZ ?? -2.35;
-        const pasoZ = opciones.pasoZ ?? 0.94;
+        const cantidad = opciones.cantidad ?? 4;
+        const espacio = opciones.espacio ?? 1.18;
+        const anchoX = opciones.anchoX ?? 0;
+        const rotacionY = opciones.rotacionY ?? 0;
 
         for (let i = 0; i < cantidad; i++) {
+            const codigo = Array.isArray(codigos)
+                ? codigos[i % codigos.length]
+                : codigos;
+
+            const z = centroZ + (i - (cantidad - 1) / 2) * espacio;
+
             crearUnidad(
                 codigo,
-                x + ((i % 2) ? anchoFila * 0.12 : 0),
+                x + (i % 2) * anchoX,
                 y,
-                z + inicioZ + i * pasoZ,
-                {
-                    altura: opciones.altura,
-                    rotacionY: opciones.rotacionY ?? 0
-                }
+                z,
+                { rotacionY }
             );
         }
     }
 
     // --------------------------------------------------------
-    // 1. LLENAR LAS 12 GÓNDOLAS CENTRALES
-    //
-    // Cada góndola tiene dos lados y cuatro niveles.
-    // Cada repisa recibe seis productos.
-    // Se alternan productos para evitar pasillos vacíos.
+    // 1. GÓNDOLAS CENTRALES
+    // Cuatro productos por nivel y lado.
     // --------------------------------------------------------
 
-    function productosParaGondola(indiceX, indiceZ, lado, nivel) {
-        const secciones = [
-            [
-                ['PAPEL', 'TOALLITAS_BEBE', 'CEREAL', 'CEREAL2'],
-                ['CEREAL', 'NESQUIK', 'PAPEL', 'TOALLITAS_BEBE'],
-                ['CEREAL2', 'NESQUIK', 'DETERGENTE_LIQUIDO', 'DETERGENTE_POLVO'],
-                ['DETERGENTE_LIQUIDO', 'DETERGENTE_POLVO', 'PAPEL', 'CEREAL2']
-            ],
-            [
-                ['CEREAL', 'CEREAL2', 'NESQUIK', 'TOALLITAS_BEBE'],
-                ['PAPEL', 'CEREAL', 'CEREAL2', 'NESQUIK'],
-                ['DETERGENTE_LIQUIDO', 'DETERGENTE_POLVO', 'PAPEL', 'TOALLITAS_BEBE'],
-                ['CEREAL2', 'NESQUIK', 'DETERGENTE_POLVO', 'CEREAL']
-            ],
-            [
-                ['PEPSI', 'COCACOLA', 'AGUA', 'NESQUIK'],
-                ['CEREAL', 'CEREAL2', 'NESQUIK', 'AGUA'],
-                ['PEPSI', 'COCACOLA', 'AGUA', 'CEREAL'],
-                ['CEREAL2', 'NESQUIK', 'PEPSI', 'COCACOLA']
-            ],
-            [
-                ['DETERGENTE_LIQUIDO', 'DETERGENTE_POLVO', 'PAPEL', 'TOALLITAS_BEBE'],
-                ['PAPEL', 'DETERGENTE_LIQUIDO', 'DETERGENTE_POLVO', 'CEREAL'],
-                ['TOALLITAS_BEBE', 'PAPEL', 'CEREAL2', 'NESQUIK'],
-                ['DETERGENTE_POLVO', 'DETERGENTE_LIQUIDO', 'CEREAL', 'CEREAL2']
-            ]
-        ];
-
-        const columna = secciones[indiceX];
-
-        const fila = columna[
-            (nivel + indiceZ + (lado === 1 ? 1 : 0)) % columna.length
-        ];
-
-        return fila;
-    }
+    const SURTIDOS_GONDOLA = [
+        ['CEREAL', 'CEREAL2', 'NESQUIK'],
+        ['PAPEL', 'TOALLITAS_BEBE'],
+        ['DETERGENTE_LIQUIDO', 'DETERGENTE_POLVO'],
+        ['PEPSI', 'COCACOLA', 'AGUA']
+    ];
 
     function llenarGondolas() {
-        let numeroGondola = 0;
+        let numero = 0;
 
         for (let ix = 0; ix < GONDOLAS_X.length; ix++) {
             for (let iz = 0; iz < GONDOLAS_Z.length; iz++) {
+                numero++;
+
                 const centroX = GONDOLAS_X[ix];
                 const centroZ = GONDOLAS_Z[iz];
-
-                numeroGondola++;
 
                 for (const lado of [-1, 1]) {
                     for (let nivel = 0; nivel < NIVELES_GONDOLA.length; nivel++) {
                         const y = NIVELES_GONDOLA[nivel] + 0.035;
                         const x = centroX + lado * 0.30;
 
-                        const surtido = productosParaGondola(
-                            ix,
-                            iz,
-                            lado,
-                            nivel
-                        );
+                        const familia =
+                            SURTIDOS_GONDOLA[
+                                (ix + iz + nivel + (lado === 1 ? 1 : 0)) %
+                                SURTIDOS_GONDOLA.length
+                            ];
 
-                        const codigo = surtido[
-                            (iz + nivel + (lado === 1 ? 1 : 0)) %
-                            surtido.length
-                        ];
-
-                        // Alternar familias por tramo de la góndola.
-                        // Cada tramo conserva seis unidades por repisa.
-                        llenarRepisa(
-                            codigo,
+                        llenarFila(
+                            familia,
                             x,
                             y,
                             centroZ,
-                            6,
                             {
-                                pasoZ: 0.88,
-                                inicioZ: -2.2,
-                                altura: MODELOS[codigo].altura,
+                                cantidad: 4,
+                                espacio: 1.18,
                                 rotacionY: lado === -1 ? 0 : Math.PI
                             }
                         );
-
-                        // Segunda familia para que la repisa no se vea vacía.
-                        const segundoCodigo = surtido[
-                            (iz + nivel + 2 + (lado === 1 ? 1 : 0)) %
-                            surtido.length
-                        ];
-
-                        // Tres unidades intercaladas entre las principales.
-                        for (let j = 0; j < 3; j++) {
-                            crearUnidad(
-                                segundoCodigo,
-                                x,
-                                y,
-                                centroZ - 1.76 + j * 1.76,
-                                {
-                                    altura: MODELOS[segundoCodigo].altura,
-                                    rotacionY: lado === -1 ? 0 : Math.PI
-                                }
-                            );
-                        }
                     }
                 }
             }
         }
 
-        console.info(
-            `Góndolas surtidas: ${numeroGondola}.`
-        );
+        console.info(`Góndolas surtidas: ${numero}.`);
     }
 
     // --------------------------------------------------------
-    // 2. LLENAR LOS REFRIGERADORES
+    // 2. REFRIGERADORES
+    // Tres productos por nivel en lugar de cinco.
     // --------------------------------------------------------
 
     function llenarRefrigeradores() {
         REFRI_X.forEach((x, indice) => {
-            let codigoPrincipal;
+            let principal;
 
             if (indice <= 1) {
-                codigoPrincipal = 'SANTA_CLARA';
-            } else if (indice === 2) {
-                codigoPrincipal = 'LALA';
-            } else if (indice === 3) {
-                codigoPrincipal = 'LALA';
+                principal = 'SANTA_CLARA';
+            } else if (indice <= 3) {
+                principal = 'LALA';
             } else if (indice <= 5) {
-                codigoPrincipal = 'PEPSI';
+                principal = 'PEPSI';
             } else {
-                codigoPrincipal = 'COCACOLA';
+                principal = 'COCACOLA';
             }
 
             for (let nivel = 0; nivel < NIVELES_REFRI.length; nivel++) {
-                const y = NIVELES_REFRI[nivel] + 0.025;
+                let codigo = principal;
 
-                let codigo = codigoPrincipal;
-
-                if (indice >= 4 && nivel % 2 === 1) {
+                if (indice >= 4 && nivel === 1) {
                     codigo = 'AGUA';
                 }
 
-                if (indice <= 3 && nivel === 3) {
-                    codigo = indice % 2 === 0
-                        ? 'SANTA_CLARA'
-                        : 'LALA';
+                if (indice >= 4 && nivel === 3) {
+                    codigo = indice % 2 === 0 ? 'AGUA' : 'COCACOLA';
                 }
 
-                for (let i = 0; i < 5; i++) {
-                    crearUnidad(
-                        codigo,
-                        x - 0.82 + i * 0.41,
-                        y,
-                        -26.12,
-                        {
-                            altura: MODELOS[codigo].altura,
-                            rotacionY: 0
-                        }
-                    );
-                }
+                llenarFila(
+                    codigo,
+                    x,
+                    NIVELES_REFRI[nivel] + 0.025,
+                    -26.12,
+                    {
+                        cantidad: 3,
+                        espacio: 0.78
+                    }
+                );
             }
         });
 
@@ -544,15 +470,11 @@ export function crearProductosLacteos(scene) {
     }
 
     // --------------------------------------------------------
-    // 3. LLENAR MESAS DE FRUTAS Y VERDURAS
-    //
-    // Superficie aproximada: Y=1.0.
-    // Se conservan las coordenadas de mobiliario.js.
+    // 3. FRUTAS Y VERDURAS
     // --------------------------------------------------------
 
-    function llenarMesa(codigo, centroX, centroZ, cantidad = 12) {
+    function llenarMesa(codigo, centroX, centroZ, cantidad = 8) {
         const columnas = 4;
-        const filas = Math.ceil(cantidad / columnas);
 
         for (let i = 0; i < cantidad; i++) {
             const columna = i % columnas;
@@ -560,27 +482,24 @@ export function crearProductosLacteos(scene) {
 
             crearUnidad(
                 codigo,
-                centroX - 0.88 + columna * 0.57,
+                centroX - 0.80 + columna * 0.52,
                 1.0,
-                centroZ - 0.36 + fila * (0.72 / Math.max(1, filas - 1)),
-                {
-                    altura: MODELOS[codigo].altura
-                }
+                centroZ - 0.25 + fila * 0.45
             );
         }
     }
 
     function llenarFrutasVerduras() {
-        llenarMesa('PERA', MESAS.pera.x, MESAS.pera.z, 12);
-        llenarMesa('PLATANO', MESAS.platano.x, MESAS.platano.z, 12);
-        llenarMesa('UVAS', MESAS.uvas.x, MESAS.uvas.z, 10);
-        llenarMesa('MANZANA', MESAS.manzana.x, MESAS.manzana.z, 12);
-        llenarMesa('LIMON', MESAS.limon.x, MESAS.limon.z, 12);
-        llenarMesa('LECHUGA', MESAS.lechuga.x, MESAS.lechuga.z, 8);
-        llenarMesa('BROCOLI', MESAS.brocoli.x, MESAS.brocoli.z, 8);
-        llenarMesa('PEPINO', MESAS.pepino.x, MESAS.pepino.z, 8);
+        llenarMesa('PERA', MESAS.pera.x, MESAS.pera.z, 8);
+        llenarMesa('PLATANO', MESAS.platano.x, MESAS.platano.z, 8);
+        llenarMesa('UVAS', MESAS.uvas.x, MESAS.uvas.z, 6);
+        llenarMesa('MANZANA', MESAS.manzana.x, MESAS.manzana.z, 8);
+        llenarMesa('LIMON', MESAS.limon.x, MESAS.limon.z, 8);
+        llenarMesa('LECHUGA', MESAS.lechuga.x, MESAS.lechuga.z, 6);
+        llenarMesa('BROCOLI', MESAS.brocoli.x, MESAS.brocoli.z, 6);
+        llenarMesa('PEPINO', MESAS.pepino.x, MESAS.pepino.z, 6);
 
-        console.info('Mesas de frutas y verduras surtidas.');
+        console.info('Frutas y verduras surtidas.');
     }
 
     // --------------------------------------------------------
@@ -588,34 +507,47 @@ export function crearProductosLacteos(scene) {
     // --------------------------------------------------------
 
     function llenarEstanteriasPerimetrales() {
-        const posiciones = [
-            { x: -29.0, z: -18, familia: ['PAPEL', 'TOALLITAS_BEBE'] },
-            { x: -29.0, z: -10, familia: ['CEREAL', 'CEREAL2'] },
-            { x: 29.0, z: -18, familia: ['DETERGENTE_LIQUIDO', 'DETERGENTE_POLVO'] },
-            { x: 29.0, z: -10, familia: ['PAPEL', 'TOALLITAS_BEBE'] }
+        const estantes = [
+            {
+                x: -29,
+                z: -18,
+                familia: ['PAPEL', 'TOALLITAS_BEBE']
+            },
+            {
+                x: -29,
+                z: -10,
+                familia: ['CEREAL', 'CEREAL2']
+            },
+            {
+                x: 29,
+                z: -18,
+                familia: ['DETERGENTE_LIQUIDO', 'DETERGENTE_POLVO']
+            },
+            {
+                x: 29,
+                z: -10,
+                familia: ['PAPEL', 'TOALLITAS_BEBE']
+            }
         ];
 
-        posiciones.forEach((estante) => {
+        for (const estante of estantes) {
             for (let nivel = 0; nivel < NIVELES_GONDOLA.length; nivel++) {
-                const y = NIVELES_GONDOLA[nivel] + 0.035;
                 const codigo = estante.familia[nivel % estante.familia.length];
 
-                for (let i = 0; i < 4; i++) {
-                    crearUnidad(
-                        codigo,
-                        estante.x,
-                        y,
-                        estante.z - 1.35 + i * 0.90,
-                        {
-                            altura: MODELOS[codigo].altura,
-                            rotacionY: estante.x < 0 ? 0 : Math.PI
-                        }
-                    );
-                }
+                llenarFila(
+                    codigo,
+                    estante.x,
+                    NIVELES_GONDOLA[nivel] + 0.035,
+                    estante.z,
+                    {
+                        cantidad: 3,
+                        espacio: 1.15,
+                        rotacionY: estante.x < 0 ? 0 : Math.PI
+                    }
+                );
             }
-        });
+        }
 
-        // Módulo de higiene y limpieza de la pared derecha.
         const modulos = [
             {
                 x: 28.3,
@@ -629,40 +561,33 @@ export function crearProductosLacteos(scene) {
             }
         ];
 
-        modulos.forEach((modulo) => {
-            const niveles = [0.43, 0.78, 1.13, 1.48, 1.83];
+        const niveles = [0.46, 0.82, 1.18, 1.54, 1.86];
 
+        for (const modulo of modulos) {
             niveles.forEach((y, nivel) => {
                 const codigo = modulo.familia[nivel % modulo.familia.length];
 
-                for (let i = 0; i < 4; i++) {
-                    crearUnidad(
-                        codigo,
-                        modulo.x - 0.55 + i * 0.36,
-                        y + 0.03,
-                        modulo.z + 0.15,
-                        {
-                            altura: Math.min(
-                                MODELOS[codigo].altura,
-                                0.30
-                            )
-                        }
-                    );
-                }
+                llenarFila(
+                    codigo,
+                    modulo.x - 0.35,
+                    y,
+                    modulo.z,
+                    {
+                        cantidad: 3,
+                        espacio: 0.34
+                    }
+                );
             });
-        });
+        }
 
         console.info('Estanterías perimetrales surtidas.');
     }
 
     // --------------------------------------------------------
-    // 5. PANADERÍA, CARNICERÍA Y PESCADERÍA
+    // 5. MOSTRADORES
     // --------------------------------------------------------
 
     function llenarMostradores() {
-        // Panadería: productos visibles sobre las bandejas.
-        // Se utilizan modelos existentes como surtido visual
-        // mientras se agregan modelos específicos de pan.
         const panaderia = [
             { x: 24.25, z: 15.2 },
             { x: 25.0, z: 15.2 },
@@ -673,45 +598,39 @@ export function crearProductosLacteos(scene) {
         ];
 
         panaderia.forEach((p, i) => {
-            const codigo = i % 2 === 0 ? 'CEREAL' : 'CEREAL2';
-
             crearUnidad(
-                codigo,
+                i % 2 === 0 ? 'CEREAL' : 'CEREAL2',
                 p.x,
                 1.02,
-                p.z,
-                { altura: 0.25 }
+                p.z
             );
         });
 
-        // Carnicería: pollo y filete en el mostrador.
-        for (let i = 0; i < 6; i++) {
+        for (let i = 0; i < 3; i++) {
             crearUnidad(
                 'POLLO',
-                24.0 + (i % 3) * 0.75,
+                24.0 + i * 0.75,
                 1.24,
-                -7.55 + Math.floor(i / 3) * 0.50,
-                { altura: MODELOS.POLLO.altura }
+                -7.55
             );
 
             crearUnidad(
                 'FILETE',
-                24.0 + (i % 3) * 0.75,
+                24.0 + i * 0.75,
                 1.24,
-                -2.75 + Math.floor(i / 3) * 0.50,
-                { altura: MODELOS.FILETE.altura }
+                -2.75
             );
         }
     }
 
     // --------------------------------------------------------
-    // 6. API PÚBLICA DEL INVENTARIO
+    // 6. FUNCIONES PÚBLICAS DEL INVENTARIO
     // --------------------------------------------------------
 
     function obtenerUnidades() {
         const unidades = [];
 
-        productos.traverse((objeto) => {
+        productos.traverse(objeto => {
             if (objeto.userData?.esUnidadProducto) {
                 unidades.push(objeto);
             }
@@ -721,7 +640,7 @@ export function crearProductosLacteos(scene) {
     }
 
     function obtenerDisponibles() {
-        return obtenerUnidades().filter((unidad) =>
+        return obtenerUnidades().filter(unidad =>
             !unidad.userData.recogido &&
             !unidad.userData.reservado &&
             !unidad.userData.vendido
@@ -747,7 +666,6 @@ export function crearProductosLacteos(scene) {
             }
 
             const item = resumen[codigo];
-
             item.total++;
 
             if (unidad.userData.vendido) {
@@ -768,36 +686,39 @@ export function crearProductosLacteos(scene) {
         return { ...PRECIOS };
     }
 
-    // --------------------------------------------------------
-    // CARGA E INICIALIZACIÓN
-    // --------------------------------------------------------
-
     productos.userData.obtenerUnidades = obtenerUnidades;
     productos.userData.obtenerDisponibles = obtenerDisponibles;
     productos.userData.obtenerResumen = obtenerResumen;
     productos.userData.obtenerPrecios = obtenerPrecios;
-
     productos.userData.cargaCompleta = false;
 
-    cargarTodosLosModelos().then(() => {
-        llenarGondolas();
-        llenarRefrigeradores();
-        llenarFrutasVerduras();
-        llenarEstanteriasPerimetrales();
-        llenarMostradores();
+    // --------------------------------------------------------
+    // INICIALIZACIÓN
+    // --------------------------------------------------------
 
-        productos.userData.cargaCompleta = true;
+    cargarTodosLosModelos()
+        .then(() => {
+            llenarGondolas();
+            llenarRefrigeradores();
+            llenarFrutasVerduras();
+            llenarEstanteriasPerimetrales();
+            llenarMostradores();
 
-        console.info(
-            '========================================',
-            '\nSUPERMERCADO SURTIDO',
-            '\nUnidades creadas:',
-            obtenerUnidades().length,
-            '\nModelos disponibles:',
-            Object.values(modelosCargados).filter(Boolean).length,
-            '\n========================================'
-        );
-    });
+            productos.userData.cargaCompleta = true;
+
+            console.info(
+                '====================================',
+                '\nSUPERMERCADO OPTIMIZADO',
+                '\nUnidades creadas:',
+                contador,
+                '\nModelos cargados:',
+                Object.values(modelosCargados).filter(Boolean).length,
+                '\n===================================='
+            );
+        })
+        .catch(error => {
+            console.error('Error preparando los productos:', error);
+        });
 
     return productos;
 }
