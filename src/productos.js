@@ -4,15 +4,12 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 // ============================================================
 // PRODUCTOS DEL SUPERMERCADO
-// Versión optimizada para reducir carga de FPS.
-// Conserva modelos, categorías y datos para clientes/ventas.
+// OPTIMIZADO PARA MEJORAR EL RENDIMIENTO
 // ============================================================
 
 export function crearProductosLacteos(scene) {
     if (!scene?.isScene) {
-        throw new Error(
-            'crearProductosLacteos necesita una THREE.Scene.'
-        );
+        throw new Error('crearProductosLacteos necesita una THREE.Scene.');
     }
 
     const loader = new GLTFLoader();
@@ -23,12 +20,11 @@ export function crearProductosLacteos(scene) {
 
     const GIRO_FRENTE = Math.PI / 2;
 
-    // Menos niveles y unidades por estante.
+    // Distribución reducida de productos.
     const nivelesGondola = [0.48, 1.12, 1.76];
     const nivelesRefrigerador = [0.55, 1.15, 1.75];
     const nivelesLimpieza = [0.48, 1.13, 1.78];
 
-    // Dos posiciones por nivel en lugar de tres.
     const posicionesEstante = [-0.55, 0.55];
     const posicionesRefrigerador = [-0.48, 0.48];
     const posicionesLimpieza = [-0.48, 0.48];
@@ -40,7 +36,7 @@ export function crearProductosLacteos(scene) {
     const cacheModelos = new Map();
 
     // ========================================================
-    // CARGAR CADA MODELO UNA SOLA VEZ
+    // CARGAR MODELOS UNA SOLA VEZ
     // ========================================================
 
     function cargarModelo(archivo, nombre, callback) {
@@ -92,7 +88,7 @@ export function crearProductosLacteos(scene) {
                 cacheModelos.delete(archivo);
 
                 console.error(
-                    `Error cargando ${archivo}. Revisa la ruta y el nombre del archivo.`,
+                    `Error cargando ${archivo}. Revisa la ruta y el nombre.`,
                     error
                 );
             }
@@ -100,7 +96,7 @@ export function crearProductosLacteos(scene) {
     }
 
     // ========================================================
-    // CREAR COPIA DE UN PRODUCTO
+    // CREAR COPIA DE PRODUCTO
     // ========================================================
 
     function crearCopia(
@@ -155,7 +151,7 @@ export function crearProductosLacteos(scene) {
 
         modelo.updateMatrixWorld(true);
 
-        // Datos necesarios para clientes, recogida y ventas.
+        // Información utilizada por clientes y sistema de ventas.
         modelo.userData.esUnidadProducto = true;
         modelo.userData.recogido = false;
         modelo.userData.vendido = false;
@@ -171,8 +167,8 @@ export function crearProductosLacteos(scene) {
 
     // ========================================================
     // 1. GÓNDOLAS
-    // Antes: 12 unidades por producto.
-    // Ahora: 6 unidades por producto.
+    // 6 unidades por producto.
+    // Se elimina completamente bebidas.glb.
     // ========================================================
 
     const catalogoGondolas = [
@@ -187,7 +183,6 @@ export function crearProductosLacteos(scene) {
         { nombre: 'Papel higiénico', archivo: '/modelos/papel.glb', codigo: 'PAPEL', categoria: 'Hogar', rackX: -9, rackZ: 0, lado: -1, altura: 0.30 },
         { nombre: 'Higiene personal', archivo: '/modelos/higienePersonal.glb', codigo: 'HIGIENE_PERSONAL', categoria: 'Higiene', rackX: -9, rackZ: 0, lado: 1, altura: 0.38 },
         { nombre: 'Toallitas para bebé', archivo: '/modelos/toallitas_bebe.glb', codigo: 'TOALLITAS_BEBE', categoria: 'Bebé', rackX: 9, rackZ: 0, lado: -1, altura: 0.38 },
-        { nombre: 'Bebidas envasadas', archivo: '/modelos/bebidas.glb', codigo: 'BEBIDAS', categoria: 'Bebidas', rackX: 9, rackZ: 0, lado: 1, altura: 0.38 },
         { nombre: 'Cereal Nesquik', archivo: '/modelos/nesquik.glb', codigo: 'NESQUIK_EXTRA', categoria: 'Abarrotes', rackX: 17, rackZ: -13, lado: -1, altura: 0.30 },
         { nombre: 'Galletas surtidas', archivo: '/modelos/galletas.glb', codigo: 'GALLETAS_SURTIDAS', categoria: 'Abarrotes', rackX: 17, rackZ: -13, lado: 1, altura: 0.40 },
         { nombre: 'Abarrotes surtidos', archivo: '/modelos/Abarrotes.glb', codigo: 'ABARROTES_SURTIDOS', categoria: 'Abarrotes', rackX: -17, rackZ: 13, lado: -1, altura: 0.40 },
@@ -223,8 +218,6 @@ export function crearProductosLacteos(scene) {
 
     // ========================================================
     // 2. REFRIGERADORES
-    // Antes: 12 unidades por refrigerador.
-    // Ahora: 6 unidades por refrigerador.
     // ========================================================
 
     const catalogoRefrigeradores = [
@@ -258,7 +251,6 @@ export function crearProductosLacteos(scene) {
 
     // ========================================================
     // 3. FRUTAS Y VERDURAS
-    // Se reducen las repeticiones, manteniendo variedad visual.
     // ========================================================
 
     const mesasFrescos = {
@@ -299,10 +291,8 @@ export function crearProductosLacteos(scene) {
         mesa: 'Mesa_frescos_01',
         altura: 0.25,
         posiciones: [
-            [-0.55, -0.30],
-            [0.55, -0.30],
-            [-0.55, 0.30],
-            [0.55, 0.30]
+            [-0.55, -0.30], [0.55, -0.30],
+            [-0.55, 0.30], [0.55, 0.30]
         ]
     });
 
@@ -313,12 +303,8 @@ export function crearProductosLacteos(scene) {
         mesa: 'Mesa_frescos_02',
         altura: 0.25,
         posiciones: [
-            [-0.65, -0.30],
-            [0, -0.30],
-            [0.65, -0.30],
-            [-0.65, 0.30],
-            [0, 0.30],
-            [0.65, 0.30]
+            [-0.65, -0.30], [0, -0.30], [0.65, -0.30],
+            [-0.65, 0.30], [0, 0.30], [0.65, 0.30]
         ]
     });
 
@@ -329,8 +315,7 @@ export function crearProductosLacteos(scene) {
         mesa: 'Mesa_frescos_03',
         altura: 0.18,
         posiciones: [
-            [-0.55, -0.30],
-            [0.55, -0.30]
+            [-0.55, -0.30], [0.55, -0.30]
         ]
     });
 
@@ -341,8 +326,7 @@ export function crearProductosLacteos(scene) {
         mesa: 'Mesa_frescos_03',
         altura: 0.28,
         posiciones: [
-            [-0.55, 0.30],
-            [0.55, 0.30]
+            [-0.55, 0.30], [0.55, 0.30]
         ]
     });
 
@@ -353,8 +337,7 @@ export function crearProductosLacteos(scene) {
         mesa: 'Mesa_frescos_03',
         altura: 0.28,
         posiciones: [
-            [-0.55, 0],
-            [0.55, 0]
+            [-0.55, 0], [0.55, 0]
         ]
     });
 
@@ -365,12 +348,8 @@ export function crearProductosLacteos(scene) {
         mesa: 'Mesa_frescos_04',
         altura: 0.25,
         posiciones: [
-            [-0.65, -0.30],
-            [0, -0.30],
-            [0.65, -0.30],
-            [-0.65, 0.30],
-            [0, 0.30],
-            [0.65, 0.30]
+            [-0.65, -0.30], [0, -0.30], [0.65, -0.30],
+            [-0.65, 0.30], [0, 0.30], [0.65, 0.30]
         ]
     });
 
@@ -381,15 +360,12 @@ export function crearProductosLacteos(scene) {
         mesa: 'Mesa_frescos_02',
         altura: 0.25,
         posiciones: [
-            [-0.55, 0.52],
-            [0.55, 0.52]
+            [-0.55, 0.52], [0.55, 0.52]
         ]
     });
 
     // ========================================================
     // 4. CARNICERÍA
-    // Antes: 4 pollos y 4 filetes.
-    // Ahora: 2 de cada uno.
     // ========================================================
 
     function colocarEnMostrador(config) {
@@ -415,8 +391,7 @@ export function crearProductosLacteos(scene) {
         codigo: 'POLLO',
         altura: 0.22,
         posiciones: [
-            [-0.55, -0.30],
-            [0.55, -0.30]
+            [-0.55, -0.30], [0.55, -0.30]
         ]
     });
 
@@ -426,15 +401,12 @@ export function crearProductosLacteos(scene) {
         codigo: 'FILETE',
         altura: 0.14,
         posiciones: [
-            [-0.55, 0.30],
-            [0.55, 0.30]
+            [-0.55, 0.30], [0.55, 0.30]
         ]
     });
 
     // ========================================================
     // 5. LIMPIEZA
-    // Antes: 15 unidades por producto.
-    // Ahora: 6 unidades por producto.
     // ========================================================
 
     const productosLimpieza = [
@@ -466,7 +438,6 @@ export function crearProductosLacteos(scene) {
 
     // ========================================================
     // 6. ROPA
-    // Se conserva una unidad por modelo.
     // ========================================================
 
     const prendas = [
@@ -494,7 +465,7 @@ export function crearProductosLacteos(scene) {
     });
 
     // ========================================================
-    // FUNCIONES DE CONSULTA PARA CLIENTES Y VENTAS
+    // CONSULTAS PARA CLIENTES Y VENTAS
     // ========================================================
 
     productos.userData.obtenerResumen = () => ({
