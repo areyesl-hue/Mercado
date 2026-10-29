@@ -4,12 +4,18 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 // ============================================================
 // PRODUCTOS DEL SUPERMERCADO
-// Compatible con Three.js + Vite
+// Archivo: productos.js
+// Compatible con el mobiliario.js proporcionado.
 //
-// Ruta de modelos: public/modelos/
-// Cada archivo de producto se carga una sola vez.
-// No se sustituyen modelos que fallen por otros productos.
-// No se crean copias para simular existencias.
+// Categorías:
+// 01. Abarrotes y botanas
+// 02. Bebidas y lácteos
+// 03. Frutas y verduras
+// 04. Carnicería
+// 05. Higiene y limpieza
+// 06. Ropa
+//
+// Todos los archivos se buscan en public/modelos/.
 // ============================================================
 
 export function crearProductosLacteos(scene) {
@@ -21,871 +27,857 @@ export function crearProductosLacteos(scene) {
 
     const loader = new GLTFLoader();
     const productos = new THREE.Group();
+
     productos.name = 'PRODUCTOS_SUPERMERCADO';
-
-    const unidades = [];
-    const erroresCarga = [];
-    const catalogoCargado = new Map();
-    const promesasCarga = [];
-
-    let cargaCompleta = false;
-
-    // ========================================================
-    // CONFIGURACIÓN DEL MOBILIARIO
-    // ========================================================
-
-    const niveles = [0.5025, 0.9325, 1.3625, 1.7925];
-
-    // Posiciones de las góndolas del mobiliario.js.
-    const gondolas = [
-        { x: -17, z: -13 },
-        { x: -17, z: 0 },
-        { x: -17, z: 13 },
-        { x: -9, z: -13 },
-        { x: -9, z: 0 },
-        { x: -9, z: 13 },
-        { x: 9, z: -13 },
-        { x: 9, z: 0 },
-        { x: 9, z: 13 },
-        { x: 17, z: -13 },
-        { x: 17, z: 0 },
-        { x: 17, z: 13 }
-    ];
-
-    // Cuatro posiciones a lo largo de cada góndola.
-    const posicionesZ = [-1.15, -0.38, 0.38, 1.15];
-
-    // Mesas de frutas y verduras.
-    const mesasFrutas = [
-        { x: -25.5, z: 15 },
-        { x: -21.7, z: 15 },
-        { x: -25.5, z: 10.8 },
-        { x: -21.7, z: 10.8 }
-    ];
-
-    // ========================================================
-    // CATÁLOGO REAL
-    //
-    // Las rutas respetan los nombres que compartiste.
-    // La ubicación se expresa respecto al mobiliario existente.
-    // ========================================================
-
-    const catalogo = [
-        // ----------------------------------------------------
-        // REFRIGERADORES: Z = -26.5
-        // ----------------------------------------------------
-        {
-            id: 'santa-clara',
-            nombre: 'Leche Santa Clara',
-            archivo: 'SantaClara.glb',
-            departamento: 'Lácteos',
-            ubicacion: 'refrigerador',
-            x: -27,
-            z: -26.08,
-            y: niveles[0],
-            altura: 0.34
-        },
-        {
-            id: 'lala',
-            nombre: 'Leche Lala',
-            archivo: 'Lala.glb',
-            departamento: 'Lácteos',
-            ubicacion: 'refrigerador',
-            x: -23.5,
-            z: -26.08,
-            y: niveles[0],
-            altura: 0.34
-        },
-        {
-            id: 'pepsi',
-            nombre: 'Pepsi',
-            archivo: 'Pepsi.glb',
-            departamento: 'Bebidas',
-            ubicacion: 'refrigerador',
-            x: -20,
-            z: -26.08,
-            y: niveles[0],
-            altura: 0.30
-        },
-        {
-            id: 'pepsi-coca',
-            nombre: 'Pepsi y Coca-Cola',
-            archivo: 'Pepsi. y coca.glb',
-            departamento: 'Bebidas',
-            ubicacion: 'refrigerador',
-            x: -16.5,
-            z: -26.08,
-            y: niveles[0],
-            altura: 0.34
-        },
-        {
-            id: 'agua',
-            nombre: 'Agua embotellada',
-            archivo: 'Agua.glb',
-            departamento: 'Bebidas',
-            ubicacion: 'refrigerador',
-            x: 16.5,
-            z: -26.08,
-            y: niveles[0],
-            altura: 0.34
-        },
-        {
-            id: 'bebidas',
-            nombre: 'Bebidas',
-            archivo: 'bebidas.glb',
-            departamento: 'Bebidas',
-            ubicacion: 'refrigerador',
-            x: 20,
-            z: -26.08,
-            y: niveles[0],
-            altura: 0.34
-        },
-
-        // ----------------------------------------------------
-        // FRUTAS Y VERDURAS
-        // ----------------------------------------------------
-        {
-            id: 'pera',
-            nombre: 'Pera',
-            archivo: 'Pera.glb',
-            departamento: 'Frutas y verduras',
-            ubicacion: 'mesa-frutas',
-            mesa: 0,
-            dx: -0.48,
-            dz: 0,
-            altura: 0.24
-        },
-        {
-            id: 'uvas',
-            nombre: 'Uvas',
-            archivo: 'Uvas.glb',
-            departamento: 'Frutas y verduras',
-            ubicacion: 'mesa-frutas',
-            mesa: 0,
-            dx: 0.40,
-            dz: 0,
-            altura: 0.24
-        },
-        {
-            id: 'platano',
-            nombre: 'Plátano',
-            archivo: 'Platano.glb',
-            departamento: 'Frutas y verduras',
-            ubicacion: 'mesa-frutas',
-            mesa: 1,
-            dx: -0.42,
-            dz: 0,
-            altura: 0.26
-        },
-        {
-            id: 'limon',
-            nombre: 'Limón',
-            archivo: 'Limon.glb',
-            departamento: 'Frutas y verduras',
-            ubicacion: 'mesa-frutas',
-            mesa: 1,
-            dx: 0.40,
-            dz: 0,
-            altura: 0.18
-        },
-        {
-            id: 'manzana',
-            nombre: 'Manzana',
-            archivo: 'Mazana.glb',
-            departamento: 'Frutas y verduras',
-            ubicacion: 'mesa-frutas',
-            mesa: 2,
-            dx: -0.42,
-            dz: 0,
-            altura: 0.22
-        },
-        {
-            id: 'brocoli',
-            nombre: 'Brócoli',
-            archivo: 'Brocoli.glb',
-            departamento: 'Frutas y verduras',
-            ubicacion: 'mesa-frutas',
-            mesa: 2,
-            dx: 0.40,
-            dz: 0,
-            altura: 0.30
-        },
-        {
-            id: 'pepino',
-            nombre: 'Pepino',
-            archivo: 'Pepino.glb',
-            departamento: 'Frutas y verduras',
-            ubicacion: 'mesa-frutas',
-            mesa: 3,
-            dx: -0.42,
-            dz: 0,
-            altura: 0.28
-        },
-
-        // ----------------------------------------------------
-        // CARNICERÍA
-        // ----------------------------------------------------
-        {
-            id: 'pollo',
-            nombre: 'Pollo',
-            archivo: 'Pollo.glb',
-            departamento: 'Carnicería',
-            ubicacion: 'mostrador',
-            x: 24.2,
-            z: -7.3,
-            y: 1.24,
-            altura: 0.38
-        },
-        {
-            id: 'filete',
-            nombre: 'Filete',
-            archivo: 'Filete.glb',
-            departamento: 'Carnicería',
-            ubicacion: 'mostrador',
-            x: 26,
-            z: -7.3,
-            y: 1.24,
-            altura: 0.30
-        },
-
-        // ----------------------------------------------------
-        // ABARROTES Y CEREALES
-        // ----------------------------------------------------
-        {
-            id: 'abarrotes',
-            nombre: 'Abarrotes',
-            archivo: 'Abarrotes.glb',
-            departamento: 'Abarrotes',
-            ubicacion: 'gondola',
-            rack: 0,
-            lado: -1,
-            nivel: 2,
-            slot: 0,
-            altura: 0.34
-        },
-        {
-            id: 'cereal',
-            nombre: 'Cereal',
-            archivo: 'cereal.glb',
-            departamento: 'Cereales',
-            ubicacion: 'gondola',
-            rack: 0,
-            lado: 1,
-            nivel: 2,
-            slot: 1,
-            altura: 0.38
-        },
-        {
-            id: 'cereal-2',
-            nombre: 'Cereal variedad 2',
-            archivo: 'cereal2.glb',
-            departamento: 'Cereales',
-            ubicacion: 'gondola',
-            rack: 1,
-            lado: -1,
-            nivel: 2,
-            slot: 0,
-            altura: 0.38
-        },
-        {
-            id: 'nesquik',
-            nombre: 'Nesquik',
-            archivo: 'nesquik.glb',
-            departamento: 'Cereales',
-            ubicacion: 'gondola',
-            rack: 1,
-            lado: 1,
-            nivel: 1,
-            slot: 1,
-            altura: 0.32
-        },
-        {
-            id: 'enlatados',
-            nombre: 'Enlatados',
-            archivo: 'enlatados.glb',
-            departamento: 'Abarrotes',
-            ubicacion: 'gondola',
-            rack: 2,
-            lado: -1,
-            nivel: 1,
-            slot: 0,
-            altura: 0.28
-        },
-
-        // ----------------------------------------------------
-        // BOTANAS Y GALLETAS
-        // ----------------------------------------------------
-        {
-            id: 'doritos',
-            nombre: 'Doritos',
-            archivo: 'Doritos.glb',
-            departamento: 'Botanas',
-            ubicacion: 'gondola',
-            rack: 2,
-            lado: 1,
-            nivel: 2,
-            slot: 1,
-            altura: 0.28
-        },
-        {
-            id: 'sabrita',
-            nombre: 'Sabritas',
-            archivo: 'Sabrita.glb',
-            departamento: 'Botanas',
-            ubicacion: 'gondola',
-            rack: 3,
-            lado: -1,
-            nivel: 2,
-            slot: 0,
-            altura: 0.28
-        },
-        {
-            id: 'galletas',
-            nombre: 'Galletas',
-            archivo: 'galletas.glb',
-            departamento: 'Galletas',
-            ubicacion: 'gondola',
-            rack: 3,
-            lado: 1,
-            nivel: 1,
-            slot: 1,
-            altura: 0.28
-        },
-
-        // ----------------------------------------------------
-        // HIGIENE PERSONAL
-        // ----------------------------------------------------
-        {
-            id: 'higiene-personal',
-            nombre: 'Higiene personal',
-            archivo: 'higienePersonal.glb',
-            departamento: 'Higiene personal',
-            ubicacion: 'gondola',
-            rack: 4,
-            lado: -1,
-            nivel: 2,
-            slot: 0,
-            altura: 0.32
-        },
-        {
-            id: 'papel',
-            nombre: 'Papel',
-            archivo: 'papel.glb',
-            departamento: 'Higiene personal',
-            ubicacion: 'gondola',
-            rack: 4,
-            lado: 1,
-            nivel: 1,
-            slot: 1,
-            altura: 0.30
-        },
-        {
-            id: 'toallitas-bebe',
-            nombre: 'Toallitas para bebé',
-            archivo: 'toallitas_bebe.glb',
-            departamento: 'Bebés',
-            ubicacion: 'gondola',
-            rack: 5,
-            lado: -1,
-            nivel: 2,
-            slot: 0,
-            altura: 0.30
-        },
-
-        // ----------------------------------------------------
-        // LIMPIEZA DEL HOGAR
-        // ----------------------------------------------------
-        {
-            id: 'detergente-liquido',
-            nombre: 'Detergente líquido',
-            archivo: 'detergente_liquido.glb',
-            departamento: 'Limpieza',
-            ubicacion: 'limpieza',
-            x: 27.5,
-            z: 3.3,
-            y: niveles[0],
-            altura: 0.36
-        },
-        {
-            id: 'detergente-liquido-1',
-            nombre: 'Detergente líquido variedad',
-            archivo: 'detergente_liquido1.glb',
-            departamento: 'Limpieza',
-            ubicacion: 'limpieza',
-            x: 28.3,
-            z: 3.3,
-            y: niveles[1],
-            altura: 0.36
-        },
-        {
-            id: 'cloro',
-            nombre: 'Cloro líquido',
-            archivo: 'cloro_liquido.glb',
-            departamento: 'Limpieza',
-            ubicacion: 'limpieza',
-            x: 27.5,
-            z: 8,
-            y: niveles[0],
-            altura: 0.36
-        },
-        {
-            id: 'suavizante',
-            nombre: 'Suavizante líquido',
-            archivo: 'suavizante_liquido.glb',
-            departamento: 'Limpieza',
-            ubicacion: 'limpieza',
-            x: 28.3,
-            z: 8,
-            y: niveles[1],
-            altura: 0.32
-        },
-        {
-            id: 'limpiador',
-            nombre: 'Limpiador multiusos',
-            archivo: 'limpiador_multiusos.glb',
-            departamento: 'Limpieza',
-            ubicacion: 'limpieza',
-            x: 27.5,
-            z: 3.3,
-            y: niveles[2],
-            altura: 0.34
-        },
-
-        // ----------------------------------------------------
-        // ROPA
-        // Se usan góndolas del lado derecho como ubicación inicial.
-        // Si tu mobiliario tiene percheros dedicados, podemos
-        // ajustar estas coordenadas a esos objetos exactos.
-        // ----------------------------------------------------
-        {
-            id: 'blusa',
-            nombre: 'Blusa',
-            archivo: 'Blusa.glb',
-            departamento: 'Ropa',
-            ubicacion: 'gondola',
-            rack: 8,
-            lado: -1,
-            nivel: 1,
-            slot: 0,
-            altura: 0.55
-        },
-        {
-            id: 'camisa-azul',
-            nombre: 'Camisa azul',
-            archivo: 'camisaAzul.glb',
-            departamento: 'Ropa',
-            ubicacion: 'gondola',
-            rack: 8,
-            lado: 1,
-            nivel: 1,
-            slot: 1,
-            altura: 0.55
-        },
-        {
-            id: 'sudadera-negra',
-            nombre: 'Sudadera negra',
-            archivo: 'SudaderaNegra.glb',
-            departamento: 'Ropa',
-            ubicacion: 'gondola',
-            rack: 9,
-            lado: -1,
-            nivel: 1,
-            slot: 0,
-            altura: 0.65
-        },
-        {
-            id: 'sudadera-roja',
-            nombre: 'Sudadera roja',
-            archivo: 'sudaderaroja.glb',
-            departamento: 'Ropa',
-            ubicacion: 'gondola',
-            rack: 9,
-            lado: 1,
-            nivel: 1,
-            slot: 1,
-            altura: 0.65
-        },
-        {
-            id: 'chamarra-negra',
-            nombre: 'Chamarra negra',
-            archivo: 'chamarranegra.glb',
-            departamento: 'Ropa',
-            ubicacion: 'gondola',
-            rack: 10,
-            lado: -1,
-            nivel: 1,
-            slot: 0,
-            altura: 0.70
-        },
-        {
-            id: 'pantalon-mezclilla',
-            nombre: 'Pantalón de mezclilla',
-            archivo: 'pantalomezclilla.glb',
-            departamento: 'Ropa',
-            ubicacion: 'gondola',
-            rack: 10,
-            lado: 1,
-            nivel: 1,
-            slot: 1,
-            altura: 0.70
-        },
-        {
-            id: 'vestido',
-            nombre: 'Vestido',
-            archivo: 'vesitdo.glb',
-            departamento: 'Ropa',
-            ubicacion: 'gondola',
-            rack: 11,
-            lado: -1,
-            nivel: 1,
-            slot: 0,
-            altura: 0.75
-        }
-    ];
-
-    // ========================================================
-    // POSICIONAMIENTO
-    // ========================================================
-
-    function obtenerPosicion(item) {
-        if (item.ubicacion === 'gondola') {
-            const rack = gondolas[item.rack];
-
-            if (!rack) {
-                throw new Error(
-                    `La góndola ${item.rack} no existe para ${item.nombre}.`
-                );
-            }
-
-            const lado = item.lado ?? -1;
-            const nivel = niveles[item.nivel ?? 1];
-            const slot = posicionesZ[item.slot ?? 1];
-
-            return {
-                x: rack.x + lado * 0.62,
-                y: nivel,
-                z: rack.z + slot
-            };
-        }
-
-        if (item.ubicacion === 'mesa-frutas') {
-            const mesa = mesasFrutas[item.mesa];
-
-            if (!mesa) {
-                throw new Error(
-                    `La mesa de frutas ${item.mesa} no existe.`
-                );
-            }
-
-            return {
-                x: mesa.x + (item.dx ?? 0),
-                y: 1.0,
-                z: mesa.z + (item.dz ?? 0)
-            };
-        }
-
-        return {
-            x: item.x ?? 0,
-            y: item.y ?? niveles[0],
-            z: item.z ?? 0
-        };
-    }
-
-    // ========================================================
-    // NORMALIZAR ESCALA Y CENTRAR EL GLB
-    // Conserva los materiales y texturas originales.
-    // ========================================================
-
-    function prepararModelo(modelo, item) {
-        modelo.updateMatrixWorld(true);
-
-        const cajaInicial = new THREE.Box3().setFromObject(modelo);
-        const tamano = new THREE.Vector3();
-
-        cajaInicial.getSize(tamano);
-
-        if (
-            !Number.isFinite(tamano.y) ||
-            tamano.y < 0.0001
-        ) {
-            throw new Error(
-                `El modelo ${item.archivo} no tiene dimensiones válidas.`
-            );
-        }
-
-        const alturaObjetivo = item.altura ?? 0.30;
-        const escala = alturaObjetivo / tamano.y;
-
-        modelo.scale.multiplyScalar(escala);
-        modelo.updateMatrixWorld(true);
-
-        const cajaEscalada = new THREE.Box3().setFromObject(modelo);
-        const centro = new THREE.Vector3();
-
-        cajaEscalada.getCenter(centro);
-
-        modelo.position.x -= centro.x;
-        modelo.position.y -= cajaEscalada.min.y;
-        modelo.position.z -= centro.z;
-
-        modelo.traverse(obj => {
-            if (!obj.isMesh) return;
-
-            obj.castShadow = false;
-            obj.receiveShadow = false;
-            obj.frustumCulled = true;
-        });
-
-        modelo.updateMatrixWorld(true);
-    }
-
-    // ========================================================
-    // REGISTRAR UNIDAD
-    // ========================================================
-
-    function registrarProducto(gltf, item) {
-        const modelo = gltf.scene;
-
-        if (!modelo) {
-            throw new Error(
-                `El archivo ${item.archivo} no contiene una escena.`
-            );
-        }
-
-        prepararModelo(modelo, item);
-
-        const posicion = obtenerPosicion(item);
-        const unidad = new THREE.Group();
-
-        unidad.name = `PRODUCTO_${item.id}`;
-        unidad.position.set(
-            posicion.x,
-            posicion.y,
-            posicion.z
-        );
-
-        if (item.rotY !== undefined) {
-            unidad.rotation.y = item.rotY;
-        }
-
-        modelo.name = item.nombre;
-        unidad.add(modelo);
-
-        unidad.userData = {
-            esUnidadProducto: true,
-            id: item.id,
-            nombre: item.nombre,
-            archivo: item.archivo,
-            departamento: item.departamento,
-            ubicacion: item.ubicacion,
-            disponible: true,
-            retirado: false,
-            precio: item.precio ?? 0,
-            codigo: item.codigo ?? item.id,
-            alturaColocacion: posicion.y,
-            posicionOriginal: posicion,
-            escalaObjetivo: item.altura ?? 0.30
-        };
-
-        productos.add(unidad);
-        unidades.push(unidad);
-        catalogoCargado.set(item.id, unidad);
-
-        console.info(
-            `[GLB] ${item.archivo} cargado en ${item.departamento}`,
-            unidad.position
-        );
-
-        return unidad;
-    }
-
-    // ========================================================
-    // CARGA INDIVIDUAL DE CADA ARCHIVO
-    // No hay modelos de sustitución ni copias automáticas.
-    // ========================================================
-
-    function cargarProducto(item) {
-        return new Promise(resolve => {
-            const ruta = `/modelos/${encodeURIComponent(item.archivo)}`;
-
-            loader.load(
-                ruta,
-                gltf => {
-                    try {
-                        const unidad = registrarProducto(gltf, item);
-                        resolve(unidad);
-                    } catch (error) {
-                        erroresCarga.push({
-                            id: item.id,
-                            archivo: item.archivo,
-                            departamento: item.departamento,
-                            error: error.message
-                        });
-
-                        console.error(
-                            `[PRODUCTO] Error preparando ${item.archivo}:`,
-                            error
-                        );
-
-                        resolve(null);
-                    }
-                },
-                undefined,
-                error => {
-                    const detalle = {
-                        id: item.id,
-                        archivo: item.archivo,
-                        departamento: item.departamento,
-                        error: error?.message ?? 'No se pudo cargar el archivo'
-                    };
-
-                    erroresCarga.push(detalle);
-
-                    console.error(
-                        `[PRODUCTO] No se pudo cargar ${ruta}.`,
-                        'Comprueba que el nombre coincida con public/modelos.',
-                        error
-                    );
-
-                    resolve(null);
-                }
-            );
-        });
-    }
-
-    // ========================================================
-    // API PÚBLICA PARA CLIENTES, CARRITO Y VENTAS
-    // ========================================================
-
-    productos.userData.obtenerUnidades = () => [...unidades];
-
-    productos.userData.obtenerDisponibles = () =>
-        unidades.filter(unidad =>
-            unidad.userData.disponible &&
-            !unidad.userData.retirado
-        );
-
-    productos.userData.obtenerResumen = () => ({
-        totalCatalogo: catalogo.length,
-        cargados: unidades.length,
-        disponibles: unidades.filter(
-            unidad => unidad.userData.disponible
-        ).length,
-        retirados: unidades.filter(
-            unidad => unidad.userData.retirado
-        ).length,
-        errores: erroresCarga.length,
-        cargaCompleta
-    });
-
-    productos.userData.obtenerCatalogo = () =>
-        catalogo.map(item => ({
-            id: item.id,
-            nombre: item.nombre,
-            archivo: item.archivo,
-            departamento: item.departamento,
-            ubicacion: item.ubicacion,
-            precio: item.precio ?? 0,
-            cargado: catalogoCargado.has(item.id)
-        }));
-
-    productos.userData.obtenerPrecios = () =>
-        unidades.map(unidad => ({
-            id: unidad.userData.id,
-            nombre: unidad.userData.nombre,
-            precio: unidad.userData.precio,
-            departamento: unidad.userData.departamento
-        }));
-
-    productos.userData.obtenerErroresCarga = () =>
-        [...erroresCarga];
-
-    productos.userData.buscarPorId = id =>
-        catalogoCargado.get(id) ?? null;
-
-    productos.userData.buscarPorNombre = nombre => {
-        const termino = String(nombre).toLowerCase();
-
-        return unidades.filter(unidad =>
-            unidad.userData.nombre.toLowerCase().includes(termino)
-        );
-    };
-
-    productos.userData.listarDepartamentos = () =>
-        [...new Set(catalogo.map(item => item.departamento))];
-
-    productos.userData.marcarRetirado = unidad => {
-        if (!unidad?.userData?.esUnidadProducto) {
-            return false;
-        }
-
-        unidad.userData.disponible = false;
-        unidad.userData.retirado = true;
-        return true;
-    };
-
-    productos.userData.devolverProducto = unidad => {
-        if (!unidad?.userData?.esUnidadProducto) {
-            return false;
-        }
-
-        unidad.userData.disponible = true;
-        unidad.userData.retirado = false;
-        return true;
-    };
-
-    productos.userData.restaurarPosicion = unidad => {
-        if (!unidad?.userData?.posicionOriginal) {
-            return false;
-        }
-
-        const p = unidad.userData.posicionOriginal;
-
-        unidad.position.set(p.x, p.y, p.z);
-        unidad.userData.disponible = true;
-        unidad.userData.retirado = false;
-
-        return true;
-    };
-
-    // ========================================================
-    // INICIAR CARGA
-    // ========================================================
-
     scene.add(productos);
 
-    for (const item of catalogo) {
-        promesasCarga.push(cargarProducto(item));
+    const nivelesGondola = [0.43, 0.86, 1.29, 1.72];
+    const nivelesRefrigerador = [0.50, 0.93, 1.36, 1.79];
+    const nivelesLimpieza = [0.43, 0.78, 1.13, 1.48, 1.83];
+
+    let modelosCargados = 0;
+    let unidadesColocadas = 0;
+    let modelosFallidos = 0;
+
+    // ========================================================
+    // PREPARAR MODELOS
+    // ========================================================
+
+    function cargarModelo(archivo, nombre, callback) {
+        loader.load(
+            archivo,
+            (gltf) => {
+                const original = gltf.scene;
+                original.name = nombre;
+
+                original.traverse((objeto) => {
+                    if (!objeto.isMesh) return;
+
+                    objeto.castShadow = false;
+                    objeto.receiveShadow = false;
+
+                    // Mantener los materiales y colores originales.
+                    const materiales = Array.isArray(objeto.material)
+                        ? objeto.material
+                        : [objeto.material];
+
+                    materiales.forEach((material) => {
+                        if (!material) return;
+                        material.side = THREE.DoubleSide;
+                        material.needsUpdate = true;
+                    });
+                });
+
+                modelosCargados++;
+                console.info(`Producto cargado: ${nombre} (${archivo})`);
+                callback(original);
+            },
+            undefined,
+            (error) => {
+                modelosFallidos++;
+                console.error(
+                    `No se pudo cargar ${archivo}. Comprueba el nombre exacto en public/modelos/.`,
+                    error
+                );
+            }
+        );
     }
 
-    const promesaCarga = Promise.all(promesasCarga).then(() => {
-        cargaCompleta = true;
+    function crearCopia(
+        original,
+        nombre,
+        x,
+        y,
+        z,
+        altura,
+        rotacionY = 0,
+        categoria = 'Abarrotes'
+    ) {
+        const modelo = original.clone(true);
 
-        const resultado = {
-            total: catalogo.length,
-            cargados: unidades.length,
-            fallidos: erroresCarga.length,
-            errores: [...erroresCarga]
-        };
+        modelo.name = nombre;
+        modelo.position.set(0, 0, 0);
+        modelo.rotation.set(0, 0, 0);
+        modelo.scale.set(1, 1, 1);
+        modelo.updateMatrixWorld(true);
 
-        console.info('========================================');
-        console.info('INVENTARIO 3D DEL SUPERMERCADO');
-        console.info(`Modelos de catálogo: ${resultado.total}`);
-        console.info(`Modelos cargados: ${resultado.cargados}`);
-        console.info(`Modelos con error: ${resultado.fallidos}`);
-        console.info('========================================');
+        let caja = new THREE.Box3().setFromObject(modelo);
+        const dimensiones = new THREE.Vector3();
+        caja.getSize(dimensiones);
 
-        if (erroresCarga.length) {
-            console.table(erroresCarga);
+        if (!Number.isFinite(dimensiones.y) || dimensiones.y < 0.0001) {
+            console.warn(`Altura inválida para ${nombre}.`);
+            return null;
         }
 
-        return resultado;
+        modelo.scale.setScalar(altura / dimensiones.y);
+        modelo.updateMatrixWorld(true);
+
+        caja = new THREE.Box3().setFromObject(modelo);
+
+        const centro = new THREE.Vector3();
+        caja.getCenter(centro);
+
+        // Centrar horizontalmente y apoyar la base en Y = 0.
+        modelo.position.set(
+            -centro.x,
+            -caja.min.y,
+            -centro.z
+        );
+
+        modelo.rotation.y = rotacionY;
+        modelo.updateMatrixWorld(true);
+
+        caja = new THREE.Box3().setFromObject(modelo);
+        modelo.position.y -= caja.min.y;
+
+        modelo.position.x += x;
+        modelo.position.y += y;
+        modelo.position.z += z;
+
+        // Información para clientes, carritos y sistema de ventas.
+        modelo.userData.esUnidadProducto = true;
+        modelo.userData.recogido = false;
+        modelo.userData.vendido = false;
+        modelo.userData.reservado = false;
+        modelo.userData.categoria = categoria;
+        modelo.userData.nombreProducto = nombre;
+
+        productos.add(modelo);
+        unidadesColocadas++;
+
+        return modelo;
+    }
+
+    // ========================================================
+    // CATÁLOGO Y COLOCACIÓN EN GÓNDOLAS CENTRALES
+    //
+    // Cada góndola tiene dos lados:
+    // X = centro de la góndola +/- 0.30.
+    // Z = centro de la góndola + desplazamiento.
+    //
+    // Las repisas reales tienen niveles:
+    // 0.43, 0.86, 1.29 y 1.72.
+    // ========================================================
+
+    const catalogoGondolas = [
+        {
+            nombre: 'Galletas',
+            archivo: '/modelos/galletas.glb',
+            codigo: 'GALLETAS',
+            categoria: 'Abarrotes',
+            rackX: -17,
+            rackZ: -13,
+            lado: -1,
+            altura: 0.28
+        },
+        {
+            nombre: 'Cereal',
+            archivo: '/modelos/cereal.glb',
+            codigo: 'CEREAL',
+            categoria: 'Abarrotes',
+            rackX: -17,
+            rackZ: -13,
+            lado: 1,
+            altura: 0.32
+        },
+        {
+            nombre: 'Cereal 2',
+            archivo: '/modelos/cereal2.glb',
+            codigo: 'CEREAL_2',
+            categoria: 'Abarrotes',
+            rackX: -17,
+            rackZ: 0,
+            lado: -1,
+            altura: 0.32
+        },
+        {
+            nombre: 'Nesquik',
+            archivo: '/modelos/nesquik.glb',
+            codigo: 'NESQUIK',
+            categoria: 'Abarrotes',
+            rackX: -17,
+            rackZ: 0,
+            lado: 1,
+            altura: 0.28
+        },
+        {
+            nombre: 'Abarrotes',
+            archivo: '/modelos/Abarrotes.glb',
+            codigo: 'ABARROTES',
+            categoria: 'Abarrotes',
+            rackX: -9,
+            rackZ: -13,
+            lado: -1,
+            altura: 0.30
+        },
+        {
+            nombre: 'Enlatados',
+            archivo: '/modelos/enlatados.glb',
+            codigo: 'ENLATADOS',
+            categoria: 'Abarrotes',
+            rackX: -9,
+            rackZ: -13,
+            lado: 1,
+            altura: 0.27
+        },
+        {
+            nombre: 'Doritos',
+            archivo: '/modelos/Doritos.glb',
+            codigo: 'DORITOS',
+            categoria: 'Botanas',
+            rackX: 9,
+            rackZ: -13,
+            lado: -1,
+            altura: 0.30
+        },
+        {
+            nombre: 'Sabritas',
+            archivo: '/modelos/Sabrita.glb',
+            codigo: 'SABRITAS',
+            categoria: 'Botanas',
+            rackX: 9,
+            rackZ: -13,
+            lado: 1,
+            altura: 0.30
+        },
+        {
+            nombre: 'Papel',
+            archivo: '/modelos/papel.glb',
+            codigo: 'PAPEL',
+            categoria: 'Hogar',
+            rackX: -9,
+            rackZ: 0,
+            lado: -1,
+            altura: 0.30
+        },
+        {
+            nombre: 'Higiene personal',
+            archivo: '/modelos/higienePersonal.glb',
+            codigo: 'HIGIENE_PERSONAL',
+            categoria: 'Higiene',
+            rackX: -9,
+            rackZ: 0,
+            lado: 1,
+            altura: 0.28
+        },
+        {
+            nombre: 'Toallitas para bebé',
+            archivo: '/modelos/toallitas_bebe.glb',
+            codigo: 'TOALLITAS_BEBE',
+            categoria: 'Bebé',
+            rackX: 9,
+            rackZ: 0,
+            lado: -1,
+            altura: 0.25
+        },
+        {
+            nombre: 'Bebidas envasadas',
+            archivo: '/modelos/bebidas.glb',
+            codigo: 'BEBIDAS',
+            categoria: 'Bebidas',
+            rackX: 9,
+            rackZ: 0,
+            lado: 1,
+            altura: 0.30
+        },
+        {
+            nombre: 'Cereal Nesquik',
+            archivo: '/modelos/nesquik.glb',
+            codigo: 'NESQUIK_EXTRA',
+            categoria: 'Abarrotes',
+            rackX: 17,
+            rackZ: -13,
+            lado: -1,
+            altura: 0.28
+        },
+        {
+            nombre: 'Galletas surtidas',
+            archivo: '/modelos/galletas.glb',
+            codigo: 'GALLETAS_SURTIDAS',
+            categoria: 'Abarrotes',
+            rackX: 17,
+            rackZ: -13,
+            lado: 1,
+            altura: 0.28
+        },
+        {
+            nombre: 'Abarrotes surtidos',
+            archivo: '/modelos/Abarrotes.glb',
+            codigo: 'ABARROTES_SURTIDOS',
+            categoria: 'Abarrotes',
+            rackX: -17,
+            rackZ: 13,
+            lado: -1,
+            altura: 0.30
+        },
+        {
+            nombre: 'Enlatados surtidos',
+            archivo: '/modelos/enlatados.glb',
+            codigo: 'ENLATADOS_SURTIDOS',
+            categoria: 'Abarrotes',
+            rackX: -17,
+            rackZ: 13,
+            lado: 1,
+            altura: 0.27
+        },
+        {
+            nombre: 'Botanas Doritos',
+            archivo: '/modelos/Doritos.glb',
+            codigo: 'DORITOS_SURTIDOS',
+            categoria: 'Botanas',
+            rackX: -9,
+            rackZ: 13,
+            lado: -1,
+            altura: 0.30
+        },
+        {
+            nombre: 'Botanas Sabritas',
+            archivo: '/modelos/Sabrita.glb',
+            codigo: 'SABRITAS_SURTIDAS',
+            categoria: 'Botanas',
+            rackX: -9,
+            rackZ: 13,
+            lado: 1,
+            altura: 0.30
+        },
+        {
+            nombre: 'Papel para el hogar',
+            archivo: '/modelos/papel.glb',
+            codigo: 'PAPEL_HOGAR',
+            categoria: 'Hogar',
+            rackX: 9,
+            rackZ: 13,
+            lado: -1,
+            altura: 0.30
+        },
+        {
+            nombre: 'Productos de higiene',
+            archivo: '/modelos/higienePersonal.glb',
+            codigo: 'HIGIENE_SURTIDA',
+            categoria: 'Higiene',
+            rackX: 9,
+            rackZ: 13,
+            lado: 1,
+            altura: 0.28
+        },
+        {
+            nombre: 'Toallitas de bebé',
+            archivo: '/modelos/toallitas_bebe.glb',
+            codigo: 'BEBE_SURTIDO',
+            categoria: 'Bebé',
+            rackX: 17,
+            rackZ: 0,
+            lado: -1,
+            altura: 0.25
+        },
+        {
+            nombre: 'Abarrotes de despensa',
+            archivo: '/modelos/Abarrotes.glb',
+            codigo: 'DESPENSA',
+            categoria: 'Abarrotes',
+            rackX: 17,
+            rackZ: 0,
+            lado: 1,
+            altura: 0.30
+        }
+    ];
+
+    function colocarEnGondola(config) {
+        cargarModelo(config.archivo, config.nombre, (original) => {
+            let cantidad = 0;
+
+            nivelesGondola.forEach((nivel, indiceNivel) => {
+                // Dos unidades por repisa para evitar amontonamiento.
+                const posicionesZ = [-0.72, 0.72];
+
+                posicionesZ.forEach((desplazamiento, indice) => {
+                    const copia = crearCopia(
+                        original,
+                        `${config.codigo}_N${indiceNivel + 1}_${indice + 1}`,
+                        config.rackX + config.lado * 0.30,
+                        nivel + 0.07,
+                        config.rackZ + desplazamiento,
+                        config.altura,
+                        0,
+                        config.categoria
+                    );
+
+                    if (copia) cantidad++;
+                });
+            });
+
+            console.info(
+                `Góndola: ${config.nombre}, ${cantidad} unidades.`
+            );
+        });
+    }
+
+    catalogoGondolas.forEach(colocarEnGondola);
+
+    // ========================================================
+    // LÁCTEOS Y BEBIDAS REFRIGERADAS
+    //
+    // Refrigeradores:
+    // X = -27, -23.5, -20, -16.5, 16.5, 20, 23.5, 27.
+    // Z = -26.5.
+    // ========================================================
+
+    function colocarEnRefrigerador(config) {
+        cargarModelo(config.archivo, config.nombre, (original) => {
+            let cantidad = 0;
+
+            nivelesRefrigerador.forEach((nivel, indiceNivel) => {
+                [-0.62, 0, 0.62].forEach((dx, indice) => {
+                    const copia = crearCopia(
+                        original,
+                        `${config.codigo}_N${indiceNivel + 1}_${indice + 1}`,
+                        config.x + dx,
+                        nivel + 0.04,
+                        -26.22,
+                        config.altura,
+                        0,
+                        config.categoria
+                    );
+
+                    if (copia) cantidad++;
+                });
+            });
+
+            console.info(
+                `Refrigerador: ${config.nombre}, ${cantidad} unidades.`
+            );
+        });
+    }
+
+    [
+        {
+            nombre: 'Leche Santa Clara',
+            archivo: '/modelos/SantaClara.glb',
+            codigo: 'SANTA_CLARA',
+            x: -27,
+            altura: 0.25,
+            categoria: 'Lácteos'
+        },
+        {
+            nombre: 'Leche Lala',
+            archivo: '/modelos/Lala.glb',
+            codigo: 'LALA',
+            x: -23.5,
+            altura: 0.25,
+            categoria: 'Lácteos'
+        },
+        {
+            nombre: 'Agua embotellada',
+            archivo: '/modelos/Agua.glb',
+            codigo: 'AGUA',
+            x: -20,
+            altura: 0.28,
+            categoria: 'Bebidas'
+        },
+        {
+            nombre: 'Pepsi',
+            archivo: '/modelos/Pepsi.glb',
+            codigo: 'PEPSI',
+            x: -16.5,
+            altura: 0.24,
+            categoria: 'Refrescos'
+        },
+        {
+            nombre: 'Pepsi y Coca-Cola',
+            archivo: '/modelos/Pepsi. y coca.glb',
+            codigo: 'REFRESCOS_SURTIDOS',
+            x: 16.5,
+            altura: 0.25,
+            categoria: 'Refrescos'
+        },
+        {
+            nombre: 'Agua fría',
+            archivo: '/modelos/Agua.glb',
+            codigo: 'AGUA_FRIA',
+            x: 20,
+            altura: 0.28,
+            categoria: 'Bebidas'
+        },
+        {
+            nombre: 'Bebidas refrigeradas',
+            archivo: '/modelos/bebidas.glb',
+            codigo: 'BEBIDAS_REFRI',
+            x: 23.5,
+            altura: 0.30,
+            categoria: 'Bebidas'
+        },
+        {
+            nombre: 'Refrescos Pepsi',
+            archivo: '/modelos/Pepsi.glb',
+            codigo: 'PEPSI_EXTRA',
+            x: 27,
+            altura: 0.24,
+            categoria: 'Refrescos'
+        }
+    ].forEach(colocarEnRefrigerador);
+
+    // ========================================================
+    // FRUTAS Y VERDURAS
+    //
+    // Mesas de frescos:
+    // 01: (-25.5, 15)
+    // 02: (-21.7, 15)
+    // 03: (-25.5, 10.8)
+    // 04: (-21.7, 10.8)
+    //
+    // Cubierta aproximada: Y = 1.015.
+    // ========================================================
+
+    const mesasFrescos = {
+        Mesa_frescos_01: { x: -25.5, z: 15 },
+        Mesa_frescos_02: { x: -21.7, z: 15 },
+        Mesa_frescos_03: { x: -25.5, z: 10.8 },
+        Mesa_frescos_04: { x: -21.7, z: 10.8 }
+    };
+
+    function colocarEnMesa(config) {
+        const mesa = mesasFrescos[config.mesa];
+
+        if (!mesa) {
+            console.error(`Mesa de frescos no encontrada: ${config.mesa}`);
+            return;
+        }
+
+        cargarModelo(config.archivo, config.nombre, (original) => {
+            config.posiciones.forEach(([dx, dz], indice) => {
+                crearCopia(
+                    original,
+                    `${config.codigo}_${String(indice + 1).padStart(2, '0')}`,
+                    mesa.x + dx,
+                    1.015,
+                    mesa.z + dz,
+                    config.altura,
+                    config.rotacionY ?? 0,
+                    'Frutas y verduras'
+                );
+            });
+        });
+    }
+
+    colocarEnMesa({
+        nombre: 'Uvas',
+        archivo: '/modelos/Uvas.glb',
+        codigo: 'UVAS',
+        mesa: 'Mesa_frescos_01',
+        altura: 0.20,
+        posiciones: [
+            [-0.82, -0.30], [-0.28, -0.30], [0.28, -0.30], [0.82, -0.30],
+            [-0.82, 0.30], [-0.28, 0.30], [0.28, 0.30], [0.82, 0.30]
+        ]
     });
 
-    productos.userData.cargaCompleta = promesaCarga;
+    colocarEnMesa({
+        nombre: 'Pera',
+        archivo: '/modelos/Pera.glb',
+        codigo: 'PERA',
+        mesa: 'Mesa_frescos_02',
+        altura: 0.17,
+        posiciones: [
+            [-0.90, -0.30], [-0.45, -0.30], [0, -0.30], [0.45, -0.30], [0.90, -0.30],
+            [-0.90, 0.30], [-0.45, 0.30], [0, 0.30], [0.45, 0.30], [0.90, 0.30]
+        ]
+    });
+
+    colocarEnMesa({
+        nombre: 'Limón',
+        archivo: '/modelos/Limon.glb',
+        codigo: 'LIMON',
+        mesa: 'Mesa_frescos_03',
+        altura: 0.11,
+        posiciones: [
+            [-0.82, -0.35], [-0.28, -0.35], [0.28, -0.35], [0.82, -0.35],
+            [-0.82, 0.15], [-0.28, 0.15], [0.28, 0.15], [0.82, 0.15]
+        ]
+    });
+
+    colocarEnMesa({
+        nombre: 'Brócoli',
+        archivo: '/modelos/Brocoli.glb',
+        codigo: 'BROCOLI',
+        mesa: 'Mesa_frescos_03',
+        altura: 0.19,
+        posiciones: [
+            [-0.82, 0.40], [-0.28, 0.40], [0.28, 0.40], [0.82, 0.40]
+        ]
+    });
+
+    colocarEnMesa({
+        nombre: 'Pepino',
+        archivo: '/modelos/Pepino.glb',
+        codigo: 'PEPINO',
+        mesa: 'Mesa_frescos_03',
+        altura: 0.14,
+        rotacionY: Math.PI / 2,
+        posiciones: [
+            [-0.90, -0.35], [-0.30, -0.35], [0.30, -0.35], [0.90, -0.35]
+        ]
+    });
+
+    colocarEnMesa({
+        nombre: 'Manzana',
+        archivo: '/modelos/Mazana.glb',
+        codigo: 'MANZANA',
+        mesa: 'Mesa_frescos_04',
+        altura: 0.16,
+        posiciones: [
+            [-0.90, -0.35], [-0.45, -0.35], [0, -0.35], [0.45, -0.35], [0.90, -0.35],
+            [-0.90, 0.30], [-0.45, 0.30], [0, 0.30], [0.45, 0.30], [0.90, 0.30]
+        ]
+    });
+
+    colocarEnMesa({
+        nombre: 'Plátano',
+        archivo: '/modelos/Platano.glb',
+        codigo: 'PLATANO',
+        mesa: 'Mesa_frescos_02',
+        altura: 0.17,
+        posiciones: [
+            [-0.90, 0.30], [-0.45, 0.30], [0, 0.30], [0.45, 0.30], [0.90, 0.30]
+        ]
+    });
+
+    // ========================================================
+    // CARNICERÍA
+    // Mostrador: centro (25.1, -7.3).
+    // Superficie aproximada: Y = 1.24.
+    // ========================================================
+
+    function colocarEnMostrador(config) {
+        cargarModelo(config.archivo, config.nombre, (original) => {
+            config.posiciones.forEach(([dx, dz], indice) => {
+                crearCopia(
+                    original,
+                    `${config.codigo}_${indice + 1}`,
+                    25.1 + dx,
+                    1.24,
+                    -7.3 + dz,
+                    config.altura,
+                    0,
+                    'Carnicería'
+                );
+            });
+        });
+    }
+
+    colocarEnMostrador({
+        nombre: 'Pollo',
+        archivo: '/modelos/Pollo.glb',
+        codigo: 'POLLO',
+        altura: 0.28,
+        posiciones: [
+            [-0.90, -0.25], [-0.30, -0.25],
+            [0.30, -0.25], [0.90, -0.25]
+        ]
+    });
+
+    colocarEnMostrador({
+        nombre: 'Filete',
+        archivo: '/modelos/Filete.glb',
+        codigo: 'FILETE',
+        altura: 0.16,
+        posiciones: [
+            [-0.90, 0.25], [-0.30, 0.25],
+            [0.30, 0.25], [0.90, 0.25]
+        ]
+    });
+
+    // ========================================================
+    // HIGIENE Y LIMPIEZA
+    //
+    // Módulo_higiene: X = 28.3, Z = 3.3.
+    // Módulo_limpieza: X = 28.3, Z = 8.
+    // ========================================================
+
+    function colocarEnLimpieza(config) {
+        cargarModelo(config.archivo, config.nombre, (original) => {
+            let cantidad = 0;
+
+            config.niveles.forEach((nivel, indiceNivel) => {
+                config.posicionesX.forEach((dx, indice) => {
+                    const copia = crearCopia(
+                        original,
+                        `${config.codigo}_N${indiceNivel + 1}_${indice + 1}`,
+                        28.3 + dx,
+                        nivel + 0.04,
+                        config.z + 0.15,
+                        config.altura,
+                        0,
+                        'Higiene y limpieza'
+                    );
+
+                    if (copia) cantidad++;
+                });
+            });
+
+            console.info(`${config.nombre}: ${cantidad} unidades en limpieza.`);
+        });
+    }
+
+    const productosLimpieza = [
+        {
+            nombre: 'Cloro líquido',
+            archivo: '/modelos/cloro_liquido.glb',
+            codigo: 'CLORO',
+            z: 8.0,
+            altura: 0.30
+        },
+        {
+            nombre: 'Detergente líquido',
+            archivo: '/modelos/detergente_liquido.glb',
+            codigo: 'DETERGENTE',
+            z: 8.0,
+            altura: 0.30
+        },
+        {
+            nombre: 'Detergente líquido surtido',
+            archivo: '/modelos/detergente_liquido1.glb',
+            codigo: 'DETERGENTE_2',
+            z: 8.0,
+            altura: 0.30
+        },
+        {
+            nombre: 'Suavizante líquido',
+            archivo: '/modelos/suavizante_liquido.glb',
+            codigo: 'SUAVIZANTE',
+            z: 8.0,
+            altura: 0.30
+        },
+        {
+            nombre: 'Limpiador multiusos',
+            archivo: '/modelos/limpiador_multiusos.glb',
+            codigo: 'LIMPIADOR',
+            z: 8.0,
+            altura: 0.30
+        }
+    ];
+
+    productosLimpieza.forEach((config, indice) => {
+        colocarEnLimpieza({
+            ...config,
+            niveles: nivelesLimpieza,
+            posicionesX: [-0.80, 0, 0.80]
+        });
+    });
+
+    // ========================================================
+    // ROPA
+    //
+    // Percheros:
+    // (-25.7, -4), (-25.7, 2), (-25.7, 8).
+    //
+    // Se distribuyen las prendas a lo largo de las barras.
+    // ========================================================
+
+    const prendas = [
+        {
+            nombre: 'Blusa',
+            archivo: '/modelos/Blusa.glb',
+            codigo: 'BLUSA',
+            x: -26.35,
+            z: -4,
+            altura: 0.95,
+            rotacionY: 0
+        },
+        {
+            nombre: 'Sudadera negra',
+            archivo: '/modelos/SudaderaNegra.glb',
+            codigo: 'SUDADERA_NEGRA',
+            x: -25.05,
+            z: -4,
+            altura: 1.05,
+            rotacionY: 0
+        },
+        {
+            nombre: 'Sudadera roja',
+            archivo: '/modelos/sudaderaroja.glb',
+            codigo: 'SUDADERA_ROJA',
+            x: -26.35,
+            z: 2,
+            altura: 1.05,
+            rotacionY: 0
+        },
+        {
+            nombre: 'Chamarrra negra',
+            archivo: '/modelos/chamarranegra.glb',
+            codigo: 'CHAMARRA_NEGRA',
+            x: -25.05,
+            z: 2,
+            altura: 1.10,
+            rotacionY: 0
+        },
+        {
+            nombre: 'Pantalón de mezclilla',
+            archivo: '/modelos/pantalomezclilla.glb',
+            codigo: 'PANTALON_MEZCLILLA',
+            x: -26.35,
+            z: 8,
+            altura: 1.00,
+            rotacionY: 0
+        },
+        {
+            nombre: 'Vestido',
+            archivo: '/modelos/vesitdo.glb',
+            codigo: 'VESTIDO',
+            x: -25.05,
+            z: 8,
+            altura: 1.15,
+            rotacionY: 0
+        }
+    ];
+
+    prendas.forEach((prenda) => {
+        cargarModelo(prenda.archivo, prenda.nombre, (original) => {
+            crearCopia(
+                original,
+                prenda.codigo,
+                prenda.x,
+                0.65,
+                prenda.z,
+                prenda.altura,
+                prenda.rotacionY,
+                'Ropa'
+            );
+
+            console.info(`Prenda colocada en perchero: ${prenda.nombre}`);
+        });
+    });
+
+    // ========================================================
+    // RESUMEN Y API PÚBLICA
+    // ========================================================
+
+    productos.userData.obtenerResumen = () => ({
+        modelosCargados,
+        unidadesColocadas,
+        modelosFallidos
+    });
+
+    productos.userData.listarUnidades = () => {
+        const lista = [];
+
+        productos.traverse((objeto) => {
+            if (objeto.userData?.esUnidadProducto) {
+                lista.push(objeto);
+            }
+        });
+
+        return lista;
+    };
+
+    productos.userData.obtenerPorCategoria = (categoria) => {
+        return productos.userData.listarUnidades().filter(
+            (objeto) => objeto.userData.categoria === categoria
+        );
+    };
 
     console.info(
-        `Cargando ${catalogo.length} modelos de productos distintos...`
+        'Catálogo del supermercado iniciado. Los GLB se están cargando.'
     );
 
     return productos;
