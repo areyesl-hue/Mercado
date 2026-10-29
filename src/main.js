@@ -167,7 +167,7 @@ const CONFIG_LADRONES = [
     {
         nombre: 'Ladron1',
 
-        modelo: '/modelos/ladron.glb',
+        modelo: '/modelos/ladron1.glb',
 
         posicion: {
             x: -2,
@@ -194,7 +194,7 @@ const CONFIG_LADRONES = [
     {
         nombre: 'Ladron2',
 
-        modelo: '/modelos/ladron.glb',
+        modelo: '/modelos/ladron2.glb',
 
         posicion: {
             x: 2,
