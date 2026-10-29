@@ -1,4 +1,3 @@
-
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
@@ -510,6 +509,18 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     function iniciarRegresoVehiculo(plaza, alTerminar = null) {
         if (eliminado || !plaza) return false;
 
+        // Confirma la compra antes de regresar al estacionamiento.
+        if (!compraConfirmada && comprasCliente.length > 0) {
+            const resultadoPago = confirmarCompra();
+
+            if (resultadoPago.ok) {
+                console.info(
+                    `[CLIENTE ${id}] Compra confirmada al salir:`,
+                    resultadoPago
+                );
+            }
+        }
+
         detenido = false;
         estado = 'regresando';
         tiempoEstado = 0;
@@ -670,6 +681,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         orientarSuavemente(dx, dz);
 
         const paso = Math.min(config.velocidad * dt, d);
+
         grupo.position.x += dx / d * paso;
         grupo.position.z += dz / d * paso;
 
@@ -1115,32 +1127,53 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     function registrarHuesos() {
         if (!modelo) return;
 
+        for (const clave of Object.keys(huesos)) {
+            delete huesos[clave];
+        }
+
+        rotacionesBase.clear();
+
         modelo.traverse(o => {
             if (!o.isBone) return;
 
-            const n = normalizarNombre(o.name);
+            const original = String(o.name ?? '').toLowerCase();
+            const n = normalizarNombre(original);
+
             rotacionesBase.set(o, o.rotation.clone());
 
             let lado = null;
 
-            if (n.includes('left') || n.endsWith('l')) {
+            if (
+                /left|izquierd[oa]/.test(n) ||
+                /(^|[^a-z0-9])l($|[^a-z0-9])/.test(original) ||
+                /(^|[^a-z0-9])l$/.test(original)
+            ) {
                 lado = 'L';
-            } else if (n.includes('right') || n.endsWith('r')) {
+            } else if (
+                /right|derech[oa]/.test(n) ||
+                /(^|[^a-z0-9])r($|[^a-z0-9])/.test(original) ||
+                /(^|[^a-z0-9])r$/.test(original)
+            ) {
                 lado = 'R';
             }
 
             if (!lado) return;
 
-            if (/thigh|upleg|upperleg/.test(n)) {
+            if (/thigh|upleg|upperleg|legupper|muslo/.test(n)) {
                 huesos[`thigh${lado}`] = o;
-            } else if (/shin|calf|lowerleg/.test(n)) {
+            } else if (/shin|calf|lowerleg|leglower|knee|pantorrilla/.test(n)) {
                 huesos[`shin${lado}`] = o;
-            } else if (/upperarm|armupper/.test(n)) {
+            } else if (/upperarm|armupper|uparm|brazo/.test(n)) {
                 huesos[`arm${lado}`] = o;
-            } else if (/forearm|lowerarm/.test(n)) {
+            } else if (/forearm|lowerarm|loarm|antebrazo/.test(n)) {
                 huesos[`forearm${lado}`] = o;
             }
         });
+
+        console.info(
+            `[CLIENTE ${id}] Huesos para animación manual:`,
+            Object.keys(huesos)
+        );
     }
 
     function animarManual(dt) {
@@ -1151,15 +1184,14 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             estado === 'llegando' ||
             estado === 'regresando';
 
-        const movimiento =
-            caminando
-                ? THREE.MathUtils.clamp(
-                    velocidadActual /
-                    Math.max(config.velocidad, 0.01),
-                    0,
-                    1
-                )
-                : 0;
+        const movimiento = caminando
+            ? THREE.MathUtils.clamp(
+                velocidadActual /
+                Math.max(config.velocidad, 0.01),
+                0,
+                1
+            )
+            : 0;
 
         velocidadAnimacion = THREE.MathUtils.damp(
             velocidadAnimacion,
