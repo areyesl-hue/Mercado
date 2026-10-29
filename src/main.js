@@ -1,3 +1,4 @@
+
 import * as THREE from 'three';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 
@@ -22,7 +23,7 @@ const CONFIG = {
     gravedad: 19,
     fuerzaSalto: 7,
 
-    modeloLadron: '/modelos/ladron.glb',
+    modeloLadron: '/modelos/ladron2.glb',
 
     tiempoCompraAuto: 32,
     tiempoCajaAuto: 5,
@@ -34,8 +35,12 @@ const CONFIG = {
     limiteZMin: -27,
     limiteZMax: 27,
 
-    pixelRatioMaximo: 1.0,
-    intervaloHUD: 250
+    // Baja la resolución interna para favorecer los FPS.
+    // Puedes subirlo a 1.0 si prefieres más nitidez.
+    pixelRatioMaximo: 0.85,
+
+    intervaloHUD: 0.5,
+    maxDelta: 0.05
 };
 
 // ============================================================
@@ -123,7 +128,7 @@ const camara = new THREE.PerspectiveCamera(
     75,
     window.innerWidth / window.innerHeight,
     0.1,
-    500
+    250
 );
 
 camara.position.set(0, CONFIG.alturaJugador, 25);
@@ -131,29 +136,40 @@ camara.lookAt(0, CONFIG.alturaJugador, 10);
 
 // ============================================================
 // RENDERIZADOR OPTIMIZADO
-// RESOLUCIÓN FIJA EN 1.0
 // ============================================================
 
 const renderizador = new THREE.WebGLRenderer({
     antialias: false,
-    powerPreference: 'high-performance'
+    alpha: false,
+    powerPreference: 'high-performance',
+    stencil: false,
+    depth: true,
+    preserveDrawingBuffer: false
 });
 
-renderizador.setSize(
-    window.innerWidth,
-    window.innerHeight
+const pixelRatio = Math.min(
+    window.devicePixelRatio || 1,
+    CONFIG.pixelRatioMaximo
 );
 
-renderizador.setPixelRatio(1.0);
+renderizador.setPixelRatio(pixelRatio);
+renderizador.setSize(window.innerWidth, window.innerHeight);
 renderizador.shadowMap.enabled = false;
 renderizador.toneMapping = THREE.ACESFilmicToneMapping;
 renderizador.toneMappingExposure = 1.0;
 renderizador.outputColorSpace = THREE.SRGBColorSpace;
+renderizador.info.autoReset = true;
 
 document.body.style.margin = '0';
 document.body.style.overflow = 'hidden';
+document.body.style.background = '#101827';
 
 document.body.appendChild(renderizador.domElement);
+
+// Evita que el navegador interprete el movimiento como gestos táctiles.
+renderizador.domElement.style.display = 'block';
+renderizador.domElement.style.width = '100%';
+renderizador.domElement.style.height = '100%';
 
 // ============================================================
 // CONTROLES DEL JUGADOR
@@ -186,21 +202,32 @@ let modoNoche = false;
 let camaraSeguridadActiva = false;
 let numeroCamara = 1;
 
+// Vectores reutilizables para reducir asignaciones por fotograma.
+const direccionMovimiento = new THREE.Vector3();
+const direccionAdelante = new THREE.Vector3();
+const direccionDerecha = new THREE.Vector3();
+const posicionTemporal = new THREE.Vector3();
+
+const camaraJugador = {
+    posicion: new THREE.Vector3(),
+    quaternion: new THREE.Quaternion()
+};
+
 // ============================================================
-// LUCES
+// ILUMINACIÓN
 // ============================================================
 
 const luzAmbiente = new THREE.HemisphereLight(
     0xe5f1ff,
     0x6d6254,
-    2.0
+    1.8
 );
 
 escena.add(luzAmbiente);
 
 const luzSol = new THREE.DirectionalLight(
     0xfff0d6,
-    3.0
+    2.5
 );
 
 luzSol.position.set(-25, 40, 20);
@@ -229,12 +256,15 @@ console.info('[MAIN] Estacionamiento:', estacionamiento);
 // TERRENO EXTERIOR
 // ============================================================
 
+const materialTerreno = new THREE.MeshStandardMaterial({
+    color: 0x687c59,
+    roughness: 1,
+    metalness: 0
+});
+
 const terreno = new THREE.Mesh(
     new THREE.PlaneGeometry(300, 300),
-    new THREE.MeshStandardMaterial({
-        color: 0x687c59,
-        roughness: 1
-    })
+    materialTerreno
 );
 
 terreno.rotation.x = -Math.PI / 2;
@@ -251,7 +281,8 @@ const carretera = new THREE.Mesh(
     new THREE.PlaneGeometry(24, 150),
     new THREE.MeshStandardMaterial({
         color: 0x34383d,
-        roughness: 0.95
+        roughness: 1,
+        metalness: 0
     })
 );
 
@@ -261,9 +292,8 @@ carretera.receiveShadow = false;
 
 escena.add(carretera);
 
-const materialLinea = new THREE.MeshStandardMaterial({
-    color: 0xe9e2c9,
-    roughness: 0.8
+const materialLinea = new THREE.MeshBasicMaterial({
+    color: 0xe9e2c9
 });
 
 const geometriaLinea = new THREE.BoxGeometry(
@@ -279,8 +309,7 @@ for (let z = 35; z < 160; z += 8) {
     );
 
     linea.position.set(0, -0.01, z);
-    linea.castShadow = false;
-    linea.receiveShadow = false;
+    linea.frustumCulled = true;
 
     escena.add(linea);
 }
@@ -481,16 +510,16 @@ function cambiarDiaNoche() {
         escena.background.setHex(CONFIG.colorNoche);
         escena.fog.color.setHex(CONFIG.colorNoche);
 
-        luzAmbiente.intensity = 0.45;
-        luzSol.intensity = 0.35;
+        luzAmbiente.intensity = 0.55;
+        luzSol.intensity = 0.3;
 
-        renderizador.toneMappingExposure = 0.8;
+        renderizador.toneMappingExposure = 0.85;
     } else {
         escena.background.setHex(CONFIG.colorDia);
         escena.fog.color.setHex(0xc7d9e9);
 
-        luzAmbiente.intensity = 2.0;
-        luzSol.intensity = 3.0;
+        luzAmbiente.intensity = 1.8;
+        luzSol.intensity = 2.5;
 
         renderizador.toneMappingExposure = 1.0;
     }
@@ -510,6 +539,7 @@ function volverEntrada() {
     );
 
     camara.rotation.set(0, 0, 0);
+    camara.quaternion.identity();
 
     if (controles.isLocked) {
         controles.unlock();
@@ -528,11 +558,6 @@ const CAMARAS_SEGURIDAD = [
     { x: -20, y: 5.1, z: -28, mirarX: -10, mirarZ: -15 },
     { x: 0, y: 5.8, z: 53, mirarX: 0, mirarZ: 25 }
 ];
-
-const camaraJugador = {
-    posicion: new THREE.Vector3(),
-    quaternion: new THREE.Quaternion()
-};
 
 function activarCamaraSeguridad(numero) {
     const datos = CAMARAS_SEGURIDAD[numero - 1];
@@ -607,6 +632,12 @@ document.addEventListener('keyup', evento => {
     }
 });
 
+window.addEventListener('blur', () => {
+    for (const tecla of Object.keys(teclas)) {
+        teclas[tecla] = false;
+    }
+});
+
 // ============================================================
 // MOVIMIENTO DEL JUGADOR
 // ============================================================
@@ -625,32 +656,45 @@ function actualizarJugador(delta) {
         return;
     }
 
-    const dt = Math.min(delta, 0.05);
+    const dt = Math.min(delta, CONFIG.maxDelta);
 
-    const direccion = new THREE.Vector3();
-    const adelante = new THREE.Vector3();
+    direccionMovimiento.set(0, 0, 0);
 
-    camara.getWorldDirection(adelante);
-    adelante.y = 0;
-    adelante.normalize();
+    camara.getWorldDirection(direccionAdelante);
+    direccionAdelante.y = 0;
 
-    const derecha = new THREE.Vector3()
-        .crossVectors(adelante, camara.up)
+    if (direccionAdelante.lengthSq() > 0) {
+        direccionAdelante.normalize();
+    }
+
+    direccionDerecha
+        .crossVectors(direccionAdelante, camara.up)
         .normalize()
         .negate();
 
-    if (teclas.KeyW) direccion.add(adelante);
-    if (teclas.KeyS) direccion.sub(adelante);
-    if (teclas.KeyD) direccion.add(derecha);
-    if (teclas.KeyA) direccion.sub(derecha);
+    if (teclas.KeyW) {
+        direccionMovimiento.add(direccionAdelante);
+    }
 
-    jugador.moviendo = direccion.lengthSq() > 0;
+    if (teclas.KeyS) {
+        direccionMovimiento.sub(direccionAdelante);
+    }
+
+    if (teclas.KeyD) {
+        direccionMovimiento.add(direccionDerecha);
+    }
+
+    if (teclas.KeyA) {
+        direccionMovimiento.sub(direccionDerecha);
+    }
+
+    jugador.moviendo = direccionMovimiento.lengthSq() > 0;
 
     jugador.corriendo =
         teclas.ShiftLeft || teclas.ShiftRight;
 
     if (jugador.moviendo) {
-        direccion.normalize();
+        direccionMovimiento.normalize();
 
         const velocidad = jugador.corriendo
             ? CONFIG.velocidadCorrer
@@ -658,8 +702,11 @@ function actualizarJugador(delta) {
 
         const paso = velocidad * dt;
 
-        const nx = camara.position.x + direccion.x * paso;
-        const nz = camara.position.z + direccion.z * paso;
+        const nx = camara.position.x +
+            direccionMovimiento.x * paso;
+
+        const nz = camara.position.z +
+            direccionMovimiento.z * paso;
 
         if (jugadorPuedeMoverse(nx, camara.position.z)) {
             camara.position.x = nx;
@@ -686,11 +733,10 @@ function actualizarJugador(delta) {
 }
 
 // ============================================================
-// CARRITOS Y CLIENTES
+// CARRITOS DE LOS VISITANTES
 // ============================================================
 
 const visitantes = new Map();
-const carritosCreados = [];
 
 let siguienteModeloCliente = 0;
 
@@ -708,7 +754,7 @@ function crearCarritoVisitante(posicion) {
         });
     } catch (error) {
         console.warn(
-            '[MAIN] No se pudo crear el carrito.',
+            '[MAIN] No se pudo crear el carrito. Se utilizará uno provisional.',
             error
         );
     }
@@ -725,8 +771,8 @@ function crearCarritoVisitante(posicion) {
 
         const materialMetal = new THREE.MeshStandardMaterial({
             color: 0x9da9b1,
-            metalness: 0.65,
-            roughness: 0.35
+            metalness: 0.55,
+            roughness: 0.45
         });
 
         const cesta = new THREE.Mesh(
@@ -749,21 +795,22 @@ function crearCarritoVisitante(posicion) {
             color: 0x25282c
         });
 
+        const geometriaRueda = new THREE.CylinderGeometry(
+            0.055,
+            0.055,
+            0.045,
+            8
+        );
+
         for (const x of [-0.25, 0.25]) {
             for (const z of [-0.17, 0.17]) {
                 const rueda = new THREE.Mesh(
-                    new THREE.CylinderGeometry(
-                        0.055,
-                        0.055,
-                        0.045,
-                        8
-                    ),
+                    geometriaRueda,
                     materialRueda
                 );
 
                 rueda.rotation.z = Math.PI / 2;
                 rueda.position.set(x, 0.12, z);
-
                 grupoCarrito.add(rueda);
             }
         }
@@ -771,17 +818,22 @@ function crearCarritoVisitante(posicion) {
         escena.add(grupoCarrito);
     }
 
-    grupoCarrito.position.set(
-        posicion.x,
-        0,
-        posicion.z
-    );
-
+    grupoCarrito.position.set(posicion.x, 0, posicion.z);
     grupoCarrito.visible = true;
 
     const carritoAPI = {
         grupo: grupoCarrito,
         original: resultado,
+
+        actualizar(delta) {
+            resultado?.actualizar?.(delta);
+        },
+
+        seguirObjetivo(objetivo, distancia = 1.15) {
+            if (resultado?.seguirObjetivo && objetivo?.isObject3D) {
+                resultado.seguirObjetivo(objetivo, distancia);
+            }
+        },
 
         eliminar() {
             if (resultado?.eliminar) {
@@ -792,10 +844,12 @@ function crearCarritoVisitante(posicion) {
         }
     };
 
-    carritosCreados.push(carritoAPI);
-
     return carritoAPI;
 }
+
+// ============================================================
+// CREACIÓN DE CLIENTES AL ESTACIONAR
+// ============================================================
 
 function crearClienteParaVehiculo(datos) {
     if (!datos?.plaza || !datos?.grupo) {
@@ -881,6 +935,11 @@ function crearClienteParaVehiculo(datos) {
             carrito
         });
 
+        // Vincular el carrito con el grupo 3D del cliente.
+        if (cliente.grupo?.isObject3D) {
+            carrito.seguirObjetivo(cliente.grupo, 1.15);
+        }
+
         cliente.iniciarDesdeVehiculo?.(posicion, plaza);
 
         visita.fase = 'entrando';
@@ -895,7 +954,7 @@ function crearClienteParaVehiculo(datos) {
             error
         );
 
-        carrito?.eliminar?.();
+        carrito.eliminar();
         visitantes.delete(idVehiculo);
     }
 }
@@ -958,7 +1017,7 @@ function crearSistemaVehiculos() {
 crearSistemaVehiculos();
 
 // ============================================================
-// CICLO DE COMPRA Y REGRESO AL AUTO
+// COMPRA, CAJA Y REGRESO AL VEHÍCULO
 // ============================================================
 
 function iniciarSalidaVisitante(visita) {
@@ -1002,38 +1061,38 @@ function iniciarSalidaVisitante(visita) {
 
 function actualizarVisitantes(delta) {
     for (const visita of visitantes.values()) {
-        if (!visita.cliente || visita.cliente.eliminado) {
-            continue;
-        }
-
         try {
+            visita.carrito?.actualizar?.(delta);
+
+            if (!visita.cliente || visita.cliente.eliminado) {
+                continue;
+            }
+
             visita.cliente.actualizar?.(delta);
+
+            if (visita.fase === 'comprando') {
+                visita.tiempoCompra += delta;
+
+                if (visita.tiempoCompra >= CONFIG.tiempoCompraAuto) {
+                    visita.fase = 'caja';
+                    visita.tiempoCaja = 0;
+
+                    console.info(
+                        `[CAJA] Cliente ${visita.cliente.id} se dirige a pagar.`
+                    );
+                }
+            } else if (visita.fase === 'caja') {
+                visita.tiempoCaja += delta;
+
+                if (visita.tiempoCaja >= CONFIG.tiempoCajaAuto) {
+                    iniciarSalidaVisitante(visita);
+                }
+            }
         } catch (error) {
             console.error(
-                `[CLIENTES] Error al actualizar al cliente ${visita.id}:`,
+                `[CLIENTES] Error al actualizar la visita ${visita.id}:`,
                 error
             );
-
-            continue;
-        }
-
-        if (visita.fase === 'comprando') {
-            visita.tiempoCompra += delta;
-
-            if (visita.tiempoCompra >= CONFIG.tiempoCompraAuto) {
-                visita.fase = 'caja';
-                visita.tiempoCaja = 0;
-
-                console.info(
-                    `[CAJA] Cliente ${visita.cliente.id} se dirige a pagar.`
-                );
-            }
-        } else if (visita.fase === 'caja') {
-            visita.tiempoCaja += delta;
-
-            if (visita.tiempoCaja >= CONFIG.tiempoCajaAuto) {
-                iniciarSalidaVisitante(visita);
-            }
         }
     }
 }
@@ -1047,30 +1106,23 @@ let sistemaLadronesActivo = false;
 
 function crearSistemaLadrones() {
     try {
-        sistemaLadrones = crearLadron(escena, {
+        // IMPORTANTE:
+        // ladron.js espera (escena, grupoProductos, opciones).
+        // No se debe pasar el objeto de opciones como segundo argumento.
+        sistemaLadrones = crearLadron(escena, productos, {
             modelo: CONFIG.modeloLadron,
-
-            modelos: [
-                '/modelos/ladron.glb',
-                '/modelos/ladron1.glb',
-                '/modelos/ladron2.glb'
-            ],
-
-            productos,
-            velocidad: 1.6
+            mobiliario
         });
 
         sistemaLadronesActivo = Boolean(sistemaLadrones);
 
-        console.info(
-            '[MAIN] Sistema de ladrones inicializado.'
-        );
+        console.info('[MAIN] Sistema de ladrones inicializado.');
     } catch (error) {
         sistemaLadrones = null;
         sistemaLadronesActivo = false;
 
         console.error(
-            '[MAIN] No se pudo iniciar el sistema de ladrones. Revisa ladron.js.',
+            '[MAIN] No se pudo iniciar el ladrón. Revisa los argumentos y productos de ladron.js.',
             error
         );
     }
@@ -1082,25 +1134,15 @@ function actualizarSistemaLadrones(delta) {
     }
 
     try {
-        // Actualizar solamente una API para evitar duplicar el ciclo.
         if (typeof sistemaLadrones.actualizar === 'function') {
             sistemaLadrones.actualizar(delta);
-        } else if (
-            typeof sistemaLadrones.sistema?.actualizar === 'function'
-        ) {
-            sistemaLadrones.sistema.actualizar(delta);
         }
     } catch (error) {
-        // Detener las actualizaciones repetidas si el módulo falla.
         sistemaLadronesActivo = false;
 
         console.error(
             '[LADRONES] Se detuvo la actualización para evitar errores repetidos.',
             error
-        );
-
-        console.error(
-            '[LADRONES] Es necesario revisar la función actualizar() de ladron.js.'
         );
     }
 }
@@ -1108,7 +1150,7 @@ function actualizarSistemaLadrones(delta) {
 crearSistemaLadrones();
 
 // ============================================================
-// HUD OPTIMIZADO
+// HUD
 // ============================================================
 
 let acumuladoHUD = 0;
@@ -1137,13 +1179,16 @@ function actualizarHUD() {
 }
 
 // ============================================================
-// BUCLE PRINCIPAL OPTIMIZADO
+// BUCLE PRINCIPAL
 // ============================================================
 
 const reloj = new THREE.Clock();
 
 function animar() {
-    const delta = Math.min(reloj.getDelta(), 0.05);
+    const delta = Math.min(
+        reloj.getDelta(),
+        CONFIG.maxDelta
+    );
 
     actualizarJugador(delta);
 
@@ -1179,13 +1224,17 @@ window.addEventListener('resize', () => {
     camara.aspect = window.innerWidth / window.innerHeight;
     camara.updateProjectionMatrix();
 
+    renderizador.setPixelRatio(
+        Math.min(
+            window.devicePixelRatio || 1,
+            CONFIG.pixelRatioMaximo
+        )
+    );
+
     renderizador.setSize(
         window.innerWidth,
         window.innerHeight
     );
-
-    // Mantener la resolución en 1.0.
-    renderizador.setPixelRatio(1.0);
 });
 
 // ============================================================
