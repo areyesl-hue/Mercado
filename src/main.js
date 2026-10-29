@@ -25,7 +25,7 @@ const CONFIG = {
     colorCieloDia: 0xa9c9e8,
     colorCieloNoche: 0x101827,
 
-    // Renderizado ligero para reducir carga de GPU.
+    // Renderizado ligero para reducir la carga de la GPU.
     pixelRatioMaximo: 0.85,
     sombras: false,
     antialias: false,
@@ -162,8 +162,7 @@ const CONFIG_CLIENTES = [
 ];
 
 // ============================================================
-// TUS LADRONES
-// Se conservan las rutas y los nombres de archivo indicados.
+// CONFIGURACIÓN DE LADRONES
 // ============================================================
 
 const CONFIG_LADRONES = [
@@ -209,45 +208,45 @@ const CONFIG_LADRONES = [
 ];
 
 // ============================================================
-// TUS SEIS CÁMARAS ORIGINALES
-// No se crean cámaras físicas ni un monitor de vigilancia.
+// SEIS CÁMARAS DE SEGURIDAD
+// Posiciones acercadas a las zonas de productos.
 // ============================================================
 
 const CONFIG_CAMARAS = [
     {
-        nombre: 'Cámara 1',
-        posicion: { x: -29, y: 5.5, z: 17 },
-        objetivo: { x: -12, y: 1.1, z: 10 }
+        nombre: 'Cámara 1 - Frutas y verduras',
+        posicion: { x: -27.5, y: 3.2, z: 17 },
+        objetivo: { x: -23.5, y: 1.0, z: 13.5 }
     },
     {
-        nombre: 'Cámara 2',
-        posicion: { x: 29, y: 5.5, z: 17 },
-        objetivo: { x: 12, y: 1.1, z: 10 }
+        nombre: 'Cámara 2 - Productos frescos',
+        posicion: { x: 28.5, y: 3.0, z: 14 },
+        objetivo: { x: 24, y: 1.4, z: 11.5 }
     },
     {
-        nombre: 'Cámara 3',
-        posicion: { x: -29, y: 5.5, z: -10 },
-        objetivo: { x: -12, y: 1.1, z: -6 }
+        nombre: 'Cámara 3 - Lácteos',
+        posicion: { x: -28.5, y: 3.0, z: -23 },
+        objetivo: { x: -23, y: 1.2, z: -26 }
     },
     {
-        nombre: 'Cámara 4',
-        posicion: { x: 29, y: 5.5, z: -10 },
-        objetivo: { x: 12, y: 1.1, z: -6 }
+        nombre: 'Cámara 4 - Bebidas',
+        posicion: { x: 28.5, y: 3.0, z: -23 },
+        objetivo: { x: 23, y: 1.2, z: -26 }
     },
     {
-        nombre: 'Cámara 5',
-        posicion: { x: -20, y: 5.1, z: -28 },
-        objetivo: { x: 0, y: 1.1, z: -17 }
+        nombre: 'Cámara 5 - Góndolas centrales',
+        posicion: { x: -15, y: 3.5, z: -5 },
+        objetivo: { x: -9, y: 1.2, z: -6 }
     },
     {
-        nombre: 'Cámara 6',
-        posicion: { x: 0, y: 5.8, z: 53 },
-        objetivo: { x: 0, y: 1.1, z: 27 }
+        nombre: 'Cámara 6 - Entrada y cajas',
+        posicion: { x: 0, y: 3.5, z: 25 },
+        objetivo: { x: 0, y: 1.2, z: 20 }
     }
 ];
 
 // ============================================================
-// VARIABLES
+// VARIABLES GLOBALES
 // ============================================================
 
 let escena;
@@ -272,7 +271,6 @@ let juegoIniciado = false;
 let velocidadVertical = 0;
 let jugadorEnSuelo = true;
 
-// null = vista del jugador; 1-6 = cámara de seguridad.
 let vistaSeguridad = null;
 let posicionJugadorGuardada = null;
 let quaternionJugadorGuardado = null;
@@ -354,7 +352,7 @@ function crearCamara() {
 }
 
 // ============================================================
-// RENDERIZADOR LIGERO
+// RENDERIZADOR OPTIMIZADO
 // ============================================================
 
 function crearRenderizador() {
@@ -373,9 +371,11 @@ function crearRenderizador() {
         )
     );
 
-    renderizador.setSize(window.innerWidth, window.innerHeight);
+    renderizador.setSize(
+        window.innerWidth,
+        window.innerHeight
+    );
 
-    // Se evita el tone mapping más costoso para aligerar el render.
     renderizador.outputColorSpace = THREE.SRGBColorSpace;
     renderizador.toneMapping = THREE.NoToneMapping;
     renderizador.shadowMap.enabled = false;
@@ -406,16 +406,19 @@ function crearIluminacion() {
         0x6d6250,
         1.8
     );
+
     escena.add(luzAmbiente);
 
     luzSol = new THREE.DirectionalLight(0xffedcf, 2.0);
     luzSol.position.set(-35, 55, 35);
     luzSol.castShadow = false;
+
     escena.add(luzSol);
 
     luzLuna = new THREE.DirectionalLight(0x829bc9, 0.15);
     luzLuna.position.set(20, 35, -25);
     luzLuna.visible = false;
+
     escena.add(luzLuna);
 }
 
@@ -436,6 +439,7 @@ function crearSuelo() {
     suelo.rotation.x = -Math.PI / 2;
     suelo.position.y = -0.025;
     suelo.name = 'SUELO_GENERAL';
+
     escena.add(suelo);
 
     const pisoInterior = new THREE.Mesh(
@@ -450,12 +454,16 @@ function crearSuelo() {
     pisoInterior.rotation.x = -Math.PI / 2;
     pisoInterior.position.set(0, 0.005, 0);
     pisoInterior.name = 'PISO_INTERIOR';
+
     escena.add(pisoInterior);
 
     try {
         crearEstacionamiento(escena);
     } catch (error) {
-        console.error('Error al crear estacionamiento:', error);
+        console.error(
+            'Error al crear estacionamiento:',
+            error
+        );
     }
 }
 
@@ -492,7 +500,6 @@ function crearEstructuraSupermercado() {
         console.error('Error al iniciar productos:', error);
     }
 }
-
 // ============================================================
 // CONTROLES DEL JUGADOR
 // ============================================================
@@ -506,7 +513,6 @@ function crearControles() {
         }
     });
 
-    // Un clic sobre el escenario permite recuperar el giro del mouse.
     renderizador.domElement.addEventListener('click', () => {
         if (
             juegoIniciado &&
@@ -762,6 +768,7 @@ function crearInterfaz() {
     document.getElementById('btn-dia-noche').addEventListener('click', () => {
         modoNoche = !modoNoche;
         actualizarIluminacion();
+
         mostrarMensaje(
             modoNoche
                 ? 'Iluminación nocturna.'
@@ -774,7 +781,9 @@ function crearInterfaz() {
             sistemaVehiculos.solicitarLlegada();
             mostrarMensaje('Se solicitó la llegada de un vehículo.');
         } else {
-            mostrarMensaje('El módulo vehiculos.js no expone solicitarLlegada().');
+            mostrarMensaje(
+                'El módulo vehiculos.js no expone solicitarLlegada().'
+            );
         }
     });
 
@@ -848,7 +857,7 @@ function cambiarVistaSeguridad(numero) {
     try {
         controles.unlock();
     } catch (error) {
-        // La vista de seguridad puede funcionar sin Pointer Lock.
+        // La cámara funciona aunque Pointer Lock esté desactivado.
     }
 
     camara.position.set(
@@ -949,7 +958,7 @@ function crearLadrones() {
             ladron.nombre = config.nombre;
             ladron._esLadron = true;
 
-            // Patrulla independiente: no depende de la ruta A* de cliente.js.
+            // Patrulla independiente de la ruta interna de cliente.js.
             ladron._patrullaMain = {
                 x: config.posicion.x,
                 y: config.posicion.y,
@@ -974,7 +983,6 @@ function crearLadrones() {
 
 // ============================================================
 // PATRULLA INDEPENDIENTE DE LOS LADRONES
-// Fuerza el movimiento del grupo aunque cliente.js esté esperando.
 // ============================================================
 
 function actualizarPatrullaLadrones(delta) {
@@ -987,7 +995,6 @@ function actualizarPatrullaLadrones(delta) {
         }
 
         try {
-            // Actualiza el mezclador de animaciones y el estado interno.
             ladron.actualizar?.(delta);
         } catch (error) {
             if (!ladron._errorActualizacionRegistrado) {
@@ -1007,10 +1014,8 @@ function actualizarPatrullaLadrones(delta) {
 
         let dx = objetivo.x - patrulla.x;
         let dz = objetivo.z - patrulla.z;
-
         let distancia = Math.sqrt(dx * dx + dz * dz);
 
-        // Cambiar al siguiente punto cuando se aproxima al actual.
         if (distancia < 0.65) {
             patrulla.indice =
                 (patrulla.indice + 1) % patrulla.ruta.length;
@@ -1032,11 +1037,9 @@ function actualizarPatrullaLadrones(delta) {
             patrulla.x += (dx / distancia) * paso;
             patrulla.z += (dz / distancia) * paso;
 
-            // Orientación hacia el siguiente punto.
             grupo.rotation.y = Math.atan2(dx, dz);
         }
 
-        // La patrulla controla la posición final.
         grupo.position.set(
             patrulla.x,
             patrulla.y,
@@ -1283,8 +1286,7 @@ function actualizarEntidades(delta) {
         'cliente'
     );
 
-    // Los ladrones NO se actualizan dentro de esta lista.
-    // Su actualización se realiza en actualizarPatrullaLadrones().
+    // Los ladrones se actualizan en su patrulla independiente.
     actualizarPatrullaLadrones(delta);
 
     for (let i = carritosClientes.length - 1; i >= 0; i--) {
@@ -1377,7 +1379,6 @@ function actualizarFasesVisitantes(delta) {
 
 // ============================================================
 // MOVIMIENTO DEL JUGADOR
-// No utiliza controles.getObject() ni depende del Pointer Lock.
 // ============================================================
 
 function actualizarJugador(delta) {
@@ -1507,6 +1508,7 @@ function exportarTrayectoria() {
 
     enlace.href = url;
     enlace.download = 'recorrido_supermercado.csv';
+
     document.body.appendChild(enlace);
     enlace.click();
     enlace.remove();
@@ -1614,7 +1616,7 @@ function configurarEventos() {
 
 function iniciarAnimacion() {
     renderizador.setAnimationLoop(() => {
-        // Delta limitado para evitar saltos tras una pausa.
+        // Limita el delta para evitar saltos después de una pausa.
         const delta = Math.min(reloj.getDelta(), 0.05);
 
         actualizarJugador(delta);
