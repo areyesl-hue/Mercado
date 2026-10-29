@@ -1,7 +1,5 @@
-
 import * as THREE from 'three';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 import { crearMercado } from './mercado.js';
 import { crearMobiliario } from './mobiliario.js';
@@ -34,10 +32,16 @@ const CONFIG = {
 
     limiteX: 30,
     limiteZMin: -27,
-    limiteZMax: 27
+    limiteZMax: 27,
+
+    pixelRatioMaximo: 1.0,
+    intervaloHUD: 250
 };
 
-// Los nombres deben coincidir exactamente con public/modelos.
+// ============================================================
+// CONFIGURACIÓN DE CLIENTES
+// ============================================================
+
 const CONFIG_CLIENTES = [
     {
         nombre: 'Cliente1',
@@ -103,13 +107,17 @@ const CONFIG_CLIENTES = [
 ];
 
 // ============================================================
-// ESCENA Y RENDERIZADOR
+// ESCENA
 // ============================================================
 
 const escena = new THREE.Scene();
 
 escena.background = new THREE.Color(CONFIG.colorDia);
 escena.fog = new THREE.Fog(0xc7d9e9, 65, 150);
+
+// ============================================================
+// CÁMARA
+// ============================================================
 
 const camara = new THREE.PerspectiveCamera(
     75,
@@ -121,21 +129,27 @@ const camara = new THREE.PerspectiveCamera(
 camara.position.set(0, CONFIG.alturaJugador, 25);
 camara.lookAt(0, CONFIG.alturaJugador, 10);
 
+// ============================================================
+// RENDERIZADOR OPTIMIZADO
+// ============================================================
+
 const renderizador = new THREE.WebGLRenderer({
-    antialias: true,
+    antialias: false,
     powerPreference: 'high-performance'
 });
 
-renderizador.setSize(window.innerWidth, window.innerHeight);
-renderizador.setPixelRatio(
-    Math.min(window.devicePixelRatio || 1, 1.75)
+renderizador.setSize(
+    window.innerWidth,
+    window.innerHeight
 );
 
-renderizador.shadowMap.enabled = true;
-renderizador.shadowMap.type = THREE.PCFSoftShadowMap;
+renderizador.setPixelRatio(CONFIG.pixelRatioMaximo);
+
+// Desactivar sombras en tiempo real para reducir la carga gráfica.
+renderizador.shadowMap.enabled = false;
 
 renderizador.toneMapping = THREE.ACESFilmicToneMapping;
-renderizador.toneMappingExposure = 1.1;
+renderizador.toneMappingExposure = 1.0;
 renderizador.outputColorSpace = THREE.SRGBColorSpace;
 
 document.body.style.margin = '0';
@@ -185,18 +199,13 @@ const luzAmbiente = new THREE.HemisphereLight(
 
 escena.add(luzAmbiente);
 
-const luzSol = new THREE.DirectionalLight(0xfff0d6, 3.0);
+const luzSol = new THREE.DirectionalLight(
+    0xfff0d6,
+    3.0
+);
 
 luzSol.position.set(-25, 40, 20);
-luzSol.castShadow = true;
-
-luzSol.shadow.mapSize.set(2048, 2048);
-luzSol.shadow.camera.left = -60;
-luzSol.shadow.camera.right = 60;
-luzSol.shadow.camera.top = 60;
-luzSol.shadow.camera.bottom = -60;
-luzSol.shadow.camera.near = 1;
-luzSol.shadow.camera.far = 120;
+luzSol.castShadow = false;
 
 escena.add(luzSol);
 
@@ -209,7 +218,6 @@ crearMercado(escena);
 const mobiliario = crearMobiliario(escena);
 const productos = crearProductosLacteos(escena);
 const almacen = crearAlmacen(escena);
-
 const estacionamiento = crearEstacionamiento(escena);
 
 console.info('[MAIN] Supermercado creado.');
@@ -232,11 +240,14 @@ const terreno = new THREE.Mesh(
 
 terreno.rotation.x = -Math.PI / 2;
 terreno.position.y = -0.08;
-terreno.receiveShadow = true;
+terreno.receiveShadow = false;
 
 escena.add(terreno);
 
-// Carretera exterior.
+// ============================================================
+// CARRETERA
+// ============================================================
+
 const carretera = new THREE.Mesh(
     new THREE.PlaneGeometry(24, 150),
     new THREE.MeshStandardMaterial({
@@ -247,23 +258,31 @@ const carretera = new THREE.Mesh(
 
 carretera.rotation.x = -Math.PI / 2;
 carretera.position.set(0, -0.045, 95);
-carretera.receiveShadow = true;
+carretera.receiveShadow = false;
 
 escena.add(carretera);
 
-// Líneas de la carretera.
 const materialLinea = new THREE.MeshStandardMaterial({
     color: 0xe9e2c9,
     roughness: 0.8
 });
 
+const geometriaLinea = new THREE.BoxGeometry(
+    0.18,
+    0.025,
+    3.5
+);
+
 for (let z = 35; z < 160; z += 8) {
     const linea = new THREE.Mesh(
-        new THREE.BoxGeometry(0.18, 0.025, 3.5),
+        geometriaLinea,
         materialLinea
     );
 
     linea.position.set(0, -0.01, z);
+    linea.castShadow = false;
+    linea.receiveShadow = false;
+
     escena.add(linea);
 }
 
@@ -482,7 +501,7 @@ function cambiarDiaNoche() {
         luzAmbiente.intensity = 2.0;
         luzSol.intensity = 3.0;
 
-        renderizador.toneMappingExposure = 1.1;
+        renderizador.toneMappingExposure = 1.0;
     }
 }
 
@@ -493,7 +512,12 @@ function cambiarDiaNoche() {
 function volverEntrada() {
     camaraSeguridadActiva = false;
 
-    camara.position.set(0, CONFIG.alturaJugador, 25);
+    camara.position.set(
+        0,
+        CONFIG.alturaJugador,
+        25
+    );
+
     camara.rotation.set(0, 0, 0);
 
     if (controles.isLocked) {
@@ -520,8 +544,7 @@ const camaraJugador = {
 };
 
 function activarCamaraSeguridad(numero) {
-    const indice = numero - 1;
-    const datos = CAMARAS_SEGURIDAD[indice];
+    const datos = CAMARAS_SEGURIDAD[numero - 1];
 
     if (!datos) return;
 
@@ -545,6 +568,7 @@ function salirCamaraSeguridad() {
     if (!camaraSeguridadActiva) return;
 
     camaraSeguridadActiva = false;
+
     camara.position.copy(camaraJugador.posicion);
     camara.quaternion.copy(camaraJugador.quaternion);
 }
@@ -584,20 +608,16 @@ document.addEventListener('keyup', evento => {
 });
 
 // ============================================================
-// COLISIONES DEL JUGADOR
+// MOVIMIENTO DEL JUGADOR
 // ============================================================
 
 function jugadorPuedeMoverse(x, z) {
-    if (
-        x < -31 ||
-        x > 31 ||
-        z < -29 ||
-        z > 110
-    ) {
-        return false;
-    }
-
-    return true;
+    return (
+        x >= -31 &&
+        x <= 31 &&
+        z >= -29 &&
+        z <= 110
+    );
 }
 
 function actualizarJugador(delta) {
@@ -608,10 +628,9 @@ function actualizarJugador(delta) {
     const dt = Math.min(delta, 0.05);
 
     const direccion = new THREE.Vector3();
-
     const adelante = new THREE.Vector3();
-    camara.getWorldDirection(adelante);
 
+    camara.getWorldDirection(adelante);
     adelante.y = 0;
     adelante.normalize();
 
@@ -626,6 +645,7 @@ function actualizarJugador(delta) {
     if (teclas.KeyA) direccion.sub(derecha);
 
     jugador.moviendo = direccion.lengthSq() > 0;
+
     jugador.corriendo =
         teclas.ShiftLeft || teclas.ShiftRight;
 
@@ -671,6 +691,7 @@ function actualizarJugador(delta) {
 
 const visitantes = new Map();
 const carritosCreados = [];
+
 let siguienteModeloCliente = 0;
 
 function crearCarritoVisitante(posicion) {
@@ -687,20 +708,17 @@ function crearCarritoVisitante(posicion) {
         });
     } catch (error) {
         console.warn(
-            '[MAIN] No se pudo crear el carrito con crearCarrito().',
+            '[MAIN] No se pudo crear el carrito.',
             error
         );
     }
 
-    // Algunos módulos devuelven una API con .grupo y otros
-    // devuelven directamente un Object3D.
     let grupoCarrito = resultado?.grupo;
 
     if (resultado?.isObject3D) {
         grupoCarrito = resultado;
     }
 
-    // Fallback visual si crearCarrito no devuelve un grupo.
     if (!grupoCarrito?.isObject3D) {
         grupoCarrito = new THREE.Group();
         grupoCarrito.name = 'CARRITO_VISITANTE_FALLBACK';
@@ -727,17 +745,25 @@ function crearCarritoVisitante(posicion) {
         manija.position.set(0, 0.96, -0.28);
         grupoCarrito.add(manija);
 
+        const materialRueda = new THREE.MeshStandardMaterial({
+            color: 0x25282c
+        });
+
         for (const x of [-0.25, 0.25]) {
             for (const z of [-0.17, 0.17]) {
                 const rueda = new THREE.Mesh(
-                    new THREE.CylinderGeometry(0.055, 0.055, 0.045, 12),
-                    new THREE.MeshStandardMaterial({
-                        color: 0x25282c
-                    })
+                    new THREE.CylinderGeometry(
+                        0.055,
+                        0.055,
+                        0.045,
+                        8
+                    ),
+                    materialRueda
                 );
 
                 rueda.rotation.z = Math.PI / 2;
                 rueda.position.set(x, 0.12, z);
+
                 grupoCarrito.add(rueda);
             }
         }
@@ -756,6 +782,7 @@ function crearCarritoVisitante(posicion) {
     const carritoAPI = {
         grupo: grupoCarrito,
         original: resultado,
+
         eliminar() {
             if (resultado?.eliminar) {
                 resultado.eliminar();
@@ -773,7 +800,7 @@ function crearCarritoVisitante(posicion) {
 function crearClienteParaVehiculo(datos) {
     if (!datos?.plaza || !datos?.grupo) {
         console.warn(
-            '[MAIN] El vehículo no entregó plaza o grupo al estacionarse.',
+            '[MAIN] El vehículo no entregó plaza o grupo.',
             datos
         );
         return;
@@ -791,13 +818,13 @@ function crearClienteParaVehiculo(datos) {
         z: Number(datos.plaza.z)
     };
 
-    const idVehiculo = datos.id;
-
     const posicion = {
         x: plaza.x,
         y: 0,
         z: plaza.z
     };
+
+    const idVehiculo = datos.id;
 
     const carrito = crearCarritoVisitante({
         x: posicion.x + 1.1,
@@ -912,7 +939,9 @@ crearSistemaVehiculos();
 // ============================================================
 
 function iniciarSalidaVisitante(visita) {
-    if (!visita || visita.fase === 'regresando') return;
+    if (!visita || visita.fase === 'regresando') {
+        return;
+    }
 
     const cliente = visita.cliente;
 
@@ -938,6 +967,7 @@ function iniciarSalidaVisitante(visita) {
         visita.plaza,
         () => {
             visita.fase = 'esperandoSalida';
+
             sistemaVehiculos?.solicitarSalida?.(visita.id);
         }
     );
@@ -986,11 +1016,13 @@ function crearSistemaLadrones() {
     try {
         sistemaLadrones = crearLadron(escena, {
             modelo: CONFIG.modeloLadron,
+
             modelos: [
                 '/modelos/ladron.glb',
                 '/modelos/ladron1.glb',
                 '/modelos/ladron2.glb'
             ],
+
             productos,
             velocidad: 1.6
         });
@@ -1004,12 +1036,13 @@ function crearSistemaLadrones() {
     }
 }
 
-// El sistema de ladrones usa su propia API si la expone.
 crearSistemaLadrones();
 
 // ============================================================
-// ESTADO DEL HUD
+// HUD OPTIMIZADO
 // ============================================================
+
+let acumuladoHUD = 0;
 
 function actualizarHUD() {
     const elemento = document.getElementById(
@@ -1027,9 +1060,11 @@ function actualizarHUD() {
         `Vehículos: ${coches} | ` +
         `Visitantes: ${clientesActivos} | ` +
         `Plazas libres: ${plazasLibres}` +
-        (camaraSeguridadActiva
-            ? ` | Cámara ${numeroCamara}`
-            : '');
+        (
+            camaraSeguridadActiva
+                ? ` | Cámara ${numeroCamara}`
+                : ''
+        );
 }
 
 // ============================================================
@@ -1047,12 +1082,14 @@ function animar() {
     actualizarVisitantes(delta);
 
     sistemaLadrones?.actualizar?.(delta);
-
-    // Algunos módulos exponen actualizar() directamente,
-    // otros pueden devolver una API anidada.
     sistemaLadrones?.sistema?.actualizar?.(delta);
 
-    actualizarHUD();
+    acumuladoHUD += delta;
+
+    if (acumuladoHUD >= CONFIG.intervaloHUD) {
+        acumuladoHUD = 0;
+        actualizarHUD();
+    }
 
     renderizador.render(escena, camara);
 }
@@ -1072,9 +1109,8 @@ window.addEventListener('resize', () => {
         window.innerHeight
     );
 
-    renderizador.setPixelRatio(
-        Math.min(window.devicePixelRatio || 1, 1.75)
-    );
+    // Mantener la resolución en 1.0.
+    renderizador.setPixelRatio(CONFIG.pixelRatioMaximo);
 });
 
 // ============================================================
@@ -1082,11 +1118,17 @@ window.addEventListener('resize', () => {
 // ============================================================
 
 window.addEventListener('error', evento => {
-    console.error('[MAIN] Error JavaScript:', evento.error || evento.message);
+    console.error(
+        '[MAIN] Error JavaScript:',
+        evento.error || evento.message
+    );
 });
 
 window.addEventListener('unhandledrejection', evento => {
-    console.error('[MAIN] Promesa rechazada:', evento.reason);
+    console.error(
+        '[MAIN] Promesa rechazada:',
+        evento.reason
+    );
 });
 
 console.info('[MAIN] Aplicación lista.');
