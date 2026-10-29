@@ -17,7 +17,7 @@ import { crearEstacionamiento } from './estacionamiento.js';
 
 const CONFIG = {
     alturaJugador: 1.7,
-    velocidadCaminar: 7,
+    velocidadCaminar: 9,
     velocidadCorrer: 12,
     velocidadSalto: 7,
     gravedad: 19,
@@ -26,7 +26,7 @@ const CONFIG = {
     colorCieloNoche: 0x101827,
 
     // Ajustes de rendimiento.
-    pixelRatioMaximo:  0.25,
+    pixelRatioMaximo:  0.50,
     sombras: false,
 
     // Carritos.
@@ -35,11 +35,11 @@ const CONFIG = {
     correccionModeloCarrito: 0,
 
     // Clientes.
-    velocidadCliente: 1.5,
+    velocidadCliente: 1.7,
     probabilidadCompra: 1,
-    tiempoExaminar: 1.25,
+    tiempoExaminar: 1.5,
     distanciaRecoger: 2,
-    pausaEntreCompras: 1.5
+    pausaEntreCompras: 1.8
 };
 
 const CONFIG_CLIENTES = [
