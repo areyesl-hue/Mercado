@@ -27,7 +27,7 @@ export function crearProductosLacteos(scene) {
     const GIRO_FRENTE = Math.PI / 2;
 
     // Límites de tamaño de los modelos.
-    const HUELLA_MAXIMA = 0.42;
+    const HUELLA_MAXIMA = 0.50;
 
     let modelosCargados = 0;
     let unidadesColocadas = 0;
