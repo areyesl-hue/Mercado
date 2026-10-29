@@ -4,7 +4,8 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 // ============================================================
 // PRODUCTOS DEL SUPERMERCADO
-// Tamaños ajustados por tipo de producto.
+// Versión optimizada para reducir carga de FPS.
+// Conserva modelos, categorías y datos para clientes/ventas.
 // ============================================================
 
 export function crearProductosLacteos(scene) {
@@ -22,9 +23,15 @@ export function crearProductosLacteos(scene) {
 
     const GIRO_FRENTE = Math.PI / 2;
 
-    const nivelesGondola = [0.43, 0.86, 1.29, 1.72];
-    const nivelesRefrigerador = [0.50, 0.93, 1.36, 1.79];
-    const nivelesLimpieza = [0.43, 0.78, 1.13, 1.48, 1.83];
+    // Menos niveles y unidades por estante.
+    const nivelesGondola = [0.48, 1.12, 1.76];
+    const nivelesRefrigerador = [0.55, 1.15, 1.75];
+    const nivelesLimpieza = [0.48, 1.13, 1.78];
+
+    // Dos posiciones por nivel en lugar de tres.
+    const posicionesEstante = [-0.55, 0.55];
+    const posicionesRefrigerador = [-0.48, 0.48];
+    const posicionesLimpieza = [-0.48, 0.48];
 
     let modelosCargados = 0;
     let unidadesColocadas = 0;
@@ -33,7 +40,7 @@ export function crearProductosLacteos(scene) {
     const cacheModelos = new Map();
 
     // ========================================================
-    // CARGAR MODELOS GLB UNA SOLA VEZ POR ARCHIVO
+    // CARGAR CADA MODELO UNA SOLA VEZ
     // ========================================================
 
     function cargarModelo(archivo, nombre, callback) {
@@ -66,16 +73,7 @@ export function crearProductosLacteos(scene) {
 
                     objeto.castShadow = false;
                     objeto.receiveShadow = false;
-
-                    const materiales = Array.isArray(objeto.material)
-                        ? objeto.material
-                        : [objeto.material];
-
-                    materiales.forEach((material) => {
-                        if (material) {
-                            material.side = THREE.DoubleSide;
-                        }
-                    });
+                    objeto.frustumCulled = true;
                 });
 
                 registro.modelo = original;
@@ -102,7 +100,7 @@ export function crearProductosLacteos(scene) {
     }
 
     // ========================================================
-    // CREAR COPIA CON ALTURA CONTROLADA
+    // CREAR COPIA DE UN PRODUCTO
     // ========================================================
 
     function crearCopia(
@@ -139,13 +137,11 @@ export function crearProductosLacteos(scene) {
             return null;
         }
 
-        // Escala uniforme para mantener las proporciones del modelo.
         const escala = altura / dimensiones.y;
 
         modelo.scale.setScalar(escala);
         modelo.updateMatrixWorld(true);
 
-        // Centrar el modelo y apoyar su base en el nivel indicado.
         const cajaFinal = new THREE.Box3().setFromObject(modelo);
         const centro = new THREE.Vector3();
 
@@ -159,6 +155,7 @@ export function crearProductosLacteos(scene) {
 
         modelo.updateMatrixWorld(true);
 
+        // Datos necesarios para clientes, recogida y ventas.
         modelo.userData.esUnidadProducto = true;
         modelo.userData.recogido = false;
         modelo.userData.vendido = false;
@@ -174,7 +171,8 @@ export function crearProductosLacteos(scene) {
 
     // ========================================================
     // 1. GÓNDOLAS
-    // Papel higiénico, Sabritas y cereales conservan su altura.
+    // Antes: 12 unidades por producto.
+    // Ahora: 6 unidades por producto.
     // ========================================================
 
     const catalogoGondolas = [
@@ -205,7 +203,7 @@ export function crearProductosLacteos(scene) {
     function colocarEnGondola(config) {
         cargarModelo(config.archivo, config.nombre, (original) => {
             nivelesGondola.forEach((nivel, nivelIndex) => {
-                [-0.95, 0, 0.95].forEach((desplazamiento, indice) => {
+                posicionesEstante.forEach((desplazamiento, indice) => {
                     crearCopia(
                         original,
                         `${config.codigo}_N${nivelIndex + 1}_${indice + 1}`,
@@ -225,7 +223,8 @@ export function crearProductosLacteos(scene) {
 
     // ========================================================
     // 2. REFRIGERADORES
-    // Leches, Pepsi y Coca-Cola conservan su tamaño.
+    // Antes: 12 unidades por refrigerador.
+    // Ahora: 6 unidades por refrigerador.
     // ========================================================
 
     const catalogoRefrigeradores = [
@@ -241,7 +240,7 @@ export function crearProductosLacteos(scene) {
     catalogoRefrigeradores.forEach((config) => {
         cargarModelo(config.archivo, config.nombre, (original) => {
             nivelesRefrigerador.forEach((nivel, nivelIndex) => {
-                [-0.80, 0, 0.80].forEach((dx, indice) => {
+                posicionesRefrigerador.forEach((dx, indice) => {
                     crearCopia(
                         original,
                         `${config.codigo}_N${nivelIndex + 1}_${indice + 1}`,
@@ -259,6 +258,7 @@ export function crearProductosLacteos(scene) {
 
     // ========================================================
     // 3. FRUTAS Y VERDURAS
+    // Se reducen las repeticiones, manteniendo variedad visual.
     // ========================================================
 
     const mesasFrescos = {
@@ -299,10 +299,10 @@ export function crearProductosLacteos(scene) {
         mesa: 'Mesa_frescos_01',
         altura: 0.25,
         posiciones: [
-            [-0.80, -0.35], [-0.27, -0.35],
-            [0.27, -0.35], [0.80, -0.35],
-            [-0.80, 0.35], [-0.27, 0.35],
-            [0.27, 0.35], [0.80, 0.35]
+            [-0.55, -0.30],
+            [0.55, -0.30],
+            [-0.55, 0.30],
+            [0.55, 0.30]
         ]
     });
 
@@ -313,10 +313,12 @@ export function crearProductosLacteos(scene) {
         mesa: 'Mesa_frescos_02',
         altura: 0.25,
         posiciones: [
-            [-0.80, -0.35], [-0.40, -0.35],
-            [0, -0.35], [0.40, -0.35], [0.80, -0.35],
-            [-0.80, 0.35], [-0.40, 0.35],
-            [0, 0.35], [0.40, 0.35], [0.80, 0.35]
+            [-0.65, -0.30],
+            [0, -0.30],
+            [0.65, -0.30],
+            [-0.65, 0.30],
+            [0, 0.30],
+            [0.65, 0.30]
         ]
     });
 
@@ -327,8 +329,8 @@ export function crearProductosLacteos(scene) {
         mesa: 'Mesa_frescos_03',
         altura: 0.18,
         posiciones: [
-            [-0.80, -0.35], [-0.27, -0.35],
-            [0.27, -0.35], [0.80, -0.35]
+            [-0.55, -0.30],
+            [0.55, -0.30]
         ]
     });
 
@@ -339,8 +341,8 @@ export function crearProductosLacteos(scene) {
         mesa: 'Mesa_frescos_03',
         altura: 0.28,
         posiciones: [
-            [-0.80, 0.35], [-0.27, 0.35],
-            [0.27, 0.35], [0.80, 0.35]
+            [-0.55, 0.30],
+            [0.55, 0.30]
         ]
     });
 
@@ -351,8 +353,8 @@ export function crearProductosLacteos(scene) {
         mesa: 'Mesa_frescos_03',
         altura: 0.28,
         posiciones: [
-            [-0.80, 0], [-0.27, 0],
-            [0.27, 0], [0.80, 0]
+            [-0.55, 0],
+            [0.55, 0]
         ]
     });
 
@@ -363,10 +365,12 @@ export function crearProductosLacteos(scene) {
         mesa: 'Mesa_frescos_04',
         altura: 0.25,
         posiciones: [
-            [-0.80, -0.35], [-0.40, -0.35],
-            [0, -0.35], [0.40, -0.35], [0.80, -0.35],
-            [-0.80, 0.35], [-0.40, 0.35],
-            [0, 0.35], [0.40, 0.35], [0.80, 0.35]
+            [-0.65, -0.30],
+            [0, -0.30],
+            [0.65, -0.30],
+            [-0.65, 0.30],
+            [0, 0.30],
+            [0.65, 0.30]
         ]
     });
 
@@ -377,14 +381,15 @@ export function crearProductosLacteos(scene) {
         mesa: 'Mesa_frescos_02',
         altura: 0.25,
         posiciones: [
-            [-0.80, 0.52], [-0.40, 0.52],
-            [0, 0.52], [0.40, 0.52], [0.80, 0.52]
+            [-0.55, 0.52],
+            [0.55, 0.52]
         ]
     });
 
     // ========================================================
     // 4. CARNICERÍA
-    // Pollo y filete reducidos para que no se vean enormes.
+    // Antes: 4 pollos y 4 filetes.
+    // Ahora: 2 de cada uno.
     // ========================================================
 
     function colocarEnMostrador(config) {
@@ -410,8 +415,8 @@ export function crearProductosLacteos(scene) {
         codigo: 'POLLO',
         altura: 0.22,
         posiciones: [
-            [-0.80, -0.30], [-0.27, -0.30],
-            [0.27, -0.30], [0.80, -0.30]
+            [-0.55, -0.30],
+            [0.55, -0.30]
         ]
     });
 
@@ -421,13 +426,15 @@ export function crearProductosLacteos(scene) {
         codigo: 'FILETE',
         altura: 0.14,
         posiciones: [
-            [-0.80, 0.30], [-0.27, 0.30],
-            [0.27, 0.30], [0.80, 0.30]
+            [-0.55, 0.30],
+            [0.55, 0.30]
         ]
     });
 
     // ========================================================
     // 5. LIMPIEZA
+    // Antes: 15 unidades por producto.
+    // Ahora: 6 unidades por producto.
     // ========================================================
 
     const productosLimpieza = [
@@ -441,7 +448,7 @@ export function crearProductosLacteos(scene) {
     productosLimpieza.forEach((config, productoIndex) => {
         cargarModelo(config.archivo, config.nombre, (original) => {
             nivelesLimpieza.forEach((nivel, nivelIndex) => {
-                [-0.80, 0, 0.80].forEach((dx, indice) => {
+                posicionesLimpieza.forEach((dx, indice) => {
                     crearCopia(
                         original,
                         `${config.codigo}_N${nivelIndex + 1}_${indice + 1}`,
@@ -459,6 +466,7 @@ export function crearProductosLacteos(scene) {
 
     // ========================================================
     // 6. ROPA
+    // Se conserva una unidad por modelo.
     // ========================================================
 
     const prendas = [
@@ -513,9 +521,7 @@ export function crearProductosLacteos(scene) {
         );
     };
 
-    console.info(
-        'Catálogo de productos iniciado.'
-    );
+    console.info('Catálogo optimizado de productos iniciado.');
 
     return productos;
 }
