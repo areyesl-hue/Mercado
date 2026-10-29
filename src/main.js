@@ -26,7 +26,7 @@ const CONFIG = {
     colorCieloNoche: 0x101827,
 
     // Ajustes de rendimiento.
-    pixelRatioMaximo:  0.50,
+    pixelRatioMaximo:  0.70,
     sombras: false,
 
     // Carritos.
