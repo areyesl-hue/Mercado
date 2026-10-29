@@ -1,18 +1,18 @@
-
 import * as THREE from 'three';
 
 // ============================================================
-// MOBILIARIO DEL SUPERMERCADO
+// MOBILIARIO DEL SUPERMERCADO OPTIMIZADO
+// Three.js r180+
 // Archivo: mobiliario.js
 //
-// Coordenadas:
-// X: -32 a 32
-// Z: -29 a 29
-// Entrada principal: Z positivo
-// Almacén: Z negativo
-//
-// Los productos GLB se cargan en productos.js.
-// Este archivo crea solamente el mobiliario.
+// Mantiene:
+// - 19 departamentos
+// - Geometrías reutilizadas mediante caché
+// - Materiales compartidos
+// - Colisiones y metadatos
+// - Productos y superficies compatibles con productos.js
+// - Iluminación decorativa con menos luces dinámicas
+// - Sin sombras individuales innecesarias
 // ============================================================
 
 export function crearMobiliario(scene, mercado = null) {
@@ -27,53 +27,133 @@ export function crearMobiliario(scene, mercado = null) {
     const colisiones = [];
     const luminarias = [];
 
+    // --------------------------------------------------------
+    // CACHÉ DE GEOMETRÍAS
+    // --------------------------------------------------------
+
+    const geometríasCaja = new Map();
+    const geometríasCilindro = new Map();
+
+    function obtenerCaja(ancho, alto, fondo) {
+        const clave = `${ancho}|${alto}|${fondo}`;
+
+        if (!geometríasCaja.has(clave)) {
+            geometríasCaja.set(
+                clave,
+                new THREE.BoxGeometry(ancho, alto, fondo)
+            );
+        }
+
+        return geometríasCaja.get(clave);
+    }
+
+    function obtenerCilindro(radio, alto, segmentos) {
+        const clave = `${radio}|${alto}|${segmentos}`;
+
+        if (!geometríasCilindro.has(clave)) {
+            geometríasCilindro.set(
+                clave,
+                new THREE.CylinderGeometry(
+                    radio, radio, alto, segmentos
+                )
+            );
+        }
+
+        return geometríasCilindro.get(clave);
+    }
+
+    // --------------------------------------------------------
+    // MATERIALES COMPARTIDOS
+    // --------------------------------------------------------
+
     const mat = {
         metal: new THREE.MeshStandardMaterial({
-            color: 0x87939b, metalness: 0.65, roughness: 0.35
+            color: 0x87939b,
+            metalness: 0.45,
+            roughness: 0.48
         }),
+
         acero: new THREE.MeshStandardMaterial({
-            color: 0xc3cbd0, metalness: 0.7, roughness: 0.3
+            color: 0xc3cbd0,
+            metalness: 0.45,
+            roughness: 0.42
         }),
+
         estructura: new THREE.MeshStandardMaterial({
-            color: 0x303a43, metalness: 0.5, roughness: 0.42
+            color: 0x303a43,
+            metalness: 0.25,
+            roughness: 0.55
         }),
+
         oscuro: new THREE.MeshStandardMaterial({
-            color: 0x20272d, metalness: 0.4, roughness: 0.45
+            color: 0x20272d,
+            metalness: 0.2,
+            roughness: 0.6
         }),
+
         blanco: new THREE.MeshStandardMaterial({
-            color: 0xf0f2f3, roughness: 0.55
+            color: 0xf0f2f3,
+            roughness: 0.65
         }),
+
         gris: new THREE.MeshStandardMaterial({
-            color: 0x9da7ae, roughness: 0.6
+            color: 0x9da7ae,
+            roughness: 0.65
         }),
+
         azul: new THREE.MeshStandardMaterial({
-            color: 0x176eb0, roughness: 0.42
+            color: 0x176eb0,
+            roughness: 0.5
         }),
+
         azulOscuro: new THREE.MeshStandardMaterial({
-            color: 0x153c55, roughness: 0.45
+            color: 0x153c55,
+            roughness: 0.55
         }),
+
         verde: new THREE.MeshStandardMaterial({
-            color: 0x31834b, roughness: 0.5
+            color: 0x31834b,
+            roughness: 0.55
         }),
+
         rojo: new THREE.MeshStandardMaterial({
-            color: 0xc82d37, roughness: 0.45
+            color: 0xc82d37,
+            roughness: 0.55
         }),
+
         naranja: new THREE.MeshStandardMaterial({
-            color: 0xe99535, roughness: 0.5
+            color: 0xe99535,
+            roughness: 0.6
         }),
+
         madera: new THREE.MeshStandardMaterial({
-            color: 0xb58a5a, roughness: 0.75
+            color: 0xb58a5a,
+            roughness: 0.8
         }),
+
         maderaClara: new THREE.MeshStandardMaterial({
-            color: 0xd8bd95, roughness: 0.7
+            color: 0xd8bd95,
+            roughness: 0.75
         }),
+
         goma: new THREE.MeshStandardMaterial({
-            color: 0x202428, roughness: 0.88
+            color: 0x202428,
+            roughness: 0.9
         }),
+
         luz: new THREE.MeshStandardMaterial({
             color: 0xffffff,
             emissive: 0xd7f1ff,
-            emissiveIntensity: 0.8
+            emissiveIntensity: 1.0,
+            roughness: 0.5
+        }),
+
+        cristal: new THREE.MeshStandardMaterial({
+            color: 0x9bc8d9,
+            transparent: true,
+            opacity: 0.28,
+            roughness: 0.3,
+            depthWrite: false
         })
     };
 
@@ -100,17 +180,21 @@ export function crearMobiliario(scene, mercado = null) {
         x, y, z,
         ancho, alto, fondo,
         material,
-        sombras = true
+        sombras = false
     ) {
         const mesh = new THREE.Mesh(
-            new THREE.BoxGeometry(ancho, alto, fondo),
+            obtenerCaja(ancho, alto, fondo),
             material
         );
 
         mesh.name = nombre;
         mesh.position.set(x, y, z);
-        mesh.castShadow = sombras;
-        mesh.receiveShadow = true;
+
+        // El renderizador del proyecto tiene sombras desactivadas.
+        // Evitamos trabajo extra por objeto.
+        mesh.castShadow = false;
+        mesh.receiveShadow = false;
+
         padre.add(mesh);
         return mesh;
     }
@@ -122,23 +206,21 @@ export function crearMobiliario(scene, mercado = null) {
         segmentos = 12
     ) {
         const mesh = new THREE.Mesh(
-            new THREE.CylinderGeometry(
-                radio, radio, alto, segmentos
-            ),
+            obtenerCilindro(radio, alto, segmentos),
             material
         );
 
         mesh.name = nombre;
         mesh.position.set(x, y, z);
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
+        mesh.castShadow = false;
+        mesh.receiveShadow = false;
+
         padre.add(mesh);
         return mesh;
     }
 
-    // Guarda las dimensiones de los obstáculos en coordenadas globales.
     function registrarColision(nombre, x, z, ancho, fondo, opciones = {}) {
-        const obstaculo = {
+        colisiones.push({
             nombre,
             minX: x - ancho / 2,
             maxX: x + ancho / 2,
@@ -148,10 +230,7 @@ export function crearMobiliario(scene, mercado = null) {
             fondo,
             tipo: opciones.tipo ?? 'mueble',
             transitable: false
-        };
-
-        colisiones.push(obstaculo);
-        return obstaculo;
+        });
     }
 
     function crearMuebleSimple(
@@ -165,8 +244,7 @@ export function crearMobiliario(scene, mercado = null) {
         caja(
             g, 'Cuerpo',
             0, alto / 2, 0,
-            ancho, alto, fondo,
-            material
+            ancho, alto, fondo, material
         );
 
         if (opciones.base !== false) {
@@ -190,10 +268,6 @@ export function crearMobiliario(scene, mercado = null) {
 
     // --------------------------------------------------------
     // 01. GÓNDOLAS CENTRALES
-    //
-    // Las alturas de las superficies están pensadas para que
-    // productos.js coloque el fondo de cada producto sobre ellas.
-    // Superficies: 0.43, 0.86, 1.29 y 1.72.
     // --------------------------------------------------------
 
     function crearGondola(padre, nombre, x, z) {
@@ -202,78 +276,46 @@ export function crearMobiliario(scene, mercado = null) {
         const ancho = 1.15;
         const largo = 5.7;
         const alto = 2.0;
+        const niveles = [0.43, 0.86, 1.29, 1.72];
 
-        caja(
-            g, 'Base',
-            0, 0.13, 0,
-            ancho, 0.22, largo,
-            mat.estructura
-        );
+        caja(g, 'Base', 0, 0.13, 0, ancho, 0.22, largo, mat.estructura);
 
         for (const dx of [-0.51, 0.51]) {
             for (const dz of [-2.72, 2.72]) {
-                caja(
-                    g, 'Montante',
-                    dx, alto / 2, dz,
-                    0.075, alto, 0.09,
-                    mat.metal
-                );
+                caja(g, 'Montante', dx, alto / 2, dz,
+                    0.075, alto, 0.09, mat.metal);
 
-                caja(
-                    g, 'Pie',
-                    dx, 0.055, dz,
-                    0.26, 0.09, 0.22,
-                    mat.estructura
-                );
+                caja(g, 'Pie', dx, 0.055, dz,
+                    0.26, 0.09, 0.22, mat.estructura);
             }
         }
-
-        // Cuatro superficies útiles para productos.
-        const niveles = [0.43, 0.86, 1.29, 1.72];
 
         for (const lado of [-1, 1]) {
             for (let i = 0; i < niveles.length; i++) {
                 const y = niveles[i];
 
-                caja(
-                    g, `Repisa_${lado}_${i + 1}`,
+                caja(g, `Repisa_${lado}_${i + 1}`,
                     lado * 0.30, y, 0,
-                    0.55, 0.065, largo - 0.18,
-                    mat.acero
-                );
+                    0.55, 0.065, largo - 0.18, mat.acero);
 
-                caja(
-                    g, `Borde_${lado}_${i + 1}`,
+                caja(g, `Borde_${lado}_${i + 1}`,
                     lado * 0.575, y + 0.035, 0,
-                    0.035, 0.07, largo - 0.18,
-                    mat.oscuro,
-                    false
-                );
+                    0.035, 0.07, largo - 0.18, mat.oscuro);
             }
         }
 
         for (const dz of [-1.8, 0, 1.8]) {
-            caja(
-                g, 'Refuerzo',
-                0, 0.29, dz,
-                ancho - 0.12, 0.07, 0.08,
-                mat.oscuro
-            );
+            caja(g, 'Refuerzo', 0, 0.29, dz,
+                ancho - 0.12, 0.07, 0.08, mat.oscuro);
         }
 
-        caja(
-            g, 'Franja_superior',
-            0, 2.04, 0,
-            ancho, 0.10, largo - 0.1,
-            mat.azul
-        );
+        caja(g, 'Franja_superior', 0, 2.04, 0,
+            ancho, 0.10, largo - 0.1, mat.azul);
 
-        registrarColision(
-            nombre, x, z, 1.5, 6.0,
-            { tipo: 'gondola' }
-        );
+        registrarColision(nombre, x, z, 1.5, 6.0, {
+            tipo: 'gondola'
+        });
 
-        // Metadatos útiles para productos.js.
         g.userData.esGondola = true;
         g.userData.ancho = ancho;
         g.userData.largo = largo;
@@ -285,20 +327,15 @@ export function crearMobiliario(scene, mercado = null) {
 
     {
         const dep = departamento('01_GONDOLAS_CENTRALES');
-        const posicionesX = [-17, -9, 9, 17];
-        const posicionesZ = [-13, 0, 13];
-
         let numero = 1;
 
-        for (const x of posicionesX) {
-            for (const z of posicionesZ) {
+        for (const x of [-17, -9, 9, 17]) {
+            for (const z of [-13, 0, 13]) {
                 crearGondola(
                     dep,
-                    `Gondola_${String(numero).padStart(2, '0')}`,
-                    x,
-                    z
+                    `Gondola_${String(numero++).padStart(2, '0')}`,
+                    x, z
                 );
-                numero++;
             }
         }
     }
@@ -324,60 +361,30 @@ export function crearMobiliario(scene, mercado = null) {
     {
         const dep = departamento('02_ISLAS_PROMOCIONALES');
 
-        crearIslaPromocional(
-            dep, 'Isla_promocional_01',
-            -3.5, -7, mat.naranja
-        );
-
-        crearIslaPromocional(
-            dep, 'Isla_promocional_02',
-            3.5, 7, mat.verde
-        );
+        crearIslaPromocional(dep, 'Isla_promocional_01', -3.5, -7, mat.naranja);
+        crearIslaPromocional(dep, 'Isla_promocional_02', 3.5, 7, mat.verde);
     }
 
     // --------------------------------------------------------
     // 03. ESTANTERÍAS PERIMETRALES
     // --------------------------------------------------------
 
-    function crearEstanteriaPared(
-        padre, nombre, x, z,
-        largo = 4.0
-    ) {
+    function crearEstanteriaPared(padre, nombre, x, z, largo = 4.0) {
         const g = grupo(nombre, padre, x, z);
-
-        caja(
-            g, 'Panel_trasero',
-            0, 1.0, 0,
-            0.12, 2.0, largo,
-            mat.gris
-        );
-
         const niveles = [0.43, 0.86, 1.29, 1.72];
 
-        for (let i = 0; i < niveles.length; i++) {
-            caja(
-                g, `Repisa_${i + 1}`,
-                0.32, niveles[i], 0,
-                0.62, 0.065, largo - 0.12,
-                mat.acero
-            );
+        caja(g, 'Panel_trasero', 0, 1.0, 0, 0.12, 2.0, largo, mat.gris);
 
-            caja(
-                g, `Borde_${i + 1}`,
-                0.64, niveles[i] + 0.035, 0,
-                0.035, 0.045, largo - 0.12,
-                mat.oscuro,
-                false
-            );
-        }
+        niveles.forEach((y, i) => {
+            caja(g, `Repisa_${i + 1}`, 0.32, y, 0,
+                0.62, 0.065, largo - 0.12, mat.acero);
+
+            caja(g, `Borde_${i + 1}`, 0.64, y + 0.035, 0,
+                0.035, 0.045, largo - 0.12, mat.oscuro);
+        });
 
         for (const dz of [-largo / 2 + 0.1, largo / 2 - 0.1]) {
-            caja(
-                g, 'Poste',
-                0, 1.0, dz,
-                0.09, 2.0, 0.09,
-                mat.metal
-            );
+            caja(g, 'Poste', 0, 1.0, dz, 0.09, 2.0, 0.09, mat.metal);
         }
 
         registrarColision(nombre, x, z, 0.95, largo + 0.1, {
@@ -407,28 +414,17 @@ export function crearMobiliario(scene, mercado = null) {
         const fondo = 1.4;
 
         caja(g, 'Cuerpo', 0, 0.48, 0, ancho, 0.85, fondo, mat.madera);
-        caja(
-            g, 'Cubierta',
-            0, 0.94, 0,
-            ancho + 0.12, 0.12, fondo + 0.12,
-            mat.maderaClara
-        );
 
-        caja(
-            g, 'Franja_verde',
-            0, 0.50, fondo / 2 + 0.015,
-            ancho - 0.12, 0.18, 0.035,
-            mat.verde
-        );
+        caja(g, 'Cubierta', 0, 0.94, 0,
+            ancho + 0.12, 0.12, fondo + 0.12, mat.maderaClara);
+
+        caja(g, 'Franja_verde', 0, 0.50, fondo / 2 + 0.015,
+            ancho - 0.12, 0.18, 0.035, mat.verde);
 
         for (const dx of [-1.2, 1.2]) {
             for (const dz of [-0.53, 0.53]) {
-                caja(
-                    g, 'Pata',
-                    dx, 0.16, dz,
-                    0.10, 0.32, 0.10,
-                    mat.estructura
-                );
+                caja(g, 'Pata', dx, 0.16, dz,
+                    0.10, 0.32, 0.10, mat.estructura);
             }
         }
 
@@ -436,7 +432,6 @@ export function crearMobiliario(scene, mercado = null) {
             tipo: 'mesa_frescos'
         });
 
-        // La cubierta está centrada aproximadamente en Y=1.
         g.userData.superficieProductoY = 1.0;
         g.userData.anchoSuperficie = ancho;
         g.userData.fondoSuperficie = fondo;
@@ -462,8 +457,6 @@ export function crearMobiliario(scene, mercado = null) {
 
         caja(g, 'Base', 0, 0.48, 0, 2.65, 0.90, 1.05, mat.madera);
         caja(g, 'Encimera', 0, 0.96, 0, 2.75, 0.10, 1.15, mat.maderaClara);
-
-        // Sin vidrio frontal para facilitar la visualización.
         caja(g, 'Bandeja_inferior', 0, 1.18, 0, 2.42, 0.045, 0.85, mat.acero);
         caja(g, 'Bandeja_superior', 0, 1.52, 0, 2.42, 0.045, 0.85, mat.acero);
         caja(g, 'Luz_interior', 0, 1.80, 0, 2.35, 0.04, 0.08, mat.luz);
@@ -485,71 +478,37 @@ export function crearMobiliario(scene, mercado = null) {
 
     // --------------------------------------------------------
     // 06. REFRIGERADORES
-    //
-    // Se eliminan las puertas de vidrio. Las repisas quedan
-    // visibles para distinguir bebidas, leche y agua.
     // --------------------------------------------------------
 
     function crearRefrigerador(padre, nombre, x, z) {
         const g = grupo(nombre, padre, x, z);
-
         const ancho = 2.7;
         const alto = 2.55;
         const fondo = 0.95;
-
-        caja(
-            g, 'Parte_trasera',
-            0, alto / 2, -fondo / 2,
-            ancho, alto, 0.10,
-            mat.gris
-        );
-
-        caja(
-            g, 'Lateral_izquierdo',
-            -ancho / 2, alto / 2, 0,
-            0.09, alto, fondo,
-            mat.acero
-        );
-
-        caja(
-            g, 'Lateral_derecho',
-            ancho / 2, alto / 2, 0,
-            0.09, alto, fondo,
-            mat.acero
-        );
-
-        caja(
-            g, 'Zocalo',
-            0, 0.13, 0,
-            ancho + 0.05, 0.24, fondo + 0.06,
-            mat.estructura
-        );
-
-        caja(
-            g, 'Marco_superior',
-            0, alto - 0.08, 0,
-            ancho, 0.15, fondo,
-            mat.acero
-        );
-
-        // Cuatro niveles para los productos.
         const niveles = [0.50, 0.93, 1.36, 1.79];
 
+        caja(g, 'Parte_trasera', 0, alto / 2, -fondo / 2,
+            ancho, alto, 0.10, mat.gris);
+
+        caja(g, 'Lateral_izquierdo', -ancho / 2, alto / 2, 0,
+            0.09, alto, fondo, mat.acero);
+
+        caja(g, 'Lateral_derecho', ancho / 2, alto / 2, 0,
+            0.09, alto, fondo, mat.acero);
+
+        caja(g, 'Zocalo', 0, 0.13, 0,
+            ancho + 0.05, 0.24, fondo + 0.06, mat.estructura);
+
+        caja(g, 'Marco_superior', 0, alto - 0.08, 0,
+            ancho, 0.15, fondo, mat.acero);
+
         niveles.forEach((y, i) => {
-            caja(
-                g, `Repisa_${i + 1}`,
-                0, y, 0,
-                ancho - 0.20, 0.045, fondo - 0.16,
-                mat.acero
-            );
+            caja(g, `Repisa_${i + 1}`, 0, y, 0,
+                ancho - 0.20, 0.045, fondo - 0.16, mat.acero);
         });
 
-        caja(
-            g, 'Luz_interior',
-            0, 2.24, 0.12,
-            ancho - 0.35, 0.045, 0.06,
-            mat.luz
-        );
+        caja(g, 'Luz_interior', 0, 2.24, 0.12,
+            ancho - 0.35, 0.045, 0.06, mat.luz);
 
         registrarColision(nombre, x, z, 2.85, 1.15, {
             tipo: 'refrigerador'
@@ -563,14 +522,12 @@ export function crearMobiliario(scene, mercado = null) {
 
     {
         const dep = departamento('06_REFRIGERADORES');
-        const posicionesX = [-27, -23.5, -20, -16.5, 16.5, 20, 23.5, 27];
 
-        posicionesX.forEach((x, i) => {
+        [-27, -23.5, -20, -16.5, 16.5, 20, 23.5, 27].forEach((x, i) => {
             crearRefrigerador(
                 dep,
                 `Refrigerador_${String(i + 1).padStart(2, '0')}`,
-                x,
-                -26.5
+                x, -26.5
             );
         });
     }
@@ -585,19 +542,7 @@ export function crearMobiliario(scene, mercado = null) {
         caja(g, 'Cuerpo', 0, 0.55, 0, 2.65, 1.05, 1.25, mat.blanco);
         caja(g, 'Zocalo', 0, 0.10, 0, 2.72, 0.18, 1.32, mat.estructura);
         caja(g, 'Marco_superior', 0, 1.12, 0, 2.72, 0.10, 1.32, mat.acero);
-
-        // Tapa transparente solo arriba.
-        caja(
-            g, 'Tapa_superior',
-            0, 1.19, 0,
-            2.52, 0.045, 1.12,
-            new THREE.MeshStandardMaterial({
-                color: 0x9bc8d9,
-                transparent: true,
-                opacity: 0.28,
-                roughness: 0.2
-            })
-        );
+        caja(g, 'Tapa_superior', 0, 1.19, 0, 2.52, 0.045, 1.12, mat.cristal);
 
         registrarColision(nombre, x, z, 2.85, 1.45, {
             tipo: 'congelador'
@@ -624,8 +569,6 @@ export function crearMobiliario(scene, mercado = null) {
         caja(g, 'Panel_frontal', 0, 0.53, 0.615, 3.05, 0.64, 0.045, color);
         caja(g, 'Zocalo', 0, 0.11, 0, 3.20, 0.16, 1.23, mat.estructura);
         caja(g, 'Cubierta', 0, 1.04, 0, 3.35, 0.10, 1.28, mat.acero);
-
-        // Sin cristal frontal.
         caja(g, 'Bandeja', 0, 1.20, 0, 2.88, 0.04, 0.94, mat.acero);
 
         registrarColision(nombre, x, z, 3.5, 1.4, {
@@ -639,15 +582,8 @@ export function crearMobiliario(scene, mercado = null) {
     {
         const dep = departamento('08_CARNICERIA_PESCADERIA');
 
-        crearMostradorFrio(
-            dep, 'Mostrador_carniceria',
-            25.1, -7.3, mat.rojo
-        );
-
-        crearMostradorFrio(
-            dep, 'Mostrador_pescaderia',
-            25.1, -2.5, mat.azul
-        );
+        crearMostradorFrio(dep, 'Mostrador_carniceria', 25.1, -7.3, mat.rojo);
+        crearMostradorFrio(dep, 'Mostrador_pescaderia', 25.1, -2.5, mat.azul);
     }
 
     // --------------------------------------------------------
@@ -659,23 +595,21 @@ export function crearMobiliario(scene, mercado = null) {
         const ancho = 2.8;
         const niveles = [0.43, 0.78, 1.13, 1.48, 1.83];
 
-        caja(g, 'Panel_trasero', 0, 0.98, -0.3, ancho, 1.95, 0.09);
+        caja(g, 'Panel_trasero', 0, 0.98, -0.3, ancho, 1.95, 0.09, mat.gris);
         caja(g, 'Zocalo', 0, 0.12, 0.05, ancho, 0.24, 0.68, mat.estructura);
 
         niveles.forEach((y, i) => {
-            caja(
-                g, `Repisa_${i + 1}`,
-                0, y, 0.15,
-                ancho - 0.12, 0.055, 0.60,
-                mat.acero
-            );
+            caja(g, `Repisa_${i + 1}`, 0, y, 0.15,
+                ancho - 0.12, 0.055, 0.60, mat.acero);
         });
 
         for (const dx of [-1.34, 1.34]) {
-            caja(g, 'Montante', dx, 0.98, 0.15, 0.07, 1.95, 0.07, mat.metal);
+            caja(g, 'Montante', dx, 0.98, 0.15,
+                0.07, 1.95, 0.07, mat.metal);
         }
 
-        caja(g, 'Franja_identificacion', 0, 2.02, 0.02, ancho, 0.12, 0.12, color);
+        caja(g, 'Franja_identificacion', 0, 2.02, 0.02,
+            ancho, 0.12, 0.12, color);
 
         registrarColision(nombre, x, z, 2.95, 0.85, {
             tipo: 'estanteria'
@@ -770,12 +704,11 @@ export function crearMobiliario(scene, mercado = null) {
 
     {
         const dep = departamento('11_CAJAS_REGISTRADORAS');
-        const posiciones = [
+
+        [
             [-22, 22.5], [-17, 22.5], [-12, 22.5],
             [12, 22.5], [17, 22.5], [22, 22.5]
-        ];
-
-        posiciones.forEach(([x, z], i) => {
+        ].forEach(([x, z], i) => {
             crearCajaRegistradora(
                 dep,
                 `Caja_registradora_${String(i + 1).padStart(2, '0')}`,
@@ -831,7 +764,10 @@ export function crearMobiliario(scene, mercado = null) {
 
         for (const dx of [-0.29, 0.29]) {
             for (const dz of [-0.32, 0.32]) {
-                const rueda = cilindro(g, 'Rueda', dx, 0.24, dz, 0.09, 0.07, mat.goma);
+                const rueda = cilindro(
+                    g, 'Rueda', dx, 0.24, dz,
+                    0.09, 0.07, mat.goma
+                );
                 rueda.rotation.z = Math.PI / 2;
             }
         }
@@ -904,8 +840,7 @@ export function crearMobiliario(scene, mercado = null) {
         caja(
             mostrador, 'Franja_frontal',
             0, 0.03, 0.54,
-            2.3, 0.55, 0.045,
-            mat.azul
+            2.3, 0.55, 0.045, mat.azul
         );
     }
 
@@ -946,14 +881,20 @@ export function crearMobiliario(scene, mercado = null) {
 
         for (const dx of [-ancho / 2, ancho / 2]) {
             for (const dz of [-largo / 2, largo / 2]) {
-                caja(g, 'Montante', dx, alto / 2, dz, 0.09, alto, 0.09, mat.azulOscuro);
-                caja(g, 'Placa_base', dx, 0.06, dz, 0.22, 0.10, 0.22, mat.estructura);
+                caja(g, 'Montante', dx, alto / 2, dz,
+                    0.09, alto, 0.09, mat.azulOscuro);
+
+                caja(g, 'Placa_base', dx, 0.06, dz,
+                    0.22, 0.10, 0.22, mat.estructura);
             }
         }
 
         for (const y of [0.45, 1.25, 2.05, 2.80]) {
-            caja(g, `Nivel_carga_${y}`, 0, y, 0, ancho, 0.10, largo, mat.naranja);
-            caja(g, `Superficie_${y}`, 0, y + 0.06, 0, ancho - 0.12, 0.035, largo - 0.12, mat.acero);
+            caja(g, `Nivel_carga_${y}`, 0, y, 0,
+                ancho, 0.10, largo, mat.naranja);
+
+            caja(g, `Superficie_${y}`, 0, y + 0.06, 0,
+                ancho - 0.12, 0.035, largo - 0.12, mat.acero);
         }
 
         registrarColision(nombre, x, z, ancho + 0.15, largo + 0.15, {
@@ -970,11 +911,13 @@ export function crearMobiliario(scene, mercado = null) {
 
         for (const dx of [-0.85, 0.85]) {
             for (const dz of [-0.38, 0.38]) {
-                caja(g, 'Pata', dx, 0.47, dz, 0.10, 0.94, 0.10, mat.estructura);
+                caja(g, 'Pata', dx, 0.47, dz,
+                    0.10, 0.94, 0.10, mat.estructura);
             }
         }
 
-        caja(g, 'Repisa_inferior', 0, 0.32, 0, 1.85, 0.08, 0.85, mat.metal);
+        caja(g, 'Repisa_inferior', 0, 0.32, 0,
+            1.85, 0.08, 0.85, mat.metal);
 
         registrarColision(nombre, x, z, 2.2, 1.2, {
             tipo: 'mesa_almacen'
@@ -999,13 +942,16 @@ export function crearMobiliario(scene, mercado = null) {
     // 18. SEÑALIZACIÓN
     // --------------------------------------------------------
 
-    function crearLetrero(padre, nombre, texto, x, y, z, colorFondo = 0x176eb0) {
-        const g = grupo(nombre, padre, x, z);
-        g.position.y = y;
+    const materialesLetreros = new Map();
 
-        let material = new THREE.MeshStandardMaterial({
-            color: colorFondo
-        });
+    function obtenerMaterialLetrero(texto, colorFondo) {
+        const clave = `${texto}|${colorFondo}`;
+
+        if (materialesLetreros.has(clave)) {
+            return materialesLetreros.get(clave);
+        }
+
+        let material;
 
         if (typeof document !== 'undefined') {
             const canvas = document.createElement('canvas');
@@ -1013,8 +959,10 @@ export function crearMobiliario(scene, mercado = null) {
             canvas.height = 128;
 
             const ctx = canvas.getContext('2d');
+
             ctx.fillStyle = `#${colorFondo.toString(16).padStart(6, '0')}`;
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillRect(0, 0, 512, 128);
+
             ctx.fillStyle = '#ffffff';
             ctx.font = 'bold 30px Arial';
             ctx.textAlign = 'center';
@@ -1026,14 +974,33 @@ export function crearMobiliario(scene, mercado = null) {
 
             material = new THREE.MeshStandardMaterial({
                 map: textura,
-                roughness: 0.55
+                roughness: 0.65
+            });
+        } else {
+            material = new THREE.MeshStandardMaterial({
+                color: colorFondo
             });
         }
 
-        caja(g, 'Panel', 0, 0, 0, 3.2, 0.65, 0.12, material, false);
+        materialesLetreros.set(clave, material);
+        return material;
+    }
+
+    function crearLetrero(
+        padre, nombre, texto,
+        x, y, z, colorFondo = 0x176eb0
+    ) {
+        const g = grupo(nombre, padre, x, z);
+        g.position.y = y;
+
+        const material = obtenerMaterialLetrero(texto, colorFondo);
+
+        caja(g, 'Panel', 0, 0, 0,
+            3.2, 0.65, 0.12, material);
 
         for (const dx of [-1.2, 1.2]) {
-            caja(g, 'Soporte', dx, -0.55, 0, 0.055, 0.55, 0.055, mat.metal);
+            caja(g, 'Soporte', dx, -0.55, 0,
+                0.055, 0.55, 0.055, mat.metal);
         }
 
         return g;
@@ -1063,23 +1030,34 @@ export function crearMobiliario(scene, mercado = null) {
                 dep, x, 24.7
             );
 
-            cilindro(g, 'Base', 0, 0.06, 0, 0.16, 0.12, mat.estructura, 16);
-            cilindro(g, 'Poste', 0, 0.48, 0, 0.045, 0.80, mat.acero, 12);
-            cilindro(g, 'Tapa', 0, 0.90, 0, 0.08, 0.08, mat.oscuro, 12);
+            cilindro(g, 'Base', 0, 0.06, 0,
+                0.16, 0.12, mat.estructura, 12);
 
-            // Los postes de fila no bloquean todo el pasillo.
-            registrarColision(
-                g.name, x, 24.7, 0.28, 0.28,
-                { tipo: 'poste' }
-            );
+            cilindro(g, 'Poste', 0, 0.48, 0,
+                0.045, 0.80, mat.acero, 8);
+
+            cilindro(g, 'Tapa', 0, 0.90, 0,
+                0.08, 0.08, mat.oscuro, 8);
+
+            registrarColision(g.name, x, 24.7, 0.28, 0.28, {
+                tipo: 'poste'
+            });
         }
     }
 
     // --------------------------------------------------------
     // 20. ILUMINACIÓN
+    //
+    // Los paneles siguen siendo visibles.
+    // Se limita el número de luces dinámicas activas para
+    // reducir el coste de iluminación por fotograma.
+    // La iluminación general debe venir de main.js.
     // --------------------------------------------------------
 
     const iluminacion = grupo('20_ILUMINACION_MOBILIARIO');
+
+    let lucesRealesActivas = 0;
+    const MAX_LUCES_REALES = 5;
 
     function crearLuminaria(
         nombre, x, y, z,
@@ -1094,37 +1072,51 @@ export function crearMobiliario(scene, mercado = null) {
         g.position.set(x, y, z);
 
         const carcasa = new THREE.Mesh(
-            new THREE.BoxGeometry(tamanoX + 0.12, 0.10, tamanoZ + 0.12),
+            obtenerCaja(tamanoX + 0.12, 0.10, tamanoZ + 0.12),
             mat.oscuro
         );
 
         carcasa.name = 'Carcasa_luminaria';
         carcasa.castShadow = false;
+        carcasa.receiveShadow = false;
         g.add(carcasa);
 
         const materialPanel = new THREE.MeshStandardMaterial({
             color,
             emissive: color,
-            emissiveIntensity: 0.8
+            emissiveIntensity: 0.65,
+            roughness: 0.55
         });
 
         const panel = new THREE.Mesh(
-            new THREE.BoxGeometry(tamanoX, 0.035, tamanoZ),
+            obtenerCaja(tamanoX, 0.035, tamanoZ),
             materialPanel
         );
 
         panel.name = 'Panel_luminoso';
         panel.position.y = -0.06;
         panel.castShadow = false;
+        panel.receiveShadow = false;
         g.add(panel);
 
-        const luz = new THREE.PointLight(color, intensidad, alcance, 2);
+        const luz = new THREE.PointLight(
+            color,
+            lucesRealesActivas < MAX_LUCES_REALES ? intensidad : 0,
+            alcance,
+            2
+        );
+
         luz.name = `Luz_${nombre}`;
         luz.position.set(0, -0.18, 0);
         luz.castShadow = false;
         luz.userData.intensidadBase = intensidad;
-        g.add(luz);
+        luz.userData.luzReducida = lucesRealesActivas >= MAX_LUCES_REALES;
 
+        if (lucesRealesActivas < MAX_LUCES_REALES) {
+            lucesRealesActivas++;
+        }
+
+        g.add(luz);
         iluminacion.add(g);
         luminarias.push({ nombre, grupo: g, luz });
 
@@ -1133,8 +1125,8 @@ export function crearMobiliario(scene, mercado = null) {
 
     [
         [-18, 4.7, -15], [0, 4.7, -15], [18, 4.7, -15],
-        [-18, 4.7, 0],   [0, 4.7, 0],   [18, 4.7, 0],
-        [-18, 4.7, 15],  [0, 4.7, 15],  [18, 4.7, 15]
+        [-18, 4.7, 0], [0, 4.7, 0], [18, 4.7, 0],
+        [-18, 4.7, 15], [0, 4.7, 15], [18, 4.7, 15]
     ].forEach(([x, y, z], i) => {
         crearLuminaria(
             `Luminaria_pasillos_${String(i + 1).padStart(2, '0')}`,
@@ -1189,8 +1181,8 @@ export function crearMobiliario(scene, mercado = null) {
 
     mobiliario.userData.encenderIluminacion = () => {
         luminarias.forEach(({ luz, grupo }) => {
-            luz.visible = true;
             grupo.visible = true;
+            luz.visible = true;
         });
     };
 
@@ -1205,7 +1197,9 @@ export function crearMobiliario(scene, mercado = null) {
         const factor = THREE.MathUtils.clamp(multiplicador, 0, 3);
 
         luminarias.forEach(({ luz }) => {
-            luz.intensity = luz.userData.intensidadBase * factor;
+            luz.intensity = luz.userData.luzReducida
+                ? 0
+                : luz.userData.intensidadBase * factor;
         });
     };
 
@@ -1221,6 +1215,7 @@ export function crearMobiliario(scene, mercado = null) {
 
     mobiliario.userData.mostrarDepartamento = nombre => {
         if (!departamentos[nombre]) return false;
+
         departamentos[nombre].visible = true;
         return true;
     };
@@ -1237,7 +1232,8 @@ export function crearMobiliario(scene, mercado = null) {
         });
     };
 
-    mobiliario.userData.listarDepartamentos = () => Object.keys(departamentos);
+    mobiliario.userData.listarDepartamentos = () =>
+        Object.keys(departamentos);
 
     mobiliario.userData.obtenerDepartamento = nombre =>
         departamentos[nombre] ?? null;
@@ -1261,21 +1257,21 @@ export function crearMobiliario(scene, mercado = null) {
         almacenZ: -29
     };
 
+    mobiliario.userData.estadisticasOptimizacion = {
+        geometríasCajaReutilizadas: geometríasCaja.size,
+        geometríasCilindroReutilizadas: geometríasCilindro.size,
+        materialesLetrerosReutilizados: materialesLetreros.size,
+        luminarias: luminarias.length,
+        lucesRealesActivas: lucesRealesActivas,
+        colisiones: colisiones.length
+    };
+
     scene.add(mobiliario);
 
-    console.info(
-        'Mobiliario del supermercado creado.',
-        '\nDepartamentos:',
-        mobiliario.userData.listarDepartamentos()
-    );
-
-    console.info(
-        `Iluminación del mobiliario creada: ${luminarias.length} luminarias.`
-    );
-
-    console.info(
-        `Obstáculos registrados para navegación: ${colisiones.length}.`
-    );
+    console.info('Mobiliario del supermercado creado.');
+    console.info('Departamentos:', Object.keys(departamentos));
+    console.info('Optimización:', mobiliario.userData.estadisticasOptimizacion);
+    console.info(`Obstáculos registrados: ${colisiones.length}`);
 
     return mobiliario;
 }
