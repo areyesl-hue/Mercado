@@ -1,4 +1,3 @@
-
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
@@ -164,9 +163,10 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     // ========================================================
 
     let modelo = null;
-    let mixer = null;
-    let accionCaminar = null;
-    let clips = [];
+
+    // IMPORTANTE:
+    // No utilizamos AnimationMixer ni AnimationAction.
+    // La animación se realizará manualmente con los huesos.
 
     let cargado = false;
     let eliminado = false;
@@ -246,9 +246,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     // Góndolas
     for (const x of [-17, -9, 9, 17]) {
         for (const z of [-13, 0, 13]) {
-            agregarObstaculo(
-                x, z, 1.45, 6, 'Góndola'
-            );
+            agregarObstaculo(x, z, 1.45, 6, 'Góndola');
         }
     }
 
@@ -259,9 +257,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         [-25.5, 10.8],
         [-21.7, 10.8]
     ]) {
-        agregarObstaculo(
-            x, z, 3, 1.6, 'Mesa de frescos'
-        );
+        agregarObstaculo(x, z, 3, 1.6, 'Mesa de frescos');
     }
 
     // Islas promocionales
@@ -271,9 +267,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     // Estanterías perimetrales
     for (const x of [-29.5, 29.5]) {
         for (const z of [-18, -10]) {
-            agregarObstaculo(
-                x, z, 0.95, 4.5, 'Estantería'
-            );
+            agregarObstaculo(x, z, 0.95, 4.5, 'Estantería');
         }
     }
 
@@ -289,9 +283,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         -27, -23.5, -20, -16.5,
         16.5, 20, 23.5, 27
     ]) {
-        agregarObstaculo(
-            x, -26.5, 2.8, 1.15, 'Refrigerador'
-        );
+        agregarObstaculo(x, -26.5, 2.8, 1.15, 'Refrigerador');
     }
 
     // ========================================================
@@ -454,7 +446,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         const dx = Math.abs(a.ix - b.ix);
         const dz = Math.abs(a.iz - b.iz);
 
-        // Distancia octil
         return Math.max(dx, dz) +
             (Math.SQRT2 - 1) * Math.min(dx, dz);
     }
@@ -488,10 +479,8 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         }
 
         const abiertos = new ColaPrioridad();
-
         const anterior = new Map();
         const costo = new Map();
-
         const cerrados = new Set();
 
         costo.set(ka, 0);
@@ -506,7 +495,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             [-1, 0, 1],
             [0, 1, 1],
             [0, -1, 1],
-
             [1, 1, Math.SQRT2],
             [-1, 1, Math.SQRT2],
             [1, -1, Math.SQRT2],
@@ -534,11 +522,11 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
                 while (k && k !== ka) {
                     const [ix, iz] = k.split(',').map(Number);
+
                     camino.unshift(nodo(ix, iz));
                     k = anterior.get(k);
                 }
 
-                // Suavizar ruta sin atravesar obstáculos.
                 const rutaSuavizada = [];
                 let origen = a;
                 let indice = 0;
@@ -592,7 +580,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
                 if (!nodoValido(nx, nz)) continue;
 
-                // Evitar cortar esquinas en diagonal.
                 if (dx !== 0 && dz !== 0) {
                     if (
                         !nodoValido(ix + dx, iz) ||
@@ -683,7 +670,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         let camino = buscarCamino(inicio, destino);
 
-        // Si el punto no tiene camino, probar otros destinos.
         if (!camino.length) {
             for (let i = 0; i < 8; i++) {
                 const alternativo = destinoAleatorio();
@@ -705,6 +691,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             rutaActual = [];
             indiceRuta = 0;
             tiempoReintento = 1.2;
+
             return false;
         }
 
@@ -771,7 +758,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     // ========================================================
 
     function iniciarDesdeVehiculo(posicion, plaza = null) {
-        if (eliminado) return;
+        if (eliminado || !posicion) return;
 
         establecerPosicion(posicion);
 
@@ -799,11 +786,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         objetivoActual = null;
         rutaActual = [];
         indiceRuta = 0;
-
-        if (accionCaminar) {
-            accionCaminar.reset();
-            accionCaminar.play();
-        }
     }
 
     function iniciarRegresoVehiculo(plaza, alTerminar = null) {
@@ -832,11 +814,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             typeof alTerminar === 'function'
                 ? alTerminar
                 : null;
-
-        if (accionCaminar) {
-            accionCaminar.reset();
-            accionCaminar.play();
-        }
 
         return true;
     }
@@ -872,11 +849,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         }
 
         asignarDestino();
-
-        if (accionCaminar) {
-            accionCaminar.reset();
-            accionCaminar.play();
-        }
     }
 
     function avanzarExterior(delta) {
@@ -912,7 +884,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         }
 
         const paso = Math.min(
-            config.velocidad * delta,
+            Math.max(0, config.velocidad) * delta,
             distancia
         );
 
@@ -926,15 +898,15 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         estado = 'esperando';
         detenido = true;
 
-        if (accionCaminar) {
-            accionCaminar.stop();
-        }
-
         const callback = callbackRegreso;
         callbackRegreso = null;
 
         if (callback) {
-            callback(api);
+            try {
+                callback(api);
+            } catch (error) {
+                console.error('Error al terminar regreso:', error);
+            }
         }
     }
 
@@ -1189,11 +1161,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         estado = 'yendoProducto';
 
-        if (accionCaminar && !accionCaminar.isRunning()) {
-            accionCaminar.reset();
-            accionCaminar.play();
-        }
-
         return true;
     }
 
@@ -1251,7 +1218,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         const copia = producto.clone(true);
 
         copia.name = `PRODUCTO_EN_MANO_${id}`;
-
         copia.userData.esProductoTemporal = true;
 
         copia.position.set(0, 0, 0);
@@ -1521,10 +1487,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         objetivoActual = null;
         rutaActual = [];
         indiceRuta = 0;
-
-        if (accionCaminar) {
-            accionCaminar.stop();
-        }
     }
 
     function comprobarLlegadaProducto() {
@@ -1569,19 +1531,10 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         const nuevaRuta = calcularRutaHastaProducto(producto);
 
-        if (nuevaRuta) {
+        if (nuevaRuta && nuevaRuta.ruta.length) {
             objetivoActual = nuevaRuta.destino;
             rutaActual = nuevaRuta.ruta;
             indiceRuta = 0;
-
-            if (!rutaActual.length) {
-                liberarObjetivoProducto();
-
-                estado = 'caminando';
-                tiempoCompra = 0;
-
-                asignarDestino();
-            }
         } else {
             liberarObjetivoProducto();
 
@@ -1631,11 +1584,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         indiceRuta = 0;
 
         asignarDestino();
-
-        if (accionCaminar) {
-            accionCaminar.reset();
-            accionCaminar.play();
-        }
     }
 
     // ========================================================
@@ -1737,7 +1685,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         vz /= longitud;
 
         const paso = Math.min(
-            config.velocidad * delta,
+            Math.max(0, config.velocidad) * delta,
             distancia
         );
 
@@ -1767,7 +1715,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             tiempoAtascado += delta;
         }
 
-        // Detector de atascos
         const desplazamiento = Math.hypot(
             grupo.position.x - ultimaPosicion.x,
             grupo.position.z - ultimaPosicion.z
@@ -1798,7 +1745,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     }
 
     // ========================================================
-    // ANIMACIÓN MANUAL
+    // ANIMACIÓN MANUAL DE HUESOS
     // ========================================================
 
     function normalizarNombre(nombre) {
@@ -1941,41 +1888,24 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
             contenedorModelo.add(modelo);
 
-            clips = gltf.animations ?? [];
+            // =================================================
+            // CORRECCIÓN DEL ERROR DE ANIMACIÓN
+            // =================================================
 
-            if (clips.length) {
-                mixer = new THREE.AnimationMixer(modelo);
-
-                const clip = clips.find(c =>
-                    /walk|walking|caminar|andar|locomotion/i.test(
-                        c.name
-                    )
-                );
-
-                if (clip) {
-                    accionCaminar = mixer.clipAction(clip);
-
-                    if (!detenido) {
-                        accionCaminar.play();
-                    }
-                }
-            }
+            // No se crea AnimationMixer.
+            // No se ejecutan los clips del archivo GLB.
+            // Los huesos se animan manualmente.
 
             registrarHuesos();
 
             cargado = true;
 
             console.info(
-                `Cliente ${id} cargado: ${config.modelo}`,
-                `Animaciones: ${clips.length}`
+                `Cliente ${id} cargado correctamente: ${config.modelo}`,
+                'Animación manual activada.'
             );
 
-            if (
-                !accionCaminar &&
-                estado !== 'esperando'
-            ) {
-                animarManual(0);
-            }
+            animarManual(0);
         },
 
         progreso => {
@@ -2017,9 +1947,8 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         const dt = Math.min(delta, 0.05);
 
-        if (mixer) {
-            mixer.update(dt);
-        }
+        // No se llama a mixer.update().
+        // Así evitamos ejecutar las animaciones GLB.
 
         tiempoEstado += dt;
         tiempoCompra += dt;
@@ -2085,9 +2014,8 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             );
         }
 
-        if (!accionCaminar || estado === 'examinando') {
-            animarManual(dt);
-        }
+        // Animación manual siempre activa.
+        animarManual(dt);
     }
 
     // ========================================================
@@ -2096,10 +2024,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
     function detenerAnimacion() {
         detenido = true;
-
-        if (accionCaminar) {
-            accionCaminar.stop();
-        }
     }
 
     function reproducirAnimacion() {
@@ -2109,11 +2033,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         if (estado === 'esperando') {
             estado = 'caminando';
-        }
-
-        if (accionCaminar) {
-            accionCaminar.reset();
-            accionCaminar.play();
         }
 
         if (estado === 'caminando') {
@@ -2196,14 +2115,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         liberarReserva();
 
         clientesActivos.delete(api);
-
-        if (mixer) {
-            mixer.stopAllAction();
-
-            if (modelo) {
-                mixer.uncacheRoot(modelo);
-            }
-        }
 
         scene.remove(grupo);
         grupo.clear();
