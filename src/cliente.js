@@ -24,6 +24,8 @@ const CONFIG_BASE = {
     tiempoSeleccionProducto: 2.5,
     tiempoEntreProductos: 1.5,
 
+    maximoProductos: 3,
+
     radioColision: 0.65,
 
     limiteX: 29,
@@ -109,13 +111,10 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     let productoObjetivo = null;
     let productoEnMano = null;
 
-    let listaProductos = [];
-    let indiceProducto = 0;
-
     let animacionTiempo = 0;
 
-    const direccion = new THREE.Vector3();
-    const objetivoMovimiento = new THREE.Vector3();
+    let probabilidadEvaluada = false;
+    let debeComprar = false;
 
     const huesos = {};
 
@@ -123,10 +122,12 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     let accionCaminar = null;
     let accionReposo = null;
 
-    const relojAnimacion = new THREE.Clock();
-
     const provisional = new THREE.Group();
     grupo.add(provisional);
+
+    // ========================================================
+    // MATERIALES Y MODELO PROVISIONAL
+    // ========================================================
 
     function crearMaterial(color, roughness = 0.8) {
         return new THREE.MeshStandardMaterial({
@@ -188,6 +189,10 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         cargado = true;
     }
 
+    // ========================================================
+    // CARGAR GLB
+    // ========================================================
+
     function cargarModelo() {
         loader.load(
             config.modelo,
@@ -226,7 +231,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
                     mixer = new THREE.AnimationMixer(modelo);
 
                     const caminar = gltf.animations.find(a =>
-                        /walk|caminar|walking/i.test(a.name)
+                        /walk|caminar|walking|run/i.test(a.name)
                     );
 
                     const reposo = gltf.animations.find(a =>
@@ -244,6 +249,8 @@ export function crearClienteSupermercado(scene, opciones = {}) {
                 }
 
                 cargado = true;
+
+                console.info(`[CLIENTE] Modelo cargado: ${config.modelo}`);
             },
 
             undefined,
@@ -261,14 +268,24 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         );
     }
 
+    // ========================================================
+    // ANIMACIÓN
+    // ========================================================
+
     function animarCaminar(activo) {
         if (accionCaminar && accionReposo) {
             if (activo) {
                 accionReposo.stop();
-                accionCaminar.reset().play();
+
+                if (!accionCaminar.isRunning()) {
+                    accionCaminar.reset().play();
+                }
             } else {
                 accionCaminar.stop();
-                accionReposo.reset().play();
+
+                if (!accionReposo.isRunning()) {
+                    accionReposo.reset().play();
+                }
             }
 
             return;
@@ -276,21 +293,10 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         const fase = animacionTiempo * 7;
 
-        const piernaIzquierda = provisional.getObjectByName(
-            'PIERNA_IZQUIERDA'
-        );
-
-        const piernaDerecha = provisional.getObjectByName(
-            'PIERNA_DERECHA'
-        );
-
-        const brazoIzquierdo = provisional.getObjectByName(
-            'BRAZO_IZQUIERDO'
-        );
-
-        const brazoDerecho = provisional.getObjectByName(
-            'BRAZO_DERECHO'
-        );
+        const piernaIzquierda = provisional.getObjectByName('PIERNA_IZQUIERDA');
+        const piernaDerecha = provisional.getObjectByName('PIERNA_DERECHA');
+        const brazoIzquierdo = provisional.getObjectByName('BRAZO_IZQUIERDO');
+        const brazoDerecho = provisional.getObjectByName('BRAZO_DERECHO');
 
         if (activo) {
             if (piernaIzquierda) {
@@ -316,6 +322,10 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         }
     }
 
+    // ========================================================
+    // DETECTAR PRODUCTOS
+    // ========================================================
+
     function obtenerRaizProducto(objeto) {
         let actual = objeto;
 
@@ -325,6 +335,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             actual.parent.name !== 'PRODUCTOS_SUPERMERCADO'
         ) {
             if (
+                actual.userData?.esUnidadProducto === true ||
                 actual.userData?.codigo ||
                 actual.userData?.nombre
             ) {
@@ -380,36 +391,102 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             }
 
             encontrados.add(raiz.uuid);
-
             resultado.push(raiz);
         }
 
+        const contenedor = Array.isArray(config.productos)
+            ? null
+            : config.productos?.isObject3D
+                ? config.productos
+                : scene.getObjectByName('PRODUCTOS_SUPERMERCADO');
+
         if (Array.isArray(config.productos)) {
             for (const producto of config.productos) {
-                if (producto?.isObject3D) {
-                    agregar(producto);
-                } else if (producto?.objeto?.isObject3D) {
-                    agregar(producto.objeto);
-                }
+                agregar(producto?.objeto || producto);
             }
-        } else if (config.productos?.isObject3D) {
-            config.productos.traverse(agregar);
-        } else {
-            const contenedor = scene.getObjectByName(
-                'PRODUCTOS_SUPERMERCADO'
-            );
-
-            if (contenedor) {
-                contenedor.traverse(agregar);
-            } else {
-                scene.traverse(agregar);
-            }
+        } else if (contenedor) {
+            contenedor.traverse(agregar);
         }
 
         return resultado;
     }
 
+    // ========================================================
+    // MOVIMIENTO
+    // ========================================================
+
+    function establecerDestino(punto) {
+        if (!punto) return;
+
+        destino = new THREE.Vector3(
+            punto.x,
+            0,
+            punto.z
+        );
+    }
+
+    function moverHaciaDestino(delta) {
+        if (!destino) return true;
+
+        const dx = destino.x - grupo.position.x;
+        const dz = destino.z - grupo.position.z;
+
+        const distancia = Math.hypot(dx, dz);
+
+        if (distancia < 0.16) {
+            grupo.position.x = destino.x;
+            grupo.position.z = destino.z;
+
+            animarCaminar(false);
+
+            return true;
+        }
+
+        const avance = Math.min(distancia, velocidad * delta);
+
+        grupo.position.x += dx / distancia * avance;
+        grupo.position.z += dz / distancia * avance;
+
+        grupo.position.x = THREE.MathUtils.clamp(
+            grupo.position.x,
+            -config.limiteX,
+            config.limiteX
+        );
+
+        grupo.position.z = THREE.MathUtils.clamp(
+            grupo.position.z,
+            config.limiteZMin,
+            config.limiteZMax
+        );
+
+        grupo.rotation.y = Math.atan2(dx, dz);
+
+        animacionTiempo += delta;
+
+        animarCaminar(true);
+
+        return false;
+    }
+
+    // ========================================================
+    // PRODUCTOS Y RESERVAS
+    // ========================================================
+
+    function liberarReservaProducto() {
+        if (!productoObjetivo) return;
+
+        productosReservadosGlobal.delete(productoObjetivo.uuid);
+
+        productoObjetivo = null;
+    }
+
     function buscarProducto() {
+        if (compras.length >= config.maximoProductos) {
+            estado = estados.ESPERANDO;
+            tiempoEstado = 0;
+            return;
+        }
+
         const disponibles = listarProductosDisponibles();
 
         if (!disponibles.length) {
@@ -453,73 +530,17 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             z: posicion.z + 1.1
         });
 
-        estado = estados.ACERcANDO;
-    }
-
-    function establecerDestino(punto) {
-        if (!punto) return;
-
-        destino = new THREE.Vector3(
-            punto.x,
-            0,
-            punto.z
-        );
-    }
-
-    function moverHaciaDestino(delta) {
-        if (!destino) return true;
-
-        const dx = destino.x - grupo.position.x;
-        const dz = destino.z - grupo.position.z;
-
-        const distancia = Math.sqrt(dx * dx + dz * dz);
-
-        if (distancia < 0.16) {
-            grupo.position.x = destino.x;
-            grupo.position.z = destino.z;
-
-            animarCaminar(false);
-
-            return true;
-        }
-
-        const avance = Math.min(
-            distancia,
-            velocidad * delta
-        );
-
-        grupo.position.x += dx / distancia * avance;
-        grupo.position.z += dz / distancia * avance;
-
-        const angulo = Math.atan2(dx, dz);
-
-        grupo.rotation.y = angulo;
-
-        animacionTiempo += delta;
-
-        animarCaminar(true);
-
-        return false;
-    }
-
-    function liberarReservaProducto() {
-        if (!productoObjetivo) return;
-
-        productosReservadosGlobal.delete(
-            productoObjetivo.uuid
-        );
-
-        productoObjetivo = null;
+        estado = estados.ACERCANDO;
     }
 
     function recogerProducto() {
         if (!productoObjetivo || eliminado) {
+            liberarReservaProducto();
             estado = estados.BUSCANDO;
             return;
         }
 
         const objeto = productoObjetivo;
-
         const datos = objeto.userData || {};
 
         const registro = {
@@ -541,7 +562,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         const agregado = carrito.agregarProducto(registro);
 
-        if (!agregado) {
+        if (agregado === false) {
             liberarReservaProducto();
             estado = estados.ESPERANDO;
             return;
@@ -564,11 +585,13 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             config.alComprar(registro, api);
         }
 
-        indiceProducto++;
-
         estado = estados.ESPERANDO;
         tiempoEstado = 0;
     }
+
+    // ========================================================
+    // COMPRAS
+    // ========================================================
 
     function actualizarCompra(delta) {
         if (estado === estados.BUSCANDO) {
@@ -576,7 +599,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             return;
         }
 
-        if (estado === estados.ACERcANDO) {
+        if (estado === estados.ACERCANDO) {
             if (!productoObjetivo) {
                 estado = estados.BUSCANDO;
                 return;
@@ -607,7 +630,21 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             tiempoEstado += delta;
 
             if (tiempoEstado >= config.tiempoSeleccionProducto) {
-                recogerProducto();
+                if (!probabilidadEvaluada) {
+                    probabilidadEvaluada = true;
+
+                    debeComprar =
+                        Math.random() <= config.probabilidadCompra;
+                }
+
+                if (debeComprar) {
+                    recogerProducto();
+                } else {
+                    liberarReservaProducto();
+
+                    estado = estados.ESPERANDO;
+                    tiempoEstado = 0;
+                }
             }
 
             return;
@@ -617,11 +654,23 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             tiempoEstado += delta;
 
             if (tiempoEstado >= config.tiempoEntreProductos) {
+                if (compras.length >= config.maximoProductos) {
+                    estado = estados.BUSCANDO;
+                    return;
+                }
+
+                probabilidadEvaluada = false;
+                debeComprar = false;
+
                 estado = estados.BUSCANDO;
                 tiempoEstado = 0;
             }
         }
     }
+
+    // ========================================================
+    // RUTAS
+    // ========================================================
 
     function establecerRuta(nuevaRuta, repetir = config.repetirRuta) {
         ruta = Array.isArray(nuevaRuta)
@@ -632,8 +681,9 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             : [];
 
         indiceRuta = 0;
-
         config.repetirRuta = repetir;
+
+        destino = null;
 
         estado = ruta.length
             ? estados.RUTA
@@ -642,44 +692,52 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
     function actualizarRuta(delta) {
         if (!ruta.length) {
-            estado = estados.BUSCANDO;
+            if (estado === estados.ENTRANDO) {
+                finalizarEntrada();
+            } else if (estado === estados.REGRESANDO) {
+                finalizarRegreso();
+            } else {
+                estado = estados.BUSCANDO;
+            }
+
             return;
         }
 
-        const punto = ruta[indiceRuta];
-
-        establecerDestino(punto);
+        if (!destino) {
+            establecerDestino(ruta[indiceRuta]);
+        }
 
         if (moverHaciaDestino(delta)) {
             indiceRuta++;
+            destino = null;
 
             if (indiceRuta >= ruta.length) {
                 if (config.repetirRuta) {
                     indiceRuta = 0;
                 } else {
                     ruta = [];
-                    estado = estados.BUSCANDO;
+                    indiceRuta = 0;
+
+                    if (estado === estados.ENTRANDO) {
+                        finalizarEntrada();
+                    } else if (estado === estados.REGRESANDO) {
+                        finalizarRegreso();
+                    } else {
+                        estado = estados.BUSCANDO;
+                    }
                 }
             }
         }
     }
 
+    // ========================================================
+    // ENTRADA DESDE VEHÍCULO
+    // ========================================================
+
     function iniciarDesdeVehiculo(posicionEntrada, plaza) {
-        if (eliminado) return;
+        if (eliminado || !posicionEntrada || !plaza) return;
 
-        plazaVehiculo = plaza;
-
-        estado = estados.ENTRANDO;
-        entro = false;
-
-        const puntos = [
-            { x: plaza.x, z: plaza.z + 5 },
-            { x: plaza.x, z: 78 },
-            { x: 0, z: 78 },
-            { x: 0, z: 83 },
-            { x: 0, z: 32 },
-            { x: 0, z: 26 }
-        ];
+        plazaVehiculo = { ...plaza };
 
         grupo.position.set(
             posicionEntrada.x,
@@ -687,15 +745,22 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             posicionEntrada.z
         );
 
-        establecerRuta(puntos, false);
+        entro = false;
+
+        establecerRuta([
+            { x: plaza.x, z: Math.min(27, plaza.z - 2) },
+            { x: plaza.x, z: 27 },
+            { x: 0, z: 26 }
+        ], false);
 
         estado = estados.ENTRANDO;
     }
 
     function finalizarEntrada() {
-        entro = true;
+        if (entro) return;
 
-        grupo.position.set(0, 0, 26);
+        entro = true;
+        destino = null;
 
         if (typeof config.alEntrar === 'function') {
             config.alEntrar(api);
@@ -705,8 +770,14 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         tiempoEstado = 0;
     }
 
+    // ========================================================
+    // PAGO
+    // ========================================================
+
     function iniciarPago(posicionCaja, callback) {
         if (eliminado) return;
+
+        liberarReservaProducto();
 
         callbackPago = callback || null;
 
@@ -719,47 +790,71 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     }
 
     function completarPago() {
+        if (pagoConfirmado) return;
+
         estado = estados.PAGANDO;
+
         pagoConfirmado = true;
         compraConfirmada = true;
 
         const resumen = obtenerResumenCompra();
-
-        if (config.carrito?.confirmarVenta) {
-            config.carrito.confirmarVenta();
-        }
 
         if (typeof config.alPagar === 'function') {
             config.alPagar(resumen, api);
         }
 
         const callback = callbackPago;
+
         callbackPago = null;
 
         if (callback) callback(resumen);
     }
 
-    function iniciarRegresoVehiculo(plaza, callback) {
-        if (eliminado) return;
+    // ========================================================
+    // REGRESO AL VEHÍCULO
+    // ========================================================
 
-        plazaVehiculo = plaza;
+    function iniciarRegresoVehiculo(plaza, callback) {
+        if (eliminado || !plaza) return;
+
+        plazaVehiculo = { ...plaza };
         callbackRegreso = callback || null;
+
+        liberarReservaProducto();
 
         estado = estados.REGRESANDO;
 
-        ruta = [
+        establecerRuta([
             { x: 0, z: 25.5 },
-            { x: 0, z: 30.5 },
-            { x: 0, z: 34 },
-            { x: 0, z: 78 },
-            { x: 0, z: 83 },
-            { x: plaza.x, z: 83 },
-            { x: plaza.x, z: plaza.z + 5 },
+            { x: 0, z: 27 },
+            { x: 0, z: 29 },
+            { x: 0, z: 27 },
+            { x: plaza.x, z: 27 },
+            { x: plaza.x, z: Math.max(29, plaza.z - 2) },
             { x: plaza.x, z: plaza.z }
-        ];
+        ], false);
 
-        indiceRuta = 0;
+        estado = estados.REGRESANDO;
     }
+
+    function finalizarRegreso() {
+        estado = estados.FINALIZADO;
+
+        destino = null;
+
+        const callback = callbackRegreso;
+        callbackRegreso = null;
+
+        if (callback) callback(api);
+
+        if (typeof config.alFinalizar === 'function') {
+            config.alFinalizar(api);
+        }
+    }
+
+    // ========================================================
+    // DATOS DE COMPRA
+    // ========================================================
 
     function obtenerCompras() {
         return [...compras];
@@ -785,18 +880,55 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         return obtenerResumenCompra();
     }
 
-    function finalizarRegreso() {
-        estado = estados.FINALIZADO;
+    // ========================================================
+    // CONFIGURAR COMPRAS
+    // ========================================================
 
-        const callback = callbackRegreso;
-        callbackRegreso = null;
-
-        if (callback) callback(api);
-
-        if (typeof config.alFinalizar === 'function') {
-            config.alFinalizar(api);
+    function configurarCompras(opciones = {}) {
+        if (opciones.productos) {
+            config.productos = opciones.productos;
         }
+
+        if (opciones.carrito) {
+            config.carrito = opciones.carrito;
+        }
+
+        if (opciones.probabilidadCompra !== undefined) {
+            config.probabilidadCompra = THREE.MathUtils.clamp(
+                opciones.probabilidadCompra,
+                0,
+                1
+            );
+        }
+
+        if (opciones.maximoProductos !== undefined) {
+            config.maximoProductos = Math.max(
+                1,
+                Math.floor(opciones.maximoProductos)
+            );
+        }
+
+        estado = estados.BUSCANDO;
+        tiempoEstado = 0;
     }
+
+    // ========================================================
+    // POSICIÓN
+    // ========================================================
+
+    function establecerPosicion(posicion) {
+        if (!posicion) return;
+
+        grupo.position.set(
+            posicion.x ?? grupo.position.x,
+            posicion.y ?? grupo.position.y,
+            posicion.z ?? grupo.position.z
+        );
+    }
+
+    // ========================================================
+    // ACTUALIZACIÓN
+    // ========================================================
 
     function actualizar(delta = 0.016) {
         if (eliminado) return;
@@ -810,26 +942,21 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         switch (estado) {
             case estados.INACTIVO:
             case estados.FINALIZADO:
+            case estados.PAGANDO:
                 animarCaminar(false);
                 break;
 
             case estados.ENTRANDO:
+            case estados.RUTA:
+            case estados.REGRESANDO:
                 actualizarRuta(dt);
-
-                if (estado === estados.BUSCANDO) {
-                    finalizarEntrada();
-                }
                 break;
 
             case estados.BUSCANDO:
-            case estados.ACERcANDO:
+            case estados.ACERCANDO:
             case estados.RECOGIENDO:
             case estados.ESPERANDO:
                 actualizarCompra(dt);
-                break;
-
-            case estados.RUTA:
-                actualizarRuta(dt);
                 break;
 
             case estados.CAJA:
@@ -837,43 +964,12 @@ export function crearClienteSupermercado(scene, opciones = {}) {
                     completarPago();
                 }
                 break;
-
-            case estados.PAGANDO:
-                animarCaminar(false);
-                break;
-
-            case estados.REGRESANDO:
-                actualizarRuta(dt);
-
-                if (estado === estados.BUSCANDO) {
-                    finalizarRegreso();
-                }
-                break;
         }
     }
 
-    function configurarCompras(opciones = {}) {
-        if (opciones.productos) {
-            config.productos = opciones.productos;
-        }
-
-        if (opciones.carrito) {
-            config.carrito = opciones.carrito;
-        }
-
-        estado = estados.BUSCANDO;
-        tiempoEstado = 0;
-    }
-
-    function establecerPosicion(posicion) {
-        if (!posicion) return;
-
-        grupo.position.set(
-            posicion.x ?? grupo.position.x,
-            posicion.y ?? grupo.position.y,
-            posicion.z ?? grupo.position.z
-        );
-    }
+    // ========================================================
+    // ELIMINAR
+    // ========================================================
 
     function eliminar() {
         if (eliminado) return;
@@ -896,10 +992,14 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             }
         });
 
+        mixer?.stopAllAction();
+
         compras.length = 0;
     }
 
-    cargarModelo();
+    // ========================================================
+    // API PÚBLICA
+    // ========================================================
 
     const api = {
         grupo,
@@ -965,6 +1065,8 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             return estado;
         }
     };
+
+    cargarModelo();
 
     return api;
 }
