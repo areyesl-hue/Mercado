@@ -438,8 +438,16 @@ function crearEstructuraSupermercado() {
 // CONTROLES
 // ============================================================
 
+function limpiarTeclas() {
+    for (const tecla of Object.keys(teclas)) {
+        teclas[tecla] = false;
+    }
+}
+
 function crearControles() {
     controles = new PointerLockControls(camara, renderizador.domElement);
+
+    controles.addEventListener('unlock', limpiarTeclas);
 
     renderizador.domElement.addEventListener('click', () => {
         if (
@@ -639,7 +647,7 @@ function crearClienteParaVehiculo(datos) {
                 }
 
                 visita.cliente.configurarCompras?.({
-                    productos: productosLacteis,
+                    productos: productosLacteos,
                     carrito: visita.carrito
                 });
             }
@@ -1249,7 +1257,10 @@ function cambiarVistaSeguridad(numero) {
         quaternionJugadorGuardado = camara.quaternion.clone();
     }
 
+    limpiarTeclas();
+    velocidadVertical = 0;
     vistaSeguridad = numero;
+
     controles.unlock();
 
     camara.position.set(
@@ -1283,6 +1294,7 @@ function volverAlJugador() {
         quaternionJugadorGuardado = null;
     }
 
+    limpiarTeclas();
     actualizarEstadoVista();
 }
 
@@ -1670,6 +1682,13 @@ function actualizarHUD() {
 
 function configurarEventos() {
     window.addEventListener('keydown', evento => {
+        if (
+            evento.code === 'Space' ||
+            evento.code.startsWith('Arrow')
+        ) {
+            evento.preventDefault();
+        }
+
         teclas[evento.code] = true;
 
         if (
@@ -1681,7 +1700,6 @@ function configurarEventos() {
         ) {
             velocidadVertical = CONFIG.velocidadSalto;
             jugadorEnSuelo = false;
-            evento.preventDefault();
         }
 
         if (/^Digit[1-9]$/.test(evento.code)) {
@@ -1698,23 +1716,16 @@ function configurarEventos() {
         ) {
             volverAlJugador();
         }
-
-        if (
-            evento.code === 'Space' ||
-            evento.code.startsWith('Arrow')
-        ) {
-            evento.preventDefault();
-        }
     });
 
     window.addEventListener('keyup', evento => {
         teclas[evento.code] = false;
     });
 
-    window.addEventListener('blur', () => {
-        for (const tecla of Object.keys(teclas)) {
-            teclas[tecla] = false;
-        }
+    window.addEventListener('blur', limpiarTeclas);
+
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) limpiarTeclas();
     });
 
     window.addEventListener('resize', () => {
