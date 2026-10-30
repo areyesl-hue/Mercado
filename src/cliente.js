@@ -1,4 +1,3 @@
-
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
@@ -32,17 +31,12 @@ const CONFIG_BASE = {
     productos: [],
     carrito: null,
 
-    // Orientación del modelo GLB.
     correccionRotacion: 0,
-
-    // Separación del personaje respecto al producto.
     distanciaFrenteProducto: 1.05,
 
-    // Animación de recogida.
     tiempoAlcanzarProducto: 0.65,
     tiempoGuardarProducto: 0.85,
 
-    // Distribución de compras.
     distanciaMaximaBusqueda: 40,
     evitarZonaAnterior: true,
 
@@ -608,9 +602,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
     function obtenerLimitesMovimiento() {
 
-        // En entrada, regreso y salida se permite caminar
-        // por todo el estacionamiento.
-
         if (
             estado === estados.ENTRANDO ||
             estado === estados.REGRESANDO
@@ -786,9 +777,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         if (!candidatos.length) return null;
 
-        // Se agrupan candidatos por zona para evitar
-        // que todos los clientes visiten el mismo rack.
-
         const zonas = new Map();
 
         for (const candidato of candidatos) {
@@ -900,7 +888,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         productoObjetivo.userData.reservado = true;
 
-        // El cliente se coloca frente al producto.
         const posicion = elegido.posicion;
 
         const dx = grupo.position.x - posicion.x;
@@ -954,7 +941,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         const fase = Math.sin(progreso * Math.PI);
 
-        // Extender el brazo hacia el producto.
         animarArticulaciones(
             articulaciones.brazoDerecho,
             -fase * 1.0
@@ -969,7 +955,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             brazoProvisional.rotation.z = -fase * 0.25;
         }
 
-        // El personaje inclina ligeramente el torso.
         if (modeloCargado) {
             modeloCargado.rotation.x = -fase * 0.06;
         }
@@ -1038,7 +1023,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             visible: objeto.visible
         };
 
-        // Se conserva la posición mundial del producto.
         scene.attach(objeto);
 
         productoEnMano = objeto;
@@ -1072,7 +1056,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         const posicionMano = new THREE.Vector3();
 
-        // Mano derecha aproximada en el espacio del personaje.
         const manoLocal = new THREE.Vector3(
             0.28,
             1.05,
@@ -1081,10 +1064,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         posicionMano.copy(manoLocal);
         grupo.localToWorld(posicionMano);
-
-        // En la segunda mitad del movimiento se dirige
-        // visualmente el producto hacia el carrito.
-        const posicionActual = objeto.position.clone();
 
         const destinoVisual = posicionMano.clone();
 
@@ -1106,10 +1085,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             );
         }
 
-        const inicio = productoOriginal.posicion.clone();
-
-        // La posición original almacenada es local del antiguo padre.
-        // La posición inicial mundial se obtiene al iniciar el movimiento.
         if (!productoOriginal.posicionMundo) {
 
             productoOriginal.posicionMundo =
@@ -1222,8 +1197,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             return;
         }
 
-        // Se restaura la escala original antes de que el carrito
-        // gestione el producto y lo coloque en su cesta.
         objeto.scale.copy(productoOriginal.escala);
 
         const agregado = carrito.agregarProducto(registro);
@@ -1465,25 +1438,63 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         entro = false;
         callbackEntradaEjecutado = false;
 
-        // El carrito se crea desde el inicio del recorrido.
         ejecutarCallbackEntrada();
 
+        // =================================================
+        // RECORRIDO DE ENTRADA
+        // =================================================
+        // El cliente sale de su vehículo y se dirige al
+        // acceso peatonal central del supermercado.
+        //
+        // Primero avanza por el estacionamiento.
+        // Después se alinea con la puerta.
+        // Finalmente cruza hacia el interior.
+        //
+        // Frente del supermercado: Z positivo.
+        // Puerta principal: X = 0.
+        // =================================================
+
         establecerRuta([
+            // Separarse del vehículo.
             {
                 x: posicionEntrada.x,
-                z: posicionEntrada.z + 0.7
+                z: posicionEntrada.z + 1
             },
+
+            // Avanzar hacia la zona frontal.
             {
-                x: plaza.x,
-                z: Math.min(27, plaza.z - 2)
+                x: posicionEntrada.x,
+                z: 45
             },
+
+            // Acercarse a la fachada.
             {
-                x: plaza.x,
-                z: 27
+                x: posicionEntrada.x,
+                z: 34
             },
+
+            // Alinear el recorrido con la puerta.
+            {
+                x: 0,
+                z: 31
+            },
+
+            // Llegar justo frente a la entrada.
+            {
+                x: 0,
+                z: 29
+            },
+
+            // Cruzar la puerta principal.
             {
                 x: 0,
                 z: 26
+            },
+
+            // Avanzar dentro del supermercado.
+            {
+                x: 0,
+                z: 23
             }
         ], false);
 
@@ -1565,21 +1576,53 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         liberarReservaProducto();
 
-        estado = estados.REGRESANDO;
-
         destino = null;
 
-        // Salida por la entrada principal.
-        // Después se dirige hacia el estacionamiento.
+        // =================================================
+        // RECORRIDO DE SALIDA
+        // =================================================
+        // El cliente sale por la misma puerta principal.
+        // Después cruza el estacionamiento hasta su plaza.
+        // =================================================
+
         establecerRuta([
-            { x: 0, z: 25.5 },
-            { x: 0, z: 27 },
-            { x: 0, z: 29 },
-            { x: plaza.x, z: 29 },
+            // Dirigirse hacia la zona frontal interior.
+            {
+                x: 0,
+                z: 23
+            },
+
+            // Llegar a la puerta.
+            {
+                x: 0,
+                z: 26
+            },
+
+            // Cruzar hacia el exterior.
+            {
+                x: 0,
+                z: 29
+            },
+
+            // Avanzar hacia el estacionamiento.
+            {
+                x: 0,
+                z: 34
+            },
+
+            // Alinear con la columna de su plaza.
             {
                 x: plaza.x,
-                z: Math.max(29, plaza.z - 2)
+                z: 40
             },
+
+            // Acercarse a su vehículo.
+            {
+                x: plaza.x,
+                z: 45
+            },
+
+            // Llegar al cajón.
             {
                 x: plaza.x,
                 z: plaza.z
@@ -1781,8 +1824,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         liberarReservaProducto();
 
-        // Si el cliente estaba animando un producto,
-        // se devuelve al lugar original.
         if (productoEnMano && productoOriginal) {
             restaurarProductoOriginal();
         }
@@ -1794,8 +1835,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         grupo.removeFromParent();
 
-        // No destruir materiales o geometrías del producto
-        // ni recursos que puedan ser compartidos por otros modelos.
         grupo.traverse(objeto => {
 
             if (!objeto.isMesh) return;
