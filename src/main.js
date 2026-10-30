@@ -1,3 +1,4 @@
+
 import * as THREE from 'three';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 
@@ -40,7 +41,8 @@ const CONFIG = {
     distanciaRecoger: 2,
     pausaEntreCompras: 1.8,
 
-    tiempoCompraAuto: 32,
+    tiempoCompraAuto: 60,
+    maximoProductosCliente: 3,
 
     posicionCaja: { x: 0, z: 20 },
 
@@ -50,7 +52,6 @@ const CONFIG = {
 
 // ============================================================
 // RUTAS DE CLIENTES
-// SE CONSERVAN PARA LOS VISITANTES QUE LLEGAN EN VEHÍCULOS
 // ============================================================
 
 const CONFIG_CLIENTES = [
@@ -296,7 +297,6 @@ function iniciar() {
     crearInterfaz();
     crearEstructuraSupermercado();
 
-    // Clientes independientes desactivados.
     crearLadrones();
     crearSistemaVehiculos();
 
@@ -583,6 +583,7 @@ function crearClienteParaVehiculo(datos) {
             tiempoExaminar: CONFIG.tiempoExaminar,
             distanciaRecoger: CONFIG.distanciaRecoger,
             pausaEntreCompras: CONFIG.pausaEntreCompras,
+            maximoProductos: CONFIG.maximoProductosCliente,
 
             distanciaDestino: 0.8,
             radioColision: 0.42,
@@ -730,10 +731,11 @@ function actualizarEntidades(delta) {
         carrito.actualizar?.(delta);
     }
 
-    if (typeof sistemaVehiculos?.actualizar === 'function') {
-        sistemaVehiculos.actualizar(delta);
-    } else if (typeof sistemaVehiculos?.actualizarCompleto === 'function') {
+    // Se prioriza actualizarCompleto para procesar las llegadas iniciales.
+    if (typeof sistemaVehiculos?.actualizarCompleto === 'function') {
         sistemaVehiculos.actualizarCompleto(delta);
+    } else if (typeof sistemaVehiculos?.actualizar === 'function') {
+        sistemaVehiculos.actualizar(delta);
     }
 
     actualizarFasesVisitantes(delta);
@@ -763,15 +765,34 @@ function actualizarLista(lista, delta) {
 
 function actualizarFasesVisitantes(delta) {
     for (const visita of visitantesPorVehiculo.values()) {
-        if (!visita.cliente || visita.cliente.eliminado) continue;
+        const cliente = visita.cliente;
+
+        if (!cliente || cliente.eliminado) continue;
         if (visita.fase !== 'comprando') continue;
+        if (visita.pagoSolicitado) continue;
 
         visita.tiempo += delta;
 
-        if (
-            visita.tiempo < CONFIG.tiempoCompraAuto ||
-            visita.pagoSolicitado
-        ) continue;
+        const compras = cliente.obtenerCompras?.() ?? [];
+        const estado = String(cliente.estado ?? '').toLowerCase();
+
+        const maximoComprado =
+            compras.length >= CONFIG.maximoProductosCliente;
+
+        const tiempoAgotado =
+            visita.tiempo >= CONFIG.tiempoCompraAuto;
+
+        const recogiendoProducto = [
+            'acercando',
+            'recogiendo',
+            'acercandoproducto',
+            'recogiendoproducto'
+        ].includes(estado);
+
+        // No iniciar el pago mientras el cliente recoge un producto.
+        if (recogiendoProducto) continue;
+
+        if (!maximoComprado && !tiempoAgotado) continue;
 
         visita.pagoSolicitado = true;
         visita.fase = 'caja';
@@ -922,6 +943,7 @@ function actualizarJugador(delta) {
 
     if (movimientoJugador.lengthSq() > 0) {
         movimientoJugador.normalize();
+
         camara.position.addScaledVector(
             movimientoJugador,
             velocidad * delta
