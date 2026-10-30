@@ -1,80 +1,137 @@
+
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-const loader = new GLTFLoader();
+// ============================================================
+// CLIENTE DEL SUPERMERCADO
+// Archivo: cliente.js
+// Compatible con Three.js 0.180+
+//
+// Funciones:
+// - Carga de Cliente1.glb.
+// - Movimiento con búsqueda de caminos A*.
+// - Evita muebles y obstáculos.
+// - Búsqueda, recogida y devolución de productos.
+// - Integración opcional con carrito.
+// - Entrada desde vehículo y regreso.
+// - Pago en cajas.
+// - Animación procedural si el GLB no tiene animaciones.
+//
+// MEDIDAS DEL MERCADO:
+// X: -32 a 32
+// Z: -29 a 29
+// Entrada: Z positivo
+// Estacionamiento: Z mayor a 29
+// ============================================================
 
-const productosCompradosGlobal = new Set();
-const productosReservadosGlobal = new Map();
+const ESTADOS = {
+    INACTIVO: 'INACTIVO',
+    ENTRANDO: 'ENTRANDO',
+    BUSCANDO: 'BUSCANDO',
+    ACERCANDO: 'ACERCANDO',
+    RECOGIENDO: 'RECOGIENDO',
+    GUARDANDO: 'GUARDANDO',
+    ESPERANDO: 'ESPERANDO',
+    RUTA: 'RUTA',
+    CAJA: 'CAJA',
+    PAGANDO: 'PAGANDO',
+    REGRESANDO: 'REGRESANDO',
+    FINALIZADO: 'FINALIZADO'
+};
 
 const CONFIG_BASE = {
     modelo: '/modelos/Cliente1.glb',
 
     posicion: { x: 0, y: 0, z: 20 },
-    altura: 1.75,
     escala: 1,
+    altura: 1.75,
+
     velocidad: 1.5,
-
-    repetirRuta: false,
-    inactivo: false,
-
-    probabilidadCompra: 0.85,
-    distanciaProducto: 1.35,
-    tiempoSeleccionProducto: 2.5,
-    tiempoEntreProductos: 1.5,
-    maximoProductos: 3,
-
-    radioColision: 0.65,
+    velocidadEntrada: 1.8,
+    velocidadRegreso: 1.8,
 
     limiteX: 29,
     limiteZMin: -27,
     limiteZMax: 55,
 
-    ruta: [],
-    productos: [],
+    radioColision: 0.42,
+    margenObstaculos: 0.35,
+    tamanoCelda: 0.75,
+
+    probabilidadCompra: 0.85,
+    distanciaProducto: 1.35,
+    distanciaFrenteProducto: 1.0,
+
+    tiempoSeleccionProducto: 1.5,
+    tiempoRecoger: 0.8,
+    tiempoGuardar: 0.8,
+    tiempoEntreProductos: 1.5,
+    tiempoReintento: 3,
+
+    maximoProductos: 3,
+    distanciaMaximaBusqueda: 40,
+
+    repetirRuta: false,
+    inactivo: false,
+
+    productos: null,
     carrito: null,
+    mobiliario: null,
+    colisiones: null,
+
+    ruta: [],
+
+    posicionCaja: { x: 0, z: 22.5 },
 
     correccionRotacion: 0,
-    distanciaFrenteProducto: 1.05,
-
-    tiempoAlcanzarProducto: 0.65,
-    tiempoGuardarProducto: 0.85,
-
-    distanciaMaximaBusqueda: 40,
-    evitarZonaAnterior: true,
-
-    tiempoReintentoBusqueda: 3,
-    tiempoPaseo: 7,
 
     alEntrar: null,
     alComprar: null,
     alPagar: null,
-    alFinalizar: null
+    alFinalizar: null,
+    alCambiarEstado: null
 };
 
-const estados = {
-    INACTIVO: 'inactivo',
-    ENTRANDO: 'entrandoSupermercado',
-    BUSCANDO: 'buscandoProducto',
-    ACERCANDO: 'acercandoseProducto',
-    RECOGIENDO: 'recogiendoProducto',
-    GUARDANDO: 'guardandoProducto',
-    ESPERANDO: 'esperandoEntreProductos',
-    RUTA: 'recorriendoRuta',
-    PASEANDO: 'paseandoSupermercado',
-    CAJA: 'yendoCaja',
-    PAGANDO: 'pagando',
-    REGRESANDO: 'regresandoVehiculo',
-    FINALIZADO: 'finalizado'
-};
+const loaderGLTF = new GLTFLoader();
 
-// =========================================================
-// CLIENTE
-// =========================================================
+const reservasProductos = new WeakMap();
+let siguienteIdCliente = 1;
+
+// ============================================================
+// FUNCIONES GENERALES
+// ============================================================
+
+function numero(valor, defecto) {
+    return Number.isFinite(valor) ? valor : defecto;
+}
+
+function distanciaXZ(a, b) {
+    return Math.hypot(a.x - b.x, a.z - b.z);
+}
+
+function limitar(valor, minimo, maximo) {
+    return Math.max(minimo, Math.min(maximo, valor));
+}
+
+function punto(x, z) {
+    return { x, z };
+}
+
+function normalizarNombre(nombre) {
+    return String(nombre ?? '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '');
+}
+
+// ============================================================
+// CREACIÓN PRINCIPAL
+// ============================================================
 
 export function crearClienteSupermercado(scene, opciones = {}) {
-
-    if (!scene) {
-        throw new Error('crearClienteSupermercado necesita una escena.');
+    if (!scene?.isScene) {
+        throw new Error(
+            'crearClienteSupermercado necesita una THREE.Scene.'
+        );
     }
 
     const config = {
@@ -82,557 +139,295 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         ...opciones,
         posicion: {
             ...CONFIG_BASE.posicion,
-            ...(opciones.posicion || {})
+            ...(opciones.posicion ?? {})
         }
     };
 
+    const id = siguienteIdCliente++;
+
     const grupo = new THREE.Group();
-    grupo.name = config.id || 'CLIENTE_SUPERMERCADO';
+    grupo.name = `CLIENTE_SUPERMERCADO_${id}`;
 
     grupo.position.set(
         config.posicion.x,
-        config.posicion.y,
+        config.posicion.y ?? 0,
         config.posicion.z
     );
 
-    grupo.scale.setScalar(config.escala);
+    grupo.userData.esCliente = true;
+    grupo.userData.idCliente = id;
+
     scene.add(grupo);
 
-    const provisional = new THREE.Group();
-    provisional.name = 'MODELO_PROVISIONAL_CLIENTE';
-    grupo.add(provisional);
+    let modelo = null;
+    let mixer = null;
+    let accionCaminar = null;
+    let accionReposo = null;
 
-    let eliminado = false;
     let cargado = false;
-    let entro = false;
-    let callbackEntradaEjecutado = false;
-
-    let compraConfirmada = false;
-    let pagoConfirmado = false;
+    let eliminado = false;
+    let detenido = false;
 
     let estado = config.inactivo
-        ? estados.INACTIVO
-        : estados.BUSCANDO;
+        ? ESTADOS.INACTIVO
+        : ESTADOS.BUSCANDO;
 
-    let velocidad = Math.max(0.1, config.velocidad);
-
+    let objetivo = null;
     let ruta = [];
     let indiceRuta = 0;
-    let destino = null;
 
     let tiempoEstado = 0;
-    let animacionTiempo = 0;
-    let tiempoPaseo = 0;
-
-    let plazaVehiculo = null;
-    let callbackRegreso = null;
-    let callbackPago = null;
-
-    let compras = [];
+    let tiempoBusqueda = 0;
+    let tiempoReintento = 0;
 
     let productoObjetivo = null;
     let productoEnMano = null;
     let productoOriginal = null;
 
-    let probabilidadEvaluada = false;
-    let debeComprar = false;
+    let compras = [];
+    let zonasVisitadas = [];
 
-    let mixer = null;
-    let accionCaminar = null;
-    let accionReposo = null;
-
-    let modeloCargado = null;
+    let faseAnimacion = Math.random() * Math.PI * 2;
+    let animacionActiva = false;
 
     const huesos = {};
+    const huesosOriginales = new Map();
 
-    const articulaciones = {
-        piernaIzquierda: [],
-        piernaDerecha: [],
-        brazoIzquierdo: [],
-        brazoDerecho: []
-    };
+    const reloj = new THREE.Clock();
 
-    const rotacionesBase = new Map();
-    const zonasVisitadas = new Set();
+    // --------------------------------------------------------
+    // MATERIALES DEL MODELO PROVISIONAL
+    // --------------------------------------------------------
 
-    let ultimaZona = null;
-    let direccionPaseo = 1;
+    const materialPiel = new THREE.MeshStandardMaterial({
+        color: 0xc99570,
+        roughness: 0.85
+    });
 
-    // Rutas interiores de circulación.
-    // Se utilizan zonas de paso entre las filas de góndolas.
-    const puntosPaseo = [
-        { x: -25, z: 21 },
-        { x: -25, z: 7 },
-        { x: -25, z: -7 },
-        { x: -25, z: -21 },
+    const materialCamisa = new THREE.MeshStandardMaterial({
+        color: 0x2678b8,
+        roughness: 0.85
+    });
 
-        { x: -5, z: -21 },
-        { x: 5, z: -21 },
+    const materialPantalon = new THREE.MeshStandardMaterial({
+        color: 0x293e68,
+        roughness: 0.9
+    });
 
-        { x: 25, z: -21 },
-        { x: 25, z: -7 },
-        { x: 25, z: 7 },
-        { x: 25, z: 21 },
+    const materialZapatos = new THREE.MeshStandardMaterial({
+        color: 0x202020,
+        roughness: 0.9
+    });
 
-        { x: 5, z: 21 },
-        { x: -5, z: 21 },
-
-        { x: 0, z: 7 },
-        { x: 0, z: -7 }
-    ];
-
-    // =====================================================
-    // UTILIDADES
-    // =====================================================
-
-    function distanciaXZ(a, b) {
-        return Math.hypot(a.x - b.x, a.z - b.z);
-    }
-
-    function obtenerPosicionMundo(objeto) {
-        return objeto.getWorldPosition(new THREE.Vector3());
-    }
-
-    function crearMaterial(color) {
-        return new THREE.MeshStandardMaterial({
-            color,
-            roughness: 0.85
-        });
-    }
-
-    function limitarPosicion(punto) {
-        return {
-            x: THREE.MathUtils.clamp(
-                punto.x,
-                -config.limiteX,
-                config.limiteX
-            ),
-            z: THREE.MathUtils.clamp(
-                punto.z,
-                config.limiteZMin,
-                config.limiteZMax
-            )
-        };
-    }
-
-    // =====================================================
+    // --------------------------------------------------------
     // MODELO PROVISIONAL
-    // =====================================================
+    // --------------------------------------------------------
 
     function crearModeloProvisional() {
+        const humano = new THREE.Group();
+        humano.name = 'CLIENTE_PROVISIONAL';
 
-        provisional.clear();
+        const torso = new THREE.Mesh(
+            new THREE.CapsuleGeometry(0.23, 0.48, 3, 8),
+            materialCamisa
+        );
+        torso.position.y = 1.12;
+        humano.add(torso);
 
-        const piel = crearMaterial(0xd7a77c);
-        const camisa = crearMaterial(0x2471a3);
-        const pantalon = crearMaterial(0x263b55);
-        const zapatos = crearMaterial(0x171717);
+        const cabeza = new THREE.Mesh(
+            new THREE.SphereGeometry(0.17, 12, 10),
+            materialPiel
+        );
+        cabeza.position.y = 1.65;
+        humano.add(cabeza);
 
-        function caja(nombre, dimensiones, material, posicion) {
+        const brazos = [];
 
-            const objeto = new THREE.Mesh(
-                new THREE.BoxGeometry(...dimensiones),
-                material
+        for (const lado of [-1, 1]) {
+            const brazo = new THREE.Mesh(
+                new THREE.CapsuleGeometry(0.065, 0.35, 3, 6),
+                materialCamisa
             );
 
-            objeto.name = nombre;
-            objeto.position.set(...posicion);
-            provisional.add(objeto);
+            brazo.position.set(lado * 0.28, 1.16, 0);
+            brazo.rotation.z = lado * -0.12;
+            humano.add(brazo);
+            brazos.push(brazo);
 
-            return objeto;
-        }
-
-        function esfera(nombre, escala, material, posicion) {
-
-            const objeto = new THREE.Mesh(
-                new THREE.SphereGeometry(1, 14, 12),
-                material
+            const pierna = new THREE.Mesh(
+                new THREE.CapsuleGeometry(0.085, 0.43, 3, 6),
+                materialPantalon
             );
 
-            objeto.name = nombre;
-            objeto.scale.set(...escala);
-            objeto.position.set(...posicion);
-            provisional.add(objeto);
+            pierna.position.set(lado * 0.12, 0.48, 0);
+            humano.add(pierna);
 
-            return objeto;
+            const zapato = new THREE.Mesh(
+                new THREE.BoxGeometry(0.17, 0.10, 0.28),
+                materialZapatos
+            );
+
+            zapato.position.set(lado * 0.12, 0.10, 0.06);
+            humano.add(zapato);
         }
 
-        caja('TORSO', [0.42, 0.55, 0.24], camisa, [0, 1.12, 0]);
+        grupo.add(humano);
+        modelo = humano;
 
-        caja(
-            'PIERNA_IZQUIERDA',
-            [0.16, 0.48, 0.18],
-            pantalon,
-            [-0.12, 0.62, 0]
-        );
-
-        caja(
-            'PIERNA_DERECHA',
-            [0.16, 0.48, 0.18],
-            pantalon,
-            [0.12, 0.62, 0]
-        );
-
-        caja(
-            'BRAZO_IZQUIERDO',
-            [0.13, 0.48, 0.13],
-            camisa,
-            [-0.29, 1.1, 0]
-        );
-
-        caja(
-            'BRAZO_DERECHO',
-            [0.13, 0.48, 0.13],
-            camisa,
-            [0.29, 1.1, 0]
-        );
-
-        esfera(
-            'CABEZA',
-            [0.17, 0.19, 0.17],
-            piel,
-            [0, 1.52, 0]
-        );
-
-        caja(
-            'ZAPATO_IZQUIERDO',
-            [0.19, 0.09, 0.29],
-            zapatos,
-            [-0.12, 0.32, 0.045]
-        );
-
-        caja(
-            'ZAPATO_DERECHO',
-            [0.19, 0.09, 0.29],
-            zapatos,
-            [0.12, 0.32, 0.045]
-        );
-
-        articulaciones.piernaIzquierda = [
-            provisional.getObjectByName('PIERNA_IZQUIERDA')
-        ];
-
-        articulaciones.piernaDerecha = [
-            provisional.getObjectByName('PIERNA_DERECHA')
-        ];
-
-        articulaciones.brazoIzquierdo = [
-            provisional.getObjectByName('BRAZO_IZQUIERDO')
-        ];
-
-        articulaciones.brazoDerecho = [
-            provisional.getObjectByName('BRAZO_DERECHO')
-        ];
-
-        cargado = true;
+        humano.userData.brazos = brazos;
     }
 
-    // =====================================================
-    // ANIMACIONES Y HUESOS
-    // =====================================================
+    // --------------------------------------------------------
+    // CARGA DEL GLB
+    // --------------------------------------------------------
 
-    function normalizarNombre(nombre) {
-        return String(nombre || '')
-            .toLowerCase()
-            .replace(/mixamorig/gi, '')
-            .replace(/[^a-z0-9]/g, '');
-    }
+    function detectarHuesos(raiz) {
+        Object.keys(huesos).forEach(k => delete huesos[k]);
+        huesosOriginales.clear();
 
-    function detectarHuesosAnimables() {
+        raiz.traverse(objeto => {
+            if (!objeto.isBone) return;
 
-        for (const lista of Object.values(articulaciones)) {
-            lista.length = 0;
-        }
+            const nombre = normalizarNombre(objeto.name);
+            huesos[nombre] = objeto;
 
-        function buscar(lado, patrones) {
-
-            for (const [nombre, hueso] of Object.entries(huesos)) {
-
-                const n = normalizarNombre(nombre);
-
-                const esIzquierdo =
-                    /left|izquierdo|izquierda/.test(n);
-
-                const esDerecho =
-                    /right|derecho|derecha/.test(n);
-
-                if (lado === 'izquierdo' && !esIzquierdo) continue;
-                if (lado === 'derecho' && !esDerecho) continue;
-
-                if (patrones.some(p => p.test(n))) {
-                    return hueso;
-                }
-            }
-
-            return null;
-        }
-
-        const patronesPierna = [
-            /upleg/,
-            /upperleg/,
-            /thigh/,
-            /lowerleg/,
-            /calf/,
-            /shin/
-        ];
-
-        const patronesBrazo = [
-            /uparm/,
-            /upperarm/,
-            /lowerarm/,
-            /forearm/,
-            /shoulder/
-        ];
-
-        const piernaI = buscar('izquierdo', patronesPierna);
-        const piernaD = buscar('derecho', patronesPierna);
-
-        const brazoI = buscar('izquierdo', patronesBrazo);
-        const brazoD = buscar('derecho', patronesBrazo);
-
-        if (piernaI) articulaciones.piernaIzquierda.push(piernaI);
-        if (piernaD) articulaciones.piernaDerecha.push(piernaD);
-
-        if (brazoI) articulaciones.brazoIzquierdo.push(brazoI);
-        if (brazoD) articulaciones.brazoDerecho.push(brazoD);
-
-        for (const lista of Object.values(articulaciones)) {
-            for (const hueso of lista) {
-                if (!rotacionesBase.has(hueso)) {
-                    rotacionesBase.set(
-                        hueso,
-                        hueso.rotation.clone()
-                    );
-                }
-            }
-        }
-
-        console.info('[CLIENTE] Huesos detectados:', {
-            piernas:
-                articulaciones.piernaIzquierda.length +
-                articulaciones.piernaDerecha.length,
-            brazos:
-                articulaciones.brazoIzquierdo.length +
-                articulaciones.brazoDerecho.length
+            huesosOriginales.set(objeto, {
+                rotation: objeto.rotation.clone(),
+                quaternion: objeto.quaternion.clone()
+            });
         });
     }
 
-    function restaurarArticulaciones() {
-
-        for (const [hueso, base] of rotacionesBase) {
-            hueso.rotation.copy(base);
-        }
-    }
-
-    function animarArticulaciones(lista, valor) {
-
-        for (const hueso of lista) {
-
-            if (!hueso) continue;
-
-            const base = rotacionesBase.get(hueso);
-            if (!base) continue;
-
-            hueso.rotation.x = base.x + valor;
-        }
-    }
-
-    function animarCaminar(activo) {
-
-        const fase = animacionTiempo * 7;
-
-        if (accionCaminar) {
-
-            if (activo) {
-                accionReposo?.stop();
-
-                if (!accionCaminar.isRunning()) {
-                    accionCaminar.reset().play();
-                }
-            } else {
-                accionCaminar.stop();
-
-                if (accionReposo && !accionReposo.isRunning()) {
-                    accionReposo.reset().play();
-                }
+    function buscarHueso(...patrones) {
+        for (const [nombre, hueso] of Object.entries(huesos)) {
+            if (patrones.some(p => nombre.includes(p))) {
+                return hueso;
             }
         }
 
-        if (activo) {
-
-            const piernas = Math.sin(fase) * 0.48;
-            const brazos = Math.sin(fase) * 0.32;
-
-            animarArticulaciones(
-                articulaciones.piernaIzquierda,
-                piernas
-            );
-
-            animarArticulaciones(
-                articulaciones.piernaDerecha,
-                -piernas
-            );
-
-            animarArticulaciones(
-                articulaciones.brazoIzquierdo,
-                -brazos
-            );
-
-            animarArticulaciones(
-                articulaciones.brazoDerecho,
-                brazos
-            );
-
-        } else {
-            restaurarArticulaciones();
-        }
-
-        const pi = provisional.getObjectByName('PIERNA_IZQUIERDA');
-        const pd = provisional.getObjectByName('PIERNA_DERECHA');
-        const bi = provisional.getObjectByName('BRAZO_IZQUIERDO');
-        const bd = provisional.getObjectByName('BRAZO_DERECHO');
-
-        if (pi) pi.rotation.x = activo ? Math.sin(fase) * 0.45 : 0;
-        if (pd) pd.rotation.x = activo ? -Math.sin(fase) * 0.45 : 0;
-        if (bi) bi.rotation.x = activo ? -Math.sin(fase) * 0.3 : 0;
-        if (bd) bd.rotation.x = activo ? Math.sin(fase) * 0.3 : 0;
+        return null;
     }
-
-    function restaurarPostura() {
-
-        restaurarArticulaciones();
-
-        const brazo = provisional.getObjectByName('BRAZO_DERECHO');
-
-        if (brazo) {
-            brazo.rotation.set(0, 0, 0);
-        }
-
-        if (modeloCargado) {
-            modeloCargado.rotation.x = 0;
-        }
-    }
-
-    // =====================================================
-    // CARGAR MODELO GLB
-    // =====================================================
 
     function cargarModelo() {
-
-        loader.load(
-            config.modelo,
-
-            gltf => {
-
-                if (eliminado) return;
-
-                const modelo = gltf.scene;
-                modelo.name = 'MODELO_CLIENTE';
-
-                const caja = new THREE.Box3().setFromObject(modelo);
-
-                if (!caja.isEmpty()) {
-
-                    const centro = caja.getCenter(new THREE.Vector3());
-
-                    modelo.position.x -= centro.x;
-                    modelo.position.z -= centro.z;
-
-                    const nuevaCaja = new THREE.Box3().setFromObject(modelo);
-                    modelo.position.y -= nuevaCaja.min.y;
-                }
-
-                modelo.traverse(objeto => {
-
-                    if (objeto.isBone) {
-                        huesos[objeto.name.toLowerCase()] = objeto;
+        return new Promise(resolve => {
+            loaderGLTF.load(
+                config.modelo,
+                gltf => {
+                    if (eliminado) {
+                        resolve(false);
+                        return;
                     }
 
-                    if (objeto.isMesh) {
+                    if (modelo) {
+                        grupo.remove(modelo);
+                    }
+
+                    modelo = gltf.scene;
+                    modelo.name = 'MODELO_CLIENTE_GLTF';
+
+                    const caja = new THREE.Box3().setFromObject(modelo);
+                    const tamano = caja.getSize(new THREE.Vector3());
+
+                    const escala = config.escala *
+                        (tamano.y > 0 ? config.altura / tamano.y : 1);
+
+                    modelo.scale.multiplyScalar(escala);
+
+                    const centro = new THREE.Box3().setFromObject(modelo);
+                    const centroMundo = centro.getCenter(new THREE.Vector3());
+
+                    modelo.position.x -= centroMundo.x;
+                    modelo.position.y -= centro.min.y;
+                    modelo.position.z -= centroMundo.z;
+
+                    modelo.rotation.y = config.correccionRotacion;
+
+                    modelo.traverse(objeto => {
+                        if (!objeto.isMesh) return;
+
                         objeto.castShadow = false;
                         objeto.receiveShadow = false;
+                    });
+
+                    grupo.add(modelo);
+
+                    detectarHuesos(modelo);
+
+                    if (gltf.animations?.length) {
+                        mixer = new THREE.AnimationMixer(modelo);
+
+                        const clips = gltf.animations;
+                        const caminar = clips.find(c =>
+                            /walk|caminar|walking/i.test(c.name)
+                        );
+
+                        const reposo = clips.find(c =>
+                            /idle|rest|reposo|standing/i.test(c.name)
+                        );
+
+                        if (caminar) {
+                            accionCaminar = mixer.clipAction(caminar);
+                        }
+
+                        if (reposo) {
+                            accionReposo = mixer.clipAction(reposo);
+                            accionReposo.play();
+                        }
                     }
-                });
 
-                modelo.rotation.y = config.correccionRotacion;
-
-                grupo.add(modelo);
-                provisional.visible = false;
-
-                modeloCargado = modelo;
-
-                detectarHuesosAnimables();
-
-                if (gltf.animations?.length) {
-
-                    mixer = new THREE.AnimationMixer(modelo);
-
-                    const caminar = gltf.animations.find(a =>
-                        /walk|caminar|walking|run/i.test(a.name)
+                    cargado = true;
+                    resolve(true);
+                },
+                undefined,
+                error => {
+                    console.warn(
+                        `No se pudo cargar ${config.modelo}. Se usará modelo provisional.`,
+                        error
                     );
 
-                    const reposo = gltf.animations.find(a =>
-                        /idle|rest|reposo/i.test(a.name)
-                    );
-
-                    if (caminar) {
-                        accionCaminar = mixer.clipAction(caminar);
+                    if (!modelo && !eliminado) {
+                        crearModeloProvisional();
                     }
 
-                    if (reposo) {
-                        accionReposo = mixer.clipAction(reposo);
-                        accionReposo.play();
-                    }
+                    resolve(false);
                 }
-
-                cargado = true;
-
-                console.info(`[CLIENTE] Modelo cargado: ${config.modelo}`);
-
-                console.info(
-                    '[CLIENTE] Animación disponible:',
-                    Boolean(accionCaminar || articulaciones.piernaIzquierda.length)
-                );
-            },
-
-            undefined,
-
-            error => {
-
-                console.warn(
-                    `[CLIENTE] Error cargando ${config.modelo}`,
-                    error
-                );
-
-                if (!eliminado) {
-                    crearModeloProvisional();
-                }
-            }
-        );
+            );
+        });
     }
 
-    // =====================================================
-    // MOVIMIENTO
-    // =====================================================
+    crearModeloProvisional();
+    cargarModelo();
 
-    function establecerDestino(punto) {
+    // ========================================================
+    // COLISIONES
+    // ========================================================
 
-        if (!punto) {
-            destino = null;
-            return;
+    function obtenerColisiones() {
+        if (Array.isArray(config.colisiones)) {
+            return config.colisiones;
         }
 
-        const limitado = limitarPosicion(punto);
+        const mobiliario = config.mobiliario ??
+            scene.getObjectByName('MOBILIARIO_SUPERMERCADO');
 
-        destino = new THREE.Vector3(
-            limitado.x,
-            0,
-            limitado.z
-        );
+        if (mobiliario?.userData?.obtenerColisiones) {
+            return mobiliario.userData.obtenerColisiones();
+        }
+
+        if (mobiliario?.userData?.colisiones) {
+            return mobiliario.userData.colisiones;
+        }
+
+        return [];
+    }
+
+    let colisiones = obtenerColisiones();
+
+    function actualizarColisiones() {
+        colisiones = obtenerColisiones();
     }
 
     function obtenerLimitesMovimiento() {
-
         return {
             minX: -config.limiteX,
             maxX: config.limiteX,
@@ -641,1007 +436,880 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         };
     }
 
-    function moverHaciaDestino(delta) {
-
-        if (!destino) return true;
-
-        const dx = destino.x - grupo.position.x;
-        const dz = destino.z - grupo.position.z;
-
-        const distancia = Math.hypot(dx, dz);
-
-        if (distancia < 0.16) {
-
-            grupo.position.x = destino.x;
-            grupo.position.z = destino.z;
-
-            animarCaminar(false);
-
-            return true;
-        }
-
-        const avance = Math.min(
-            distancia,
-            velocidad * delta
-        );
-
-        grupo.position.x += (dx / distancia) * avance;
-        grupo.position.z += (dz / distancia) * avance;
-
+    function puntoLibre(x, z) {
         const limites = obtenerLimitesMovimiento();
 
-        grupo.position.x = THREE.MathUtils.clamp(
-            grupo.position.x,
-            limites.minX,
-            limites.maxX
-        );
-
-        grupo.position.z = THREE.MathUtils.clamp(
-            grupo.position.z,
-            limites.minZ,
-            limites.maxZ
-        );
-
-        grupo.rotation.y = Math.atan2(dx, dz);
-
-        animacionTiempo += delta;
-
-        animarCaminar(true);
-
-        return false;
-    }
-
-    // =====================================================
-    // PRODUCTOS
-    // =====================================================
-
-    function esUnidadProducto(objeto) {
-
-        if (!objeto?.isObject3D) return false;
-
-        const d = objeto.userData || {};
-
-        return (
-            d.esUnidadProducto === true ||
-            d.tipo === 'producto' ||
-            d.esProducto === true ||
-            Boolean(d.codigoProducto) ||
-            Boolean(d.skuProducto) ||
-            Boolean(d.codigo && d.nombre)
-        );
-    }
-
-    function obtenerRaizProducto(objeto) {
-
-        let actual = objeto;
-
-        while (actual && actual !== scene) {
-
-            if (esUnidadProducto(actual)) {
-                return actual;
-            }
-
-            actual = actual.parent;
+        if (
+            x < limites.minX ||
+            x > limites.maxX ||
+            z < limites.minZ ||
+            z > limites.maxZ
+        ) {
+            return false;
         }
 
-        return null;
+        for (const obstaculo of colisiones) {
+            if (!obstaculo) continue;
+
+            const margen = config.radioColision +
+                config.margenObstaculos;
+
+            if (
+                x >= obstaculo.minX - margen &&
+                x <= obstaculo.maxX + margen &&
+                z >= obstaculo.minZ - margen &&
+                z <= obstaculo.maxZ + margen
+            ) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
-    function listarProductosDisponibles() {
+    // ========================================================
+    // CAMINOS A*
+    // ========================================================
+
+    function claveCelda(x, z) {
+        return `${x},${z}`;
+    }
+
+    function mundoACelda(x, z) {
+        const tamano = config.tamanoCelda;
+
+        return {
+            x: Math.round(x / tamano),
+            z: Math.round(z / tamano)
+        };
+    }
+
+    function celdaAMundo(x, z) {
+        const tamano = config.tamanoCelda;
+
+        return {
+            x: x * tamano,
+            z: z * tamano
+        };
+    }
+
+    function heuristica(a, b) {
+        return Math.hypot(a.x - b.x, a.z - b.z);
+    }
+
+    function encontrarCamino(inicio, destino) {
+        const origen = mundoACelda(inicio.x, inicio.z);
+        const final = mundoACelda(destino.x, destino.z);
+
+        const abiertos = new Map();
+        const cerrados = new Set();
+        const padres = new Map();
+
+        const gScore = new Map();
+        const fScore = new Map();
+
+        const origenKey = claveCelda(origen.x, origen.z);
+
+        abiertos.set(origenKey, origen);
+        gScore.set(origenKey, 0);
+        fScore.set(origenKey, heuristica(origen, final));
+
+        const direcciones = [
+            [1, 0], [-1, 0], [0, 1], [0, -1],
+            [1, 1], [1, -1], [-1, 1], [-1, -1]
+        ];
+
+        let iteraciones = 0;
+        const maxIteraciones = 14000;
+
+        while (abiertos.size && iteraciones++ < maxIteraciones) {
+            let actualKey = null;
+            let actual = null;
+            let menorF = Infinity;
+
+            for (const [key, celda] of abiertos) {
+                const f = fScore.get(key) ?? Infinity;
+
+                if (f < menorF) {
+                    menorF = f;
+                    actualKey = key;
+                    actual = celda;
+                }
+            }
+
+            if (!actual) break;
+
+            if (
+                actual.x === final.x &&
+                actual.z === final.z
+            ) {
+                const camino = [];
+                let key = actualKey;
+
+                while (key) {
+                    const [x, z] = key.split(',').map(Number);
+                    camino.unshift(celdaAMundo(x, z));
+                    key = padres.get(key);
+                }
+
+                camino.shift();
+                camino.push({ x: destino.x, z: destino.z });
+
+                return suavizarCamino(camino);
+            }
+
+            abiertos.delete(actualKey);
+            cerrados.add(actualKey);
+
+            for (const [dx, dz] of direcciones) {
+                const vecino = {
+                    x: actual.x + dx,
+                    z: actual.z + dz
+                };
+
+                const vecinoMundo = celdaAMundo(
+                    vecino.x,
+                    vecino.z
+                );
+
+                const vecinoKey = claveCelda(
+                    vecino.x,
+                    vecino.z
+                );
+
+                if (cerrados.has(vecinoKey)) continue;
+
+                if (!puntoLibre(vecinoMundo.x, vecinoMundo.z)) {
+                    continue;
+                }
+
+                // Evitar cortar esquinas atravesando muebles.
+                if (dx !== 0 && dz !== 0) {
+                    const a = celdaAMundo(actual.x + dx, actual.z);
+                    const b = celdaAMundo(actual.x, actual.z + dz);
+
+                    if (
+                        !puntoLibre(a.x, a.z) ||
+                        !puntoLibre(b.x, b.z)
+                    ) {
+                        continue;
+                    }
+                }
+
+                const costo = dx !== 0 && dz !== 0
+                    ? 1.414
+                    : 1;
+
+                const tentativo =
+                    (gScore.get(actualKey) ?? Infinity) + costo;
+
+                if (tentativo < (gScore.get(vecinoKey) ?? Infinity)) {
+                    padres.set(vecinoKey, actualKey);
+                    gScore.set(vecinoKey, tentativo);
+                    fScore.set(
+                        vecinoKey,
+                        tentativo + heuristica(vecino, final)
+                    );
+
+                    abiertos.set(vecinoKey, vecino);
+                }
+            }
+        }
+
+        return [];
+    }
+
+    function suavizarCamino(camino) {
+        if (camino.length < 3) return camino;
 
         const resultado = [];
-        const encontrados = new Set();
+        let actual = 0;
 
-        function agregar(objeto) {
+        resultado.push(camino[0]);
 
-            if (!objeto?.isObject3D) return;
+        while (actual < camino.length - 1) {
+            let siguiente = camino.length - 1;
 
-            const raiz = obtenerRaizProducto(objeto);
+            while (siguiente > actual + 1) {
+                if (
+                    segmentoLibre(
+                        camino[actual],
+                        camino[siguiente]
+                    )
+                ) {
+                    break;
+                }
 
-            if (!raiz || encontrados.has(raiz.uuid)) return;
-
-            const datos = raiz.userData || {};
-
-            if (
-                datos.disponible === false ||
-                datos.enCarrito ||
-                datos.recogido ||
-                datos.vendido ||
-                datos.reservado
-            ) {
-                return;
+                siguiente--;
             }
 
-            if (
-                productosCompradosGlobal.has(raiz.uuid) ||
-                productosReservadosGlobal.has(raiz.uuid)
-            ) {
-                return;
-            }
-
-            encontrados.add(raiz.uuid);
-            resultado.push(raiz);
-        }
-
-        const contenedor = Array.isArray(config.productos)
-            ? null
-            : config.productos?.isObject3D
-                ? config.productos
-                : scene.getObjectByName('PRODUCTOS_SUPERMERCADO');
-
-        if (Array.isArray(config.productos)) {
-
-            for (const producto of config.productos) {
-                agregar(producto?.objeto || producto);
-            }
-
-        } else if (contenedor) {
-
-            contenedor.traverse(agregar);
+            resultado.push(camino[siguiente]);
+            actual = siguiente;
         }
 
         return resultado;
     }
 
-    function obtenerZonaProducto(posicion) {
+    function segmentoLibre(a, b) {
+        const distancia = distanciaXZ(a, b);
+        const pasos = Math.max(2, Math.ceil(distancia / 0.3));
 
-        const x = Math.round(posicion.x / 6);
-        const z = Math.round(posicion.z / 6);
+        for (let i = 1; i < pasos; i++) {
+            const t = i / pasos;
+            const x = THREE.MathUtils.lerp(a.x, b.x, t);
+            const z = THREE.MathUtils.lerp(a.z, b.z, t);
 
-        return `${x}_${z}`;
+            if (!puntoLibre(x, z)) return false;
+        }
+
+        return true;
     }
 
-    function elegirProducto(candidatos) {
+    function establecerObjetivo(destino, nuevoEstado = ESTADOS.RUTA) {
+        if (!destino) return false;
 
-        if (!candidatos.length) return null;
+        const inicio = {
+            x: grupo.position.x,
+            z: grupo.position.z
+        };
 
-        const zonas = new Map();
+        let destinoSeguro = {
+            x: limitar(destino.x, -config.limiteX, config.limiteX),
+            z: limitar(destino.z, config.limiteZMin, config.limiteZMax)
+        };
 
-        for (const candidato of candidatos) {
+        if (!puntoLibre(destinoSeguro.x, destinoSeguro.z)) {
+            let encontrado = false;
 
-            const zona = obtenerZonaProducto(candidato.posicion);
+            for (let radio = 0.5; radio <= 5; radio += 0.5) {
+                for (let angulo = 0; angulo < Math.PI * 2; angulo += Math.PI / 4) {
+                    const x = destinoSeguro.x + Math.cos(angulo) * radio;
+                    const z = destinoSeguro.z + Math.sin(angulo) * radio;
 
-            if (!zonas.has(zona)) {
-                zonas.set(zona, []);
+                    if (puntoLibre(x, z)) {
+                        destinoSeguro = { x, z };
+                        encontrado = true;
+                        break;
+                    }
+                }
+
+                if (encontrado) break;
             }
 
-            zonas.get(zona).push(candidato);
+            if (!encontrado) return false;
         }
 
-        let zonasDisponibles = [...zonas.entries()];
+        ruta = encontrarCamino(inicio, destinoSeguro);
+        indiceRuta = 0;
 
-        if (
-            config.evitarZonaAnterior &&
-            ultimaZona &&
-            zonasDisponibles.length > 1
-        ) {
+        if (!ruta.length) {
+            if (distanciaXZ(inicio, destinoSeguro) < 0.5) {
+                objetivo = destinoSeguro;
+                cambiarEstado(nuevoEstado);
+                return true;
+            }
 
-            const diferentes = zonasDisponibles.filter(
-                ([zona]) => zona !== ultimaZona
-            );
+            return false;
+        }
 
-            if (diferentes.length) {
-                zonasDisponibles = diferentes;
+        objetivo = destinoSeguro;
+        cambiarEstado(nuevoEstado);
+
+        return true;
+    }
+
+    // ========================================================
+    // ESTADOS
+    // ========================================================
+
+    function cambiarEstado(nuevoEstado) {
+        if (estado === nuevoEstado) return;
+
+        estado = nuevoEstado;
+        tiempoEstado = 0;
+
+        if (typeof config.alCambiarEstado === 'function') {
+            config.alCambiarEstado({
+                cliente: api,
+                estado
+            });
+        }
+    }
+
+    // ========================================================
+    // MOVIMIENTO
+    // ========================================================
+
+    function orientarHacia(dx, dz) {
+        if (Math.abs(dx) + Math.abs(dz) < 0.0001) return;
+
+        grupo.rotation.y = Math.atan2(dx, dz);
+    }
+
+    function moverHaciaDestino(delta) {
+        if (!objetivo) return false;
+
+        let destino = ruta[indiceRuta] ?? objetivo;
+
+        let dx = destino.x - grupo.position.x;
+        let dz = destino.z - grupo.position.z;
+
+        let distancia = Math.hypot(dx, dz);
+
+        if (distancia < 0.20) {
+            if (indiceRuta < ruta.length - 1) {
+                indiceRuta++;
+                return false;
+            }
+
+            grupo.position.x = objetivo.x;
+            grupo.position.z = objetivo.z;
+            objetivo = null;
+            ruta = [];
+            indiceRuta = 0;
+
+            return true;
+        }
+
+        orientarHacia(dx, dz);
+
+        dx /= distancia;
+        dz /= distancia;
+
+        const velocidad = estado === ESTADOS.ENTRANDO
+            ? config.velocidadEntrada
+            : estado === ESTADOS.REGRESANDO
+                ? config.velocidadRegreso
+                : config.velocidad;
+
+        const avance = Math.min(
+            distancia,
+            velocidad * Math.max(0, delta)
+        );
+
+        const siguienteX = grupo.position.x + dx * avance;
+        const siguienteZ = grupo.position.z + dz * avance;
+
+        if (puntoLibre(siguienteX, siguienteZ)) {
+            grupo.position.x = siguienteX;
+            grupo.position.z = siguienteZ;
+        } else {
+            // Deslizamiento lateral para evitar quedarse atascado.
+            const soloX = grupo.position.x + dx * avance;
+            const soloZ = grupo.position.z + dz * avance;
+
+            if (puntoLibre(soloX, grupo.position.z)) {
+                grupo.position.x = soloX;
+            } else if (puntoLibre(grupo.position.x, soloZ)) {
+                grupo.position.z = soloZ;
+            } else {
+                const nuevoCamino = encontrarCamino(
+                    grupo.position,
+                    objetivo
+                );
+
+                if (nuevoCamino.length) {
+                    ruta = nuevoCamino;
+                    indiceRuta = 0;
+                } else {
+                    objetivo = null;
+                    ruta = [];
+                    cambiarEstado(ESTADOS.BUSCANDO);
+                }
             }
         }
 
-        const zonasNoVisitadas = zonasDisponibles.filter(
-            ([zona]) => !zonasVisitadas.has(zona)
-        );
-
-        if (zonasNoVisitadas.length) {
-            zonasDisponibles = zonasNoVisitadas;
-        }
-
-        const indice = Math.floor(
-            Math.random() * zonasDisponibles.length
-        );
-
-        const [zonaElegida, productosZona] = zonasDisponibles[indice];
-
-        ultimaZona = zonaElegida;
-        zonasVisitadas.add(zonaElegida);
-
-        if (zonasVisitadas.size > 12) {
-            zonasVisitadas.clear();
-            zonasVisitadas.add(zonaElegida);
-        }
-
-        productosZona.sort(
-            (a, b) => a.distancia - b.distancia
-        );
-
-        const cantidad = Math.min(3, productosZona.length);
-
-        return productosZona[
-            Math.floor(Math.random() * cantidad)
-        ];
+        return false;
     }
 
-    // =====================================================
-    // PASEO CUANDO NO HAY PRODUCTOS
-    // =====================================================
+    // ========================================================
+    // PRODUCTOS
+    // ========================================================
 
-    function iniciarPaseo() {
+    function esProducto(objeto) {
+        const datos = objeto?.userData ?? {};
 
-        const puntos = puntosPaseo.filter(p =>
-            distanciaXZ(grupo.position, p) > 2
+        return Boolean(
+            datos.esUnidadProducto ||
+            datos.esProducto ||
+            datos.tipo === 'producto' ||
+            datos.codigoProducto ||
+            datos.skuProducto ||
+            (datos.codigo && datos.nombre)
         );
-
-        if (!puntos.length) {
-            estado = estados.BUSCANDO;
-            tiempoEstado = 0;
-            return;
-        }
-
-        const punto = puntos[
-            Math.floor(Math.random() * puntos.length)
-        ];
-
-        establecerDestino(punto);
-
-        estado = estados.PASEANDO;
-        tiempoPaseo = 0;
     }
 
-    function actualizarPaseo(delta) {
+    function listarProductosDisponibles() {
+        const encontrados = [];
+        const vistos = new Set();
 
-        tiempoPaseo += delta;
+        function agregar(objeto) {
+            if (!objeto || vistos.has(objeto)) return;
+            if (!esProducto(objeto)) return;
 
-        if (moverHaciaDestino(delta)) {
+            vistos.add(objeto);
 
-            destino = null;
+            if (
+                objeto.userData.reservado ||
+                objeto.userData.vendido ||
+                objeto.userData.oculto ||
+                !objeto.visible
+            ) {
+                return;
+            }
 
-            estado = estados.BUSCANDO;
-            tiempoEstado = 0;
+            const posicion = new THREE.Vector3();
+            objeto.getWorldPosition(posicion);
 
-            return;
+            encontrados.push({
+                objeto,
+                posicion,
+                nombre: objeto.userData.nombre ??
+                    objeto.name ??
+                    'Producto',
+                codigo: objeto.userData.codigoProducto ??
+                    objeto.userData.skuProducto ??
+                    objeto.userData.codigo ??
+                    objeto.name
+            });
         }
 
-        if (tiempoPaseo > config.tiempoPaseo * 2) {
+        if (Array.isArray(config.productos)) {
+            config.productos.forEach(agregar);
+        } else if (config.productos?.isObject3D) {
+            config.productos.traverse(agregar);
+        } else {
+            const contenedor =
+                scene.getObjectByName('PRODUCTOS_SUPERMERCADO');
 
-            destino = null;
-            estado = estados.BUSCANDO;
-            tiempoEstado = 0;
+            contenedor?.traverse(agregar);
         }
+
+        return encontrados;
     }
 
-    // =====================================================
-    // BUSCAR PRODUCTO
-    // =====================================================
-
-    function buscarProducto() {
-
-        if (compras.length >= config.maximoProductos) {
-
-            // El cliente queda disponible para que el main
-            // le indique cuándo dirigirse a la caja.
-            estado = estados.ESPERANDO;
-            tiempoEstado = 0;
-
-            return;
-        }
-
-        const disponibles = listarProductosDisponibles();
-
-        if (!disponibles.length) {
-
-            console.info(
-                '[CLIENTE] No hay productos disponibles. Iniciando recorrido.'
-            );
-
-            iniciarPaseo();
-
-            return;
-        }
-
-        const candidatos = disponibles
-            .map(objeto => {
-
-                const posicion = obtenerPosicionMundo(objeto);
-
-                return {
-                    objeto,
-                    posicion,
-                    distancia: distanciaXZ(grupo.position, posicion)
-                };
-            })
-            .filter(item =>
-                item.distancia < config.distanciaMaximaBusqueda
-            );
-
-        const elegido = elegirProducto(candidatos);
-
-        if (!elegido) {
-            iniciarPaseo();
-            return;
-        }
-
-        productoObjetivo = elegido.objeto;
-
-        productosReservadosGlobal.set(
-            productoObjetivo.uuid,
-            grupo.uuid
-        );
-
-        productoObjetivo.userData.reservado = true;
-
-        const posicion = elegido.posicion;
-
-        const dx = grupo.position.x - posicion.x;
-        const dz = grupo.position.z - posicion.z;
-
-        const longitud = Math.max(
-            0.001,
-            Math.hypot(dx, dz)
-        );
-
-        establecerDestino({
-            x: posicion.x + (dx / longitud) * config.distanciaFrenteProducto,
-            z: posicion.z + (dz / longitud) * config.distanciaFrenteProducto
-        });
-
-        estado = estados.ACERCANDO;
-    }
-
-    // =====================================================
-    // RESERVAS
-    // =====================================================
-
-    function liberarReservaProducto() {
-
+    function liberarReserva() {
         if (!productoObjetivo) return;
 
-        productosReservadosGlobal.delete(
-            productoObjetivo.uuid
-        );
-
-        if (productoObjetivo.userData) {
+        if (reservasProductos.get(productoObjetivo) === id) {
+            reservasProductos.delete(productoObjetivo);
             productoObjetivo.userData.reservado = false;
         }
 
         productoObjetivo = null;
     }
 
-    // =====================================================
-    // RECOGER PRODUCTO
-    // =====================================================
+    function elegirProducto() {
+        const disponibles = listarProductosDisponibles();
 
-    function animarRecogida(delta) {
+        if (!disponibles.length) return null;
 
-        tiempoEstado += delta;
+        const posicion = grupo.position;
 
-        const progreso = THREE.MathUtils.clamp(
-            tiempoEstado / config.tiempoSeleccionProducto,
-            0,
-            1
-        );
+        const candidatos = disponibles
+            .map(registro => ({
+                ...registro,
+                distancia: distanciaXZ(posicion, registro.posicion)
+            }))
+            .filter(registro =>
+                registro.distancia <= config.distanciaMaximaBusqueda
+            )
+            .sort((a, b) => a.distancia - b.distancia);
 
-        const fase = Math.sin(progreso * Math.PI);
+        if (!candidatos.length) return null;
 
-        animarArticulaciones(
-            articulaciones.brazoDerecho,
-            -fase
-        );
+        // Elegir entre varios productos cercanos para evitar
+        // que todos los clientes se dirijan al mismo objeto.
+        const cantidad = Math.min(5, candidatos.length);
+        const seleccion = candidatos[
+            Math.floor(Math.random() * cantidad)
+        ];
 
-        const brazoProvisional = provisional.getObjectByName(
-            'BRAZO_DERECHO'
-        );
-
-        if (brazoProvisional) {
-            brazoProvisional.rotation.x = -fase;
-            brazoProvisional.rotation.z = -fase * 0.25;
+        if (reservasProductos.has(seleccion.objeto)) {
+            return null;
         }
 
-        if (modeloCargado) {
-            modeloCargado.rotation.x = -fase * 0.06;
+        reservasProductos.set(seleccion.objeto, id);
+        seleccion.objeto.userData.reservado = true;
+
+        return seleccion;
+    }
+
+    function buscarProductos() {
+        if (compras.length >= config.maximoProductos) {
+            dirigirseACaja();
+            return;
         }
 
-        if (progreso >= 1) {
+        const registro = elegirProducto();
 
-            if (!probabilidadEvaluada) {
-                probabilidadEvaluada = true;
+        if (!registro) {
+            tiempoReintento = config.tiempoReintento;
+            cambiarEstado(ESTADOS.ESPERANDO);
+            return;
+        }
 
-                debeComprar =
-                    Math.random() <= config.probabilidadCompra;
-            }
+        productoObjetivo = registro.objeto;
 
-            if (debeComprar) {
+        const dx = grupo.position.x - registro.posicion.x;
+        const dz = grupo.position.z - registro.posicion.z;
+        const longitud = Math.hypot(dx, dz) || 1;
 
-                iniciarAnimacionGuardar();
+        const destino = {
+            x: registro.posicion.x +
+                dx / longitud * config.distanciaFrenteProducto,
+            z: registro.posicion.z +
+                dz / longitud * config.distanciaFrenteProducto
+        };
 
-            } else {
-
-                restaurarPostura();
-                liberarReservaProducto();
-
-                estado = estados.ESPERANDO;
-                tiempoEstado = 0;
-            }
+        if (!establecerObjetivo(destino, ESTADOS.ACERCANDO)) {
+            liberarReserva();
+            tiempoReintento = 1;
+            cambiarEstado(ESTADOS.ESPERANDO);
         }
     }
 
-    // =====================================================
-    // GUARDAR PRODUCTO
-    // =====================================================
-
-    function iniciarAnimacionGuardar() {
-
+    function recogerProducto() {
         if (!productoObjetivo) {
-
-            liberarReservaProducto();
-
-            estado = estados.BUSCANDO;
-
+            cambiarEstado(ESTADOS.BUSCANDO);
             return;
         }
 
         const objeto = productoObjetivo;
 
+        objeto.updateWorldMatrix(true, false);
+
+        const posicion = objeto.position.clone();
+        const quaternion = objeto.quaternion.clone();
+        const escala = objeto.scale.clone();
+        const padre = objeto.parent;
+
         productoOriginal = {
             objeto,
-            padre: objeto.parent,
-            posicion: objeto.position.clone(),
-            quaternion: objeto.quaternion.clone(),
-            escala: objeto.scale.clone(),
-            visible: objeto.visible,
-            posicionMundo: objeto.getWorldPosition(
-                new THREE.Vector3()
-            )
+            padre,
+            posicion,
+            quaternion,
+            escala
         };
 
         scene.attach(objeto);
 
         productoEnMano = objeto;
 
-        tiempoEstado = 0;
+        objeto.userData.reservado = true;
 
-        estado = estados.GUARDANDO;
+        const mano = buscarHueso('handr', 'righthand', 'handright');
+
+        if (mano) {
+            mano.attach(objeto);
+            objeto.position.set(0, 0, 0.12);
+            objeto.rotation.set(0, 0, 0);
+            objeto.scale.multiplyScalar(0.65);
+        } else {
+            grupo.attach(objeto);
+            objeto.position.set(0.25, 1.0, 0.35);
+            objeto.rotation.set(0, 0, 0);
+            objeto.scale.multiplyScalar(0.65);
+        }
+
+        compras.push({
+            nombre: objeto.userData.nombre ?? objeto.name,
+            codigo: objeto.userData.codigoProducto ??
+                objeto.userData.codigo ??
+                objeto.name,
+            objeto,
+            fecha: Date.now()
+        });
+
+        if (typeof config.alComprar === 'function') {
+            config.alComprar({
+                cliente: api,
+                producto: objeto,
+                compra: compras[compras.length - 1]
+            });
+        }
+
+        cambiarEstado(ESTADOS.GUARDANDO);
     }
 
-    function actualizarAnimacionGuardar(delta) {
+    function devolverProducto() {
+        if (!productoEnMano || !productoOriginal) return;
 
-        if (!productoEnMano || !productoOriginal) {
+        const { objeto, padre, posicion, quaternion, escala } =
+            productoOriginal;
 
-            restaurarPostura();
+        if (padre) {
+            padre.attach(objeto);
+            objeto.position.copy(posicion);
+            objeto.quaternion.copy(quaternion);
+            objeto.scale.copy(escala);
+        }
 
-            estado = estados.ESPERANDO;
-            tiempoEstado = 0;
+        objeto.userData.reservado = false;
 
+        if (reservasProductos.get(objeto) === id) {
+            reservasProductos.delete(objeto);
+        }
+
+        productoEnMano = null;
+        productoObjetivo = null;
+        productoOriginal = null;
+    }
+
+    function guardarProducto() {
+        if (!productoEnMano) {
+            cambiarEstado(ESTADOS.BUSCANDO);
             return;
         }
-
-        tiempoEstado += delta;
-
-        const objeto = productoEnMano;
-
-        const progreso = THREE.MathUtils.clamp(
-            tiempoEstado / config.tiempoGuardarProducto,
-            0,
-            1
-        );
-
-        const posicionMano = new THREE.Vector3(
-            0.28,
-            1.05,
-            0.18
-        );
-
-        grupo.localToWorld(posicionMano);
-
-        const destinoVisual = posicionMano.clone();
-
-        if (progreso > 0.55 && config.carrito?.grupo) {
-
-            const cesta = config.carrito.grupo;
-            const centroCesta = new THREE.Vector3();
-
-            cesta.getWorldPosition(centroCesta);
-
-            destinoVisual.lerp(
-                centroCesta,
-                THREE.MathUtils.clamp(
-                    (progreso - 0.55) / 0.45,
-                    0,
-                    1
-                )
-            );
-        }
-
-        objeto.position.lerpVectors(
-            productoOriginal.posicionMundo,
-            destinoVisual,
-            progreso
-        );
-
-        objeto.scale.copy(
-            productoOriginal.escala
-        ).multiplyScalar(1 - progreso * 0.15);
-
-        const faseBrazo = Math.sin(progreso * Math.PI);
-
-        animarArticulaciones(
-            articulaciones.brazoDerecho,
-            -faseBrazo * 0.8
-        );
-
-        const brazo = provisional.getObjectByName(
-            'BRAZO_DERECHO'
-        );
-
-        if (brazo) {
-            brazo.rotation.x = -faseBrazo * 0.8;
-        }
-
-        if (progreso >= 1) {
-            terminarGuardarProducto();
-        }
-    }
-
-    function restaurarProductoOriginal() {
-
-        if (!productoOriginal) return;
-
-        const datos = productoOriginal;
-        const objeto = datos.objeto;
-
-        if (!objeto) return;
-
-        const padre = datos.padre || scene;
-
-        padre.attach(objeto);
-
-        objeto.position.copy(datos.posicion);
-        objeto.quaternion.copy(datos.quaternion);
-        objeto.scale.copy(datos.escala);
-        objeto.visible = datos.visible;
-    }
-
-    function terminarGuardarProducto() {
-
-        const objeto = productoEnMano;
-
-        if (!objeto) return;
-
-        const datos = objeto.userData || {};
-
-        const nombre =
-            datos.nombreProducto ||
-            datos.nombreVisible ||
-            datos.nombreUnidad ||
-            datos.nombre ||
-            objeto.name ||
-            'Producto';
-
-        const codigo =
-            datos.codigoProducto ||
-            datos.codigoCatalogo ||
-            datos.skuProducto ||
-            datos.codigo ||
-            objeto.name ||
-            objeto.uuid;
-
-        const registro = {
-            id: datos.idUnidadProducto || objeto.uuid,
-            uuid: objeto.uuid,
-            codigo,
-            nombre,
-            precio: Number(datos.precio ?? 0),
-            categoria: datos.categoria || 'General',
-            objeto
-        };
 
         const carrito = config.carrito;
 
-        if (!carrito?.agregarProducto) {
+        if (
+            carrito &&
+            typeof carrito.agregarProducto === 'function'
+        ) {
+            const registro = compras[compras.length - 1];
 
-            restaurarProductoOriginal();
-
-            productoEnMano = null;
-            productoOriginal = null;
-
-            liberarReservaProducto();
-
-            restaurarPostura();
-
-            estado = estados.ESPERANDO;
-            tiempoEstado = 0;
-
-            return;
+            try {
+                carrito.agregarProducto(registro);
+            } catch (error) {
+                console.warn('No se pudo agregar al carrito:', error);
+                devolverProducto();
+                cambiarEstado(ESTADOS.BUSCANDO);
+                return;
+            }
         }
 
-        objeto.scale.copy(productoOriginal.escala);
-
-        const agregado = carrito.agregarProducto(registro);
-
-        if (agregado === false) {
-
-            restaurarProductoOriginal();
-
-            productoEnMano = null;
-            productoOriginal = null;
-
-            liberarReservaProducto();
-
-            restaurarPostura();
-
-            estado = estados.ESPERANDO;
-            tiempoEstado = 0;
-
-            return;
+        if (productoEnMano) {
+            productoEnMano.userData.enCarrito = true;
+            productoEnMano.userData.reservado = false;
         }
-
-        compras.push(registro);
-
-        productosCompradosGlobal.add(objeto.uuid);
-
-        datos.esUnidadProducto = true;
-        datos.enCarrito = true;
-        datos.recogido = true;
-        datos.disponible = false;
-        datos.reservado = false;
 
         productoEnMano = null;
         productoOriginal = null;
+        productoObjetivo = null;
 
-        liberarReservaProducto();
-
-        restaurarPostura();
-
-        if (typeof config.alComprar === 'function') {
-            config.alComprar(registro, api);
-        }
-
-        estado = estados.ESPERANDO;
-        tiempoEstado = 0;
+        tiempoReintento = config.tiempoEntreProductos;
+        cambiarEstado(ESTADOS.ESPERANDO);
     }
 
-    // =====================================================
-    // ACTUALIZACIÓN DE COMPRA
-    // =====================================================
+    // ========================================================
+    // RECORRIDO POR EL SUPERMERCADO
+    // ========================================================
 
-    function actualizarCompra(delta) {
+    const puntosRecorrido = [
+        { x: -23, z: 18 },
+        { x: -13, z: 18 },
+        { x: -5, z: 16 },
+        { x: 5, z: 16 },
+        { x: 13, z: 17 },
+        { x: 22, z: 17 },
+        { x: 22, z: 5 },
+        { x: 13, z: 5 },
+        { x: 5, z: 5 },
+        { x: -5, z: 5 },
+        { x: -13, z: 5 },
+        { x: -22, z: 5 },
+        { x: -22, z: -5 },
+        { x: -13, z: -8 },
+        { x: -5, z: -8 },
+        { x: 5, z: -8 },
+        { x: 13, z: -8 },
+        { x: 22, z: -8 },
+        { x: 22, z: -19 },
+        { x: 13, z: -19 },
+        { x: 5, z: -19 },
+        { x: -5, z: -19 },
+        { x: -13, z: -19 }
+    ];
 
-        if (estado === estados.BUSCANDO) {
+    let indiceRecorrido = Math.floor(
+        Math.random() * puntosRecorrido.length
+    );
 
-            buscarProducto();
+    function siguientePuntoRecorrido() {
+        for (let i = 0; i < puntosRecorrido.length; i++) {
+            const indice = (indiceRecorrido + i) %
+                puntosRecorrido.length;
 
-            return;
-        }
-
-        if (estado === estados.ACERCANDO) {
-
-            if (!productoObjetivo || !productoObjetivo.parent) {
-
-                liberarReservaProducto();
-
-                estado = estados.BUSCANDO;
-                tiempoEstado = 0;
-
-                return;
-            }
-
-            const posicion = obtenerPosicionMundo(
-                productoObjetivo
-            );
-
-            const distancia = distanciaXZ(
-                grupo.position,
-                posicion
-            );
-
-            if (distancia <= config.distanciaProducto) {
-
-                estado = estados.RECOGIENDO;
-                tiempoEstado = 0;
-
-                animarCaminar(false);
-
-                return;
-            }
-
-            if (moverHaciaDestino(delta)) {
-
-                estado = estados.RECOGIENDO;
-                tiempoEstado = 0;
-            }
-
-            return;
-        }
-
-        if (estado === estados.RECOGIENDO) {
-
-            animarRecogida(delta);
-
-            return;
-        }
-
-        if (estado === estados.GUARDANDO) {
-
-            actualizarAnimacionGuardar(delta);
-
-            return;
-        }
-
-        if (estado === estados.ESPERANDO) {
-
-            tiempoEstado += delta;
+            const candidato = puntosRecorrido[indice];
 
             if (
-                compras.length >= config.maximoProductos &&
-                config.maximoProductos > 0
+                puntoLibre(candidato.x, candidato.z) &&
+                distanciaXZ(grupo.position, candidato) > 2
             ) {
-                // Esperar a que main.js indique el pago.
-                return;
+                indiceRecorrido = (indice + 1) %
+                    puntosRecorrido.length;
+
+                return candidato;
             }
+        }
 
-            if (tiempoEstado >= config.tiempoEntreProductos) {
+        return { x: 0, z: 10 };
+    }
 
-                probabilidadEvaluada = false;
-                debeComprar = false;
+    function iniciarPaseo() {
+        const destino = siguientePuntoRecorrido();
 
-                estado = estados.BUSCANDO;
-                tiempoEstado = 0;
-            }
+        if (!establecerObjetivo(destino, ESTADOS.RUTA)) {
+            cambiarEstado(ESTADOS.BUSCANDO);
         }
     }
 
-    // =====================================================
-    // RUTAS
-    // =====================================================
+    // ========================================================
+    // CAJAS Y PAGO
+    // ========================================================
 
-    function establecerRuta(nuevaRuta, repetir = config.repetirRuta) {
+    function dirigirseACaja(posicionCaja = config.posicionCaja) {
+        const destino = {
+            x: numero(posicionCaja.x, 0),
+            z: numero(posicionCaja.z, 22.5)
+        };
 
-        ruta = Array.isArray(nuevaRuta)
-            ? nuevaRuta.map(punto => limitarPosicion({
-                x: Number(punto.x),
-                z: Number(punto.z)
-            }))
-            : [];
-
-        indiceRuta = 0;
-
-        config.repetirRuta = repetir;
-
-        destino = null;
-
-        estado = ruta.length
-            ? estados.RUTA
-            : estados.BUSCANDO;
-
-        tiempoEstado = 0;
-    }
-
-    function actualizarRuta(delta) {
-
-        if (!ruta.length) {
-
-            if (estado === estados.ENTRANDO) {
-                finalizarEntrada();
-
-            } else if (estado === estados.REGRESANDO) {
-                finalizarRegreso();
-
-            } else {
-                estado = estados.BUSCANDO;
-            }
-
-            return;
+        if (!establecerObjetivo(destino, ESTADOS.CAJA)) {
+            cambiarEstado(ESTADOS.BUSCANDO);
         }
-
-        if (!destino) {
-            establecerDestino(ruta[indiceRuta]);
-        }
-
-        if (moverHaciaDestino(delta)) {
-
-            indiceRuta++;
-            destino = null;
-
-            if (indiceRuta >= ruta.length) {
-
-                if (config.repetirRuta && estado === estados.RUTA) {
-
-                    indiceRuta = 0;
-
-                } else {
-
-                    ruta = [];
-                    indiceRuta = 0;
-
-                    if (estado === estados.ENTRANDO) {
-
-                        finalizarEntrada();
-
-                    } else if (estado === estados.REGRESANDO) {
-
-                        finalizarRegreso();
-
-                    } else {
-
-                        estado = estados.BUSCANDO;
-                        tiempoEstado = 0;
-                    }
-                }
-            }
-        }
-    }
-
-    // =====================================================
-    // ENTRADA DESDE VEHÍCULO
-    // =====================================================
-
-    function ejecutarCallbackEntrada() {
-
-        if (callbackEntradaEjecutado) return;
-
-        callbackEntradaEjecutado = true;
-
-        if (typeof config.alEntrar === 'function') {
-            config.alEntrar(api);
-        }
-    }
-
-    function iniciarDesdeVehiculo(posicionEntrada, plaza) {
-
-        if (eliminado || !posicionEntrada || !plaza) return;
-
-        plazaVehiculo = { ...plaza };
-
-        grupo.position.set(
-            posicionEntrada.x,
-            posicionEntrada.y || 0,
-            posicionEntrada.z
-        );
-
-        entro = false;
-        pagoConfirmado = false;
-        compraConfirmada = false;
-
-        compras.length = 0;
-        zonasVisitadas.clear();
-        ultimaZona = null;
-
-        productosCompradosGlobal.clear();
-
-        callbackEntradaEjecutado = false;
-
-        ejecutarCallbackEntrada();
-
-        establecerRuta([
-            {
-                x: posicionEntrada.x,
-                z: posicionEntrada.z + 1
-            },
-            {
-                x: posicionEntrada.x,
-                z: 45
-            },
-            {
-                x: posicionEntrada.x,
-                z: 34
-            },
-            {
-                x: 0,
-                z: 31
-            },
-            {
-                x: 0,
-                z: 29
-            },
-            {
-                x: 0,
-                z: 26
-            },
-            {
-                x: 0,
-                z: 23
-            }
-        ], false);
-
-        estado = estados.ENTRANDO;
-    }
-
-    function finalizarEntrada() {
-
-        if (entro) return;
-
-        entro = true;
-
-        destino = null;
-
-        estado = estados.BUSCANDO;
-        tiempoEstado = 0;
-    }
-
-    // =====================================================
-    // CAJA Y PAGO
-    // =====================================================
-
-    function iniciarPago(posicionCaja, callback) {
-
-        if (eliminado || !posicionCaja) return;
-
-        liberarReservaProducto();
-
-        callbackPago = callback || null;
-
-        estado = estados.CAJA;
-
-        establecerDestino({
-            x: posicionCaja.x,
-            z: posicionCaja.z
-        });
     }
 
     function completarPago() {
-
-        if (pagoConfirmado || eliminado) return;
-
-        estado = estados.PAGANDO;
-
-        pagoConfirmado = true;
-        compraConfirmada = true;
-
-        const resumen = obtenerResumenCompra();
-
-        if (config.carrito?.confirmarVenta) {
-            config.carrito.confirmarVenta();
-        }
-
         if (typeof config.alPagar === 'function') {
-            config.alPagar(resumen, api);
+            config.alPagar({
+                cliente: api,
+                productos: compras,
+                totalProductos: compras.length
+            });
         }
 
-        const callback = callbackPago;
-        callbackPago = null;
+        compras.forEach(compra => {
+            if (compra.objeto) {
+                compra.objeto.userData.vendido = true;
+                compra.objeto.userData.enCarrito = false;
+            }
+        });
 
-        if (callback) {
-            callback(resumen);
-        }
+        cambiarEstado(ESTADOS.PAGANDO);
+        tiempoEstado = 0;
     }
 
-    // =====================================================
-    // REGRESO AL VEHÍCULO
-    // =====================================================
+    // ========================================================
+    // ENTRADA Y REGRESO DEL VEHÍCULO
+    // ========================================================
+
+    function iniciarDesdeVehiculo(posicionEntrada, plaza) {
+        if (!posicionEntrada || !plaza) {
+            console.warn(
+                'iniciarDesdeVehiculo necesita posicionEntrada y plaza.'
+            );
+            return false;
+        }
+
+        liberarReserva();
+
+        if (productoEnMano) {
+            devolverProducto();
+        }
+
+        compras = [];
+
+        grupo.position.set(
+            numero(posicionEntrada.x, plaza.x),
+            0,
+            numero(posicionEntrada.z, plaza.z)
+        );
+
+        const rutaEntrada = [
+            { x: plaza.x, z: plaza.z },
+            { x: plaza.x, z: 34 },
+            { x: plaza.x, z: 31 },
+            { x: 0, z: 27 },
+            { x: -8, z: 24 }
+        ];
+
+        const primerDestino = rutaEntrada.find(p =>
+            puntoLibre(p.x, p.z)
+        );
+
+        if (!primerDestino) {
+            console.warn('No se encontró acceso libre al supermercado.');
+            return false;
+        }
+
+        const camino = encontrarCamino(
+            grupo.position,
+            primerDestino
+        );
+
+        if (!camino.length) {
+            return establecerObjetivo(
+                { x: 0, z: 26 },
+                ESTADOS.ENTRANDO
+            );
+        }
+
+        ruta = camino;
+        indiceRuta = 0;
+        objetivo = primerDestino;
+
+        cambiarEstado(ESTADOS.ENTRANDO);
+
+        if (typeof config.alEntrar === 'function') {
+            config.alEntrar({
+                cliente: api,
+                plaza
+            });
+        }
+
+        return true;
+    }
 
     function iniciarRegresoVehiculo(plaza, callback) {
+        if (!plaza) return false;
 
-        if (eliminado || !plaza) return;
+        liberarReserva();
 
-        plazaVehiculo = { ...plaza };
-        callbackRegreso = callback || null;
+        if (productoEnMano) {
+            devolverProducto();
+        }
 
-        liberarReservaProducto();
-
-        destino = null;
-
-        establecerRuta([
-            { x: 0, z: 23 },
+        const destinos = [
             { x: 0, z: 26 },
-            { x: 0, z: 29 },
+            { x: 0, z: 30 },
             { x: 0, z: 34 },
-            { x: plaza.x, z: 40 },
-            { x: plaza.x, z: 45 },
+            { x: plaza.x, z: 37 },
             { x: plaza.x, z: plaza.z }
-        ], false);
+        ];
 
-        estado = estados.REGRESANDO;
+        const destino = destinos[destinos.length - 1];
+
+        const camino = encontrarCamino(
+            grupo.position,
+            destino
+        );
+
+        if (!camino.length) {
+            console.warn(
+                'No se pudo encontrar un camino al vehículo.'
+            );
+            return false;
+        }
+
+        ruta = camino;
+        indiceRuta = 0;
+        objetivo = destino;
+
+        api._callbackRegreso = callback ?? null;
+
+        cambiarEstado(ESTADOS.REGRESANDO);
+
+        return true;
     }
 
     function finalizarRegreso() {
+        cambiarEstado(ESTADOS.FINALIZADO);
 
-        estado = estados.FINALIZADO;
-
-        destino = null;
-
-        animarCaminar(false);
-
-        const callback = callbackRegreso;
-        callbackRegreso = null;
-
-        if (callback) {
-            callback(api);
+        if (typeof api._callbackRegreso === 'function') {
+            api._callbackRegreso(api);
+            api._callbackRegreso = null;
         }
 
         if (typeof config.alFinalizar === 'function') {
@@ -1649,253 +1317,320 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         }
     }
 
-    // =====================================================
-    // INFORMACIÓN DE COMPRAS
-    // =====================================================
+    // ========================================================
+    // ANIMACIÓN
+    // ========================================================
 
-    function obtenerCompras() {
-        return [...compras];
+    function animarCaminar(activo) {
+        animacionActiva = activo;
+
+        if (accionCaminar) {
+            if (activo) {
+                accionReposo?.stop();
+                accionCaminar.play();
+            } else {
+                accionCaminar.stop();
+                accionReposo?.play();
+            }
+        }
     }
 
-    function obtenerTotalCompra() {
+    function animarHuesos(delta) {
+        if (!modelo || accionCaminar) return;
 
-        return compras.reduce(
-            (total, producto) => total + producto.precio,
-            0
+        faseAnimacion += delta * (animacionActiva ? 8 : 2);
+
+        const amplitud = animacionActiva ? 0.48 : 0.025;
+        const paso = Math.sin(faseAnimacion) * amplitud;
+
+        const piernaIzquierda = buscarHueso(
+            'leftupleg', 'uplegleft', 'thighl', 'leftthigh'
         );
-    }
 
-    function obtenerResumenCompra() {
-
-        return {
-            cantidad: compras.length,
-            total: obtenerTotalCompra(),
-            productos: obtenerCompras()
-        };
-    }
-
-    function confirmarCompra() {
-
-        compraConfirmada = true;
-
-        return obtenerResumenCompra();
-    }
-
-    // =====================================================
-    // CONFIGURAR COMPRAS
-    // =====================================================
-
-    function configurarCompras(opciones = {}) {
-
-        if (opciones.productos !== undefined) {
-            config.productos = opciones.productos;
-        }
-
-        if (opciones.carrito !== undefined) {
-            config.carrito = opciones.carrito;
-        }
-
-        if (opciones.probabilidadCompra !== undefined) {
-
-            config.probabilidadCompra =
-                THREE.MathUtils.clamp(
-                    opciones.probabilidadCompra,
-                    0,
-                    1
-                );
-        }
-
-        if (opciones.maximoProductos !== undefined) {
-
-            config.maximoProductos = Math.max(
-                1,
-                Math.floor(opciones.maximoProductos)
-            );
-        }
-
-        if (opciones.velocidad !== undefined) {
-
-            velocidad = Math.max(
-                0.1,
-                opciones.velocidad
-            );
-        }
-
-        if (opciones.tiempoSeleccionProducto !== undefined) {
-
-            config.tiempoSeleccionProducto = Math.max(
-                0.1,
-                opciones.tiempoSeleccionProducto
-            );
-        }
-
-        if (opciones.tiempoEntreProductos !== undefined) {
-
-            config.tiempoEntreProductos = Math.max(
-                0.1,
-                opciones.tiempoEntreProductos
-            );
-        }
-
-        if (opciones.tiempoPaseo !== undefined) {
-
-            config.tiempoPaseo = Math.max(
-                1,
-                opciones.tiempoPaseo
-            );
-        }
-
-        if (estado !== estados.ENTRANDO && estado !== estados.REGRESANDO) {
-
-            estado = estados.BUSCANDO;
-            tiempoEstado = 0;
-        }
-    }
-
-    // =====================================================
-    // POSICIÓN
-    // =====================================================
-
-    function establecerPosicion(posicion) {
-
-        if (!posicion) return;
-
-        grupo.position.set(
-            posicion.x ?? grupo.position.x,
-            posicion.y ?? grupo.position.y,
-            posicion.z ?? grupo.position.z
+        const piernaDerecha = buscarHueso(
+            'rightupleg', 'uplegright', 'thighr', 'rightthigh'
         );
+
+        const brazoIzquierdo = buscarHueso(
+            'leftarm', 'upperarml', 'leftupperarm'
+        );
+
+        const brazoDerecho = buscarHueso(
+            'rightarm', 'upperarmr', 'rightupperarm'
+        );
+
+        if (piernaIzquierda) {
+            piernaIzquierda.rotation.x = paso;
+        }
+
+        if (piernaDerecha) {
+            piernaDerecha.rotation.x = -paso;
+        }
+
+        if (brazoIzquierdo) {
+            brazoIzquierdo.rotation.x = -paso * 0.65;
+        }
+
+        if (brazoDerecho) {
+            brazoDerecho.rotation.x = paso * 0.65;
+        }
+
+        const brazo = modelo.userData?.brazos;
+
+        if (brazo?.length) {
+            brazo[0].rotation.x = paso;
+            brazo[1].rotation.x = -paso;
+        }
     }
 
-    // =====================================================
-    // ACTUALIZACIÓN PRINCIPAL
-    // =====================================================
+    // ========================================================
+    // ACTUALIZACIÓN DE ESTADOS
+    // ========================================================
 
-    function actualizar(delta = 0.016) {
+    function actualizar(delta) {
+        if (eliminado || detenido) return;
 
-        if (eliminado) return;
+        delta = limitar(numero(delta, 0), 0, 0.05);
 
-        const dt = Math.min(
-            Math.max(delta, 0),
-            0.05
-        );
+        tiempoEstado += delta;
 
         if (mixer) {
-            mixer.update(dt);
+            mixer.update(delta);
+        }
+
+        const seMueve = [
+            ESTADOS.RUTA,
+            ESTADOS.ENTRANDO,
+            ESTADOS.ACERCANDO,
+            ESTADOS.CAJA,
+            ESTADOS.REGRESANDO
+        ].includes(estado);
+
+        animarCaminar(seMueve);
+        animarHuesos(delta);
+
+        if (seMueve && objetivo) {
+            const llego = moverHaciaDestino(delta);
+
+            if (llego) {
+                switch (estado) {
+                    case ESTADOS.ENTRANDO:
+                        cambiarEstado(ESTADOS.BUSCANDO);
+                        break;
+
+                    case ESTADOS.ACERCANDO:
+                        cambiarEstado(ESTADOS.RECOGIENDO);
+                        break;
+
+                    case ESTADOS.RUTA:
+                        if (compras.length >= config.maximoProductos) {
+                            dirigirseACaja();
+                        } else {
+                            cambiarEstado(ESTADOS.BUSCANDO);
+                        }
+                        break;
+
+                    case ESTADOS.CAJA:
+                        completarPago();
+                        break;
+
+                    case ESTADOS.REGRESANDO:
+                        finalizarRegreso();
+                        break;
+                }
+            }
+
+            return;
         }
 
         switch (estado) {
-
-            case estados.INACTIVO:
-            case estados.FINALIZADO:
-            case estados.PAGANDO:
-
-                animarCaminar(false);
-
+            case ESTADOS.INACTIVO:
                 break;
 
-            case estados.ENTRANDO:
-            case estados.RUTA:
-            case estados.REGRESANDO:
-
-                actualizarRuta(dt);
-
-                break;
-
-            case estados.PASEANDO:
-
-                actualizarPaseo(dt);
-
-                break;
-
-            case estados.BUSCANDO:
-            case estados.ACERCANDO:
-            case estados.RECOGIENDO:
-            case estados.GUARDANDO:
-            case estados.ESPERANDO:
-
-                actualizarCompra(dt);
-
-                break;
-
-            case estados.CAJA:
-
-                if (moverHaciaDestino(dt)) {
-                    completarPago();
+            case ESTADOS.BUSCANDO:
+                if (Math.random() < config.probabilidadCompra) {
+                    buscarProductos();
+                } else {
+                    iniciarPaseo();
                 }
+                break;
 
+            case ESTADOS.RECOGIENDO:
+                if (tiempoEstado >= config.tiempoRecoger) {
+                    recogerProducto();
+                }
+                break;
+
+            case ESTADOS.GUARDANDO:
+                if (tiempoEstado >= config.tiempoGuardar) {
+                    guardarProducto();
+                }
+                break;
+
+            case ESTADOS.ESPERANDO:
+                tiempoReintento -= delta;
+
+                if (tiempoReintento <= 0) {
+                    if (compras.length >= config.maximoProductos) {
+                        dirigirseACaja();
+                    } else {
+                        tiempoBusqueda++;
+
+                        if (tiempoBusqueda % 3 === 0) {
+                            iniciarPaseo();
+                        } else {
+                            cambiarEstado(ESTADOS.BUSCANDO);
+                        }
+                    }
+                }
+                break;
+
+            case ESTADOS.PAGANDO:
+                if (tiempoEstado >= 2.5) {
+                    if (config.repetirRuta) {
+                        compras = [];
+                        cambiarEstado(ESTADOS.BUSCANDO);
+                    } else {
+                        cambiarEstado(ESTADOS.FINALIZADO);
+
+                        if (typeof config.alFinalizar === 'function') {
+                            config.alFinalizar(api);
+                        }
+                    }
+                }
+                break;
+
+            case ESTADOS.FINALIZADO:
                 break;
         }
     }
 
-    // =====================================================
-    // ELIMINAR
-    // =====================================================
+    // ========================================================
+    // API PÚBLICA
+    // ========================================================
+
+    function establecerRuta(nuevaRuta) {
+        if (!Array.isArray(nuevaRuta) || !nuevaRuta.length) {
+            return false;
+        }
+
+        ruta = nuevaRuta.map(p => ({
+            x: numero(p.x, 0),
+            z: numero(p.z, 0)
+        }));
+
+        indiceRuta = 0;
+        objetivo = ruta[ruta.length - 1];
+
+        cambiarEstado(ESTADOS.RUTA);
+
+        const camino = encontrarCamino(
+            grupo.position,
+            objetivo
+        );
+
+        if (camino.length) {
+            ruta = camino;
+        }
+
+        return true;
+    }
+
+    function establecerPosicion(posicion) {
+        if (!posicion) return false;
+
+        grupo.position.set(
+            numero(posicion.x, 0),
+            numero(posicion.y, 0),
+            numero(posicion.z, 0)
+        );
+
+        objetivo = null;
+        ruta = [];
+        indiceRuta = 0;
+
+        return true;
+    }
+
+    function configurarCompras(opcionesCompras = {}) {
+        Object.assign(config, opcionesCompras);
+        actualizarColisiones();
+    }
+
+    function detenerAnimacion() {
+        detenido = true;
+        animarCaminar(false);
+    }
+
+    function reproducirAnimacion() {
+        detenido = false;
+    }
 
     function eliminar() {
-
         if (eliminado) return;
 
-        eliminado = true;
+        liberarReserva();
 
-        liberarReservaProducto();
-
-        if (productoEnMano && productoOriginal) {
-            restaurarProductoOriginal();
+        if (productoEnMano) {
+            devolverProducto();
         }
 
-        productoEnMano = null;
-        productoOriginal = null;
-
         mixer?.stopAllAction();
+        mixer = null;
 
-        grupo.removeFromParent();
+        grupo.parent?.remove(grupo);
 
         grupo.traverse(objeto => {
-
             if (!objeto.isMesh) return;
 
-            // No destruir productos ni recursos compartidos.
-            if (objeto.userData?.esUnidadProducto) {
-                return;
-            }
-
-            // Evitar liberar recursos que pueden compartirse
-            // con otros clientes o modelos.
-            // La geometría y los materiales se dejan al gestor
-            // general de la escena.
-
+            // No se destruyen materiales ni geometrías compartidas.
         });
 
-        compras.length = 0;
+        eliminado = true;
+        detenido = true;
     }
 
-    // =====================================================
-    // API PÚBLICA
-    // =====================================================
-
     const api = {
-
         grupo,
 
         actualizar,
-
         establecerRuta,
         establecerPosicion,
-
         configurarCompras,
+
+        detenerAnimacion,
+        reproducirAnimacion,
 
         iniciarDesdeVehiculo,
         iniciarRegresoVehiculo,
-        iniciarPago,
+        iniciarPago: dirigirseACaja,
 
-        obtenerCompras,
-        obtenerTotalCompra,
-        obtenerResumenCompra,
+        obtenerObjetivo: () => objetivo
+            ? { ...objetivo }
+            : null,
 
-        confirmarCompra,
+        obtenerCompras: () => compras.map(c => ({
+            nombre: c.nombre,
+            codigo: c.codigo
+        })),
+
+        obtenerResumen: () => ({
+            id,
+            estado,
+            productos: compras.length,
+            posicion: {
+                x: grupo.position.x,
+                z: grupo.position.z
+            }
+        }),
+
+        obtenerEstado: () => estado,
+
+        actualizarColisiones,
 
         eliminar,
+
+        _callbackRegreso: null,
 
         get cargado() {
             return cargado;
@@ -1913,44 +1648,18 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             return eliminado;
         },
 
-        get entro() {
-            return entro;
+        get detenido() {
+            return detenido;
         },
 
-        get compraConfirmada() {
-            return compraConfirmada;
-        },
-
-        get pagoConfirmado() {
-            return pagoConfirmado;
-        },
-
-        get resumenPago() {
-            return obtenerResumenCompra();
+        get modelo() {
+            return modelo;
         },
 
         get productoEnMano() {
             return productoEnMano;
-        },
-
-        get productoObjetivo() {
-            return productoObjetivo;
-        },
-
-        get zona() {
-            return estado;
-        },
-
-        get animacionDisponible() {
-            return Boolean(
-                accionCaminar ||
-                articulaciones.piernaIzquierda.length ||
-                articulaciones.piernaDerecha.length
-            );
         }
     };
-
-    cargarModelo();
 
     return api;
 }
