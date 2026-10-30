@@ -2,47 +2,25 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-// ============================================================
-// CARRITO DE SUPERMERCADO
-// Three.js 0.180+
-// Seguimiento delante del cliente.
-// Manubrio orientado hacia el personaje.
-// ============================================================
-
 const loader = new GLTFLoader();
 
 const CONFIG_DEFAULT = {
     modelo: '/modelos/carrito.glb',
-
     posicion: { x: 0, y: 0, z: 0 },
-
     escala: 1,
-
     distancia: 1.15,
     suavizado: 6,
     velocidadMaxima: 5,
-
-    // Corrección exclusiva de la orientación del GLB.
     correccionModelo: Math.PI,
-
     alturaManubrio: 0.9,
     alturaCesta: 0.75,
-
-    // +1 coloca el carrito delante del cliente.
     ladoDelante: 1,
-
     cargarModelo: true
 };
 
-// ============================================================
-// FUNCIÓN PRINCIPAL
-// ============================================================
-
 export function crearCarrito(scene, opciones = {}) {
     if (!scene?.isScene && !scene?.isObject3D) {
-        throw new Error(
-            'crearCarrito necesita una escena THREE.Scene válida.'
-        );
+        throw new Error('crearCarrito necesita una escena THREE válida.');
     }
 
     const config = {
@@ -56,17 +34,10 @@ export function crearCarrito(scene, opciones = {}) {
 
     const grupo = new THREE.Group();
     grupo.name = 'CARRITO_SUPERMERCADO';
-
-    grupo.position.set(
-        config.posicion.x,
-        config.posicion.y,
-        config.posicion.z
-    );
-
+    grupo.position.set(config.posicion.x, config.posicion.y, config.posicion.z);
     grupo.scale.setScalar(config.escala);
     scene.add(grupo);
 
-    // Grupo independiente para corregir la orientación del GLB.
     const grupoModelo = new THREE.Group();
     grupoModelo.name = 'MODELO_CARRITO';
     grupo.add(grupoModelo);
@@ -81,14 +52,8 @@ export function crearCarrito(scene, opciones = {}) {
         siguiendo: false,
         objetivo: null,
         distancia: config.distancia,
-        productos: [],
-        ultimaPosicionObjetivo: new THREE.Vector3(),
-        temporizador: 0
+        productos: []
     };
-
-    // ========================================================
-    // MATERIALES
-    // ========================================================
 
     const materiales = {
         metal: new THREE.MeshStandardMaterial({
@@ -96,23 +61,19 @@ export function crearCarrito(scene, opciones = {}) {
             metalness: 0.82,
             roughness: 0.3
         }),
-
         metalOscuro: new THREE.MeshStandardMaterial({
             color: 0x424c52,
             metalness: 0.75,
             roughness: 0.35
         }),
-
         plastico: new THREE.MeshStandardMaterial({
             color: 0x263b43,
             roughness: 0.65
         }),
-
         goma: new THREE.MeshStandardMaterial({
             color: 0x17191b,
             roughness: 0.9
         }),
-
         detalle: new THREE.MeshStandardMaterial({
             color: 0xd5dce0,
             metalness: 0.8,
@@ -120,80 +81,34 @@ export function crearCarrito(scene, opciones = {}) {
         })
     };
 
-    // ========================================================
-    // UTILIDADES
-    // ========================================================
-
-    function crearCaja(
-        padre,
-        nombre,
-        ancho,
-        alto,
-        profundidad,
-        posicion,
-        material
-    ) {
+    function crearCaja(padre, nombre, ancho, alto, profundidad, posicion, material) {
         const mesh = new THREE.Mesh(
             new THREE.BoxGeometry(ancho, alto, profundidad),
             material
         );
 
         mesh.name = nombre;
-
-        mesh.position.set(
-            posicion.x,
-            posicion.y,
-            posicion.z
-        );
-
+        mesh.position.set(posicion.x, posicion.y, posicion.z);
         mesh.castShadow = false;
         mesh.receiveShadow = false;
-
         padre.add(mesh);
+
         return mesh;
     }
 
-    function crearBarra(
-        padre,
-        nombre,
-        inicio,
-        final,
-        radio,
-        material
-    ) {
-        const a = new THREE.Vector3(
-            inicio.x,
-            inicio.y,
-            inicio.z
-        );
-
-        const b = new THREE.Vector3(
-            final.x,
-            final.y,
-            final.z
-        );
-
-        const direccion = new THREE.Vector3()
-            .subVectors(b, a);
-
+    function crearBarra(padre, nombre, inicio, final, radio, material) {
+        const a = new THREE.Vector3(inicio.x, inicio.y, inicio.z);
+        const b = new THREE.Vector3(final.x, final.y, final.z);
+        const direccion = new THREE.Vector3().subVectors(b, a);
         const longitud = direccion.length();
 
         const mesh = new THREE.Mesh(
-            new THREE.CylinderGeometry(
-                radio,
-                radio,
-                longitud,
-                8
-            ),
+            new THREE.CylinderGeometry(radio, radio, longitud, 8),
             material
         );
 
         mesh.name = nombre;
-
-        mesh.position.copy(a)
-            .add(b)
-            .multiplyScalar(0.5);
-
+        mesh.position.copy(a).add(b).multiplyScalar(0.5);
         mesh.quaternion.setFromUnitVectors(
             new THREE.Vector3(0, 1, 0),
             direccion.normalize()
@@ -203,22 +118,15 @@ export function crearCarrito(scene, opciones = {}) {
         return mesh;
     }
 
-    // ========================================================
-    // CARRITO DE RESPALDO
-    // ========================================================
-
     function crearModeloRespaldo() {
         const modelo = new THREE.Group();
         modelo.name = 'CARRITO_RESPALDO';
 
         const ancho = 0.82;
-
         const yInferior = 0.65;
         const ySuperior = 1.22;
-
         const zFrontal = 0.52;
         const zTrasero = -0.45;
-
         const xIzquierdo = -0.4;
         const xDerecho = 0.4;
 
@@ -232,7 +140,6 @@ export function crearCarrito(scene, opciones = {}) {
             materiales.metalOscuro
         );
 
-        // Bordes superiores.
         crearBarra(
             modelo,
             'Borde_superior_izquierdo',
@@ -269,7 +176,6 @@ export function crearCarrito(scene, opciones = {}) {
             materiales.metal
         );
 
-        // Postes de la cesta.
         for (const x of [xIzquierdo, xDerecho]) {
             for (const z of [zTrasero, zFrontal]) {
                 crearBarra(
@@ -283,7 +189,6 @@ export function crearCarrito(scene, opciones = {}) {
             }
         }
 
-        // Rejillas laterales y frontales.
         for (let i = 1; i <= 5; i++) {
             const y = yInferior + i * 0.085;
 
@@ -314,17 +219,17 @@ export function crearCarrito(scene, opciones = {}) {
                 materiales.metal
             );
 
+            // Corrección: ambos extremos conservan la misma altura.
             crearBarra(
                 modelo,
                 'Rejilla_trasera',
                 { x: xIzquierdo, y, z: zTrasero },
-                { x: xDerecho, y: zTrasero, z: zTrasero },
+                { x: xDerecho, y, z: zTrasero },
                 0.012,
                 materiales.metal
             );
         }
 
-        // Fondo de la cesta.
         for (let i = 0; i <= 7; i++) {
             const x = -0.35 + i * 0.1;
 
@@ -338,7 +243,6 @@ export function crearCarrito(scene, opciones = {}) {
             );
         }
 
-        // Chasis.
         crearBarra(
             modelo,
             'Chasis_izquierdo',
@@ -357,7 +261,6 @@ export function crearCarrito(scene, opciones = {}) {
             materiales.metalOscuro
         );
 
-        // Ruedas.
         const posicionesRuedas = [
             [-0.36, 0.18, -0.42],
             [0.36, 0.18, -0.42],
@@ -367,12 +270,7 @@ export function crearCarrito(scene, opciones = {}) {
 
         for (const [x, y, z] of posicionesRuedas) {
             const rueda = new THREE.Mesh(
-                new THREE.CylinderGeometry(
-                    0.105,
-                    0.105,
-                    0.055,
-                    16
-                ),
+                new THREE.CylinderGeometry(0.105, 0.105, 0.055, 16),
                 materiales.goma
             );
 
@@ -382,12 +280,7 @@ export function crearCarrito(scene, opciones = {}) {
             modelo.add(rueda);
 
             const centro = new THREE.Mesh(
-                new THREE.CylinderGeometry(
-                    0.035,
-                    0.035,
-                    0.06,
-                    12
-                ),
+                new THREE.CylinderGeometry(0.035, 0.035, 0.06, 12),
                 materiales.detalle
             );
 
@@ -396,7 +289,6 @@ export function crearCarrito(scene, opciones = {}) {
             modelo.add(centro);
         }
 
-        // Soportes y manubrio.
         crearBarra(
             modelo,
             'Soporte_manubrio_izquierdo',
@@ -437,9 +329,19 @@ export function crearCarrito(scene, opciones = {}) {
         return modelo;
     }
 
-    // ========================================================
-    // CARGAR MODELO GLB
-    // ========================================================
+    function liberarModelo(objeto) {
+        objeto.traverse(hijo => {
+            if (!hijo.isMesh) return;
+
+            hijo.geometry?.dispose?.();
+
+            if (Array.isArray(hijo.material)) {
+                hijo.material.forEach(m => m.dispose?.());
+            } else {
+                hijo.material?.dispose?.();
+            }
+        });
+    }
 
     function cargarModelo() {
         if (!config.cargarModelo) {
@@ -451,7 +353,6 @@ export function crearCarrito(scene, opciones = {}) {
 
         loader.load(
             config.modelo,
-
             gltf => {
                 if (estado.eliminado) {
                     liberarModelo(gltf.scene);
@@ -463,7 +364,6 @@ export function crearCarrito(scene, opciones = {}) {
 
                 modelo.traverse(objeto => {
                     if (!objeto.isMesh) return;
-
                     objeto.castShadow = false;
                     objeto.receiveShadow = false;
 
@@ -472,45 +372,31 @@ export function crearCarrito(scene, opciones = {}) {
                     }
                 });
 
-                // Centrar el modelo y apoyar sus ruedas en Y=0.
                 const caja = new THREE.Box3().setFromObject(modelo);
 
                 if (!caja.isEmpty()) {
                     const centro = caja.getCenter(new THREE.Vector3());
-
                     modelo.position.x -= centro.x;
                     modelo.position.z -= centro.z;
                     modelo.position.y -= caja.min.y;
                 }
 
-                // Escalar según su altura real.
-                const cajaFinal = new THREE.Box3()
-                    .setFromObject(modelo);
-
-                const tamano = cajaFinal.getSize(new THREE.Vector3());
-                const altura = tamano.y || 1;
+                const cajaFinal = new THREE.Box3().setFromObject(modelo);
+                const altura = cajaFinal.getSize(new THREE.Vector3()).y || 1;
 
                 modelo.scale.multiplyScalar(1.25 / altura);
-
                 grupoModelo.add(modelo);
-
-                // Corrección independiente del seguimiento.
                 grupoModelo.rotation.y = config.correccionModelo;
 
                 estado.cargado = true;
-
-                console.info(
-                    '[CARRITO] Modelo GLB cargado correctamente.'
-                );
+                console.info('[CARRITO] Modelo GLB cargado correctamente.');
             },
-
             undefined,
-
             error => {
                 if (estado.eliminado) return;
 
                 console.warn(
-                    '[CARRITO] Error al cargar el GLB. Se utilizará el respaldo.',
+                    '[CARRITO] No se pudo cargar el GLB. Se utilizará el respaldo.',
                     error
                 );
 
@@ -521,41 +407,21 @@ export function crearCarrito(scene, opciones = {}) {
         );
     }
 
-    function liberarModelo(objeto) {
-        objeto.traverse(hijo => {
-            if (!hijo.isMesh) return;
-
-            hijo.geometry?.dispose?.();
-
-            if (Array.isArray(hijo.material)) {
-                hijo.material.forEach(material => material.dispose?.());
-            } else {
-                hijo.material?.dispose?.();
-            }
-        });
-    }
-
     cargarModelo();
-
-    // ========================================================
-    // SEGUIMIENTO DEL CLIENTE
-    // ========================================================
 
     function seguirObjetivo(objetivo, distancia = config.distancia) {
         if (estado.eliminado) return false;
 
-        const grupoObjetivo = objetivo?.isObject3D
+        const objetivoReal = objetivo?.isObject3D
             ? objetivo
             : objetivo?.grupo;
 
-        if (!grupoObjetivo?.isObject3D) {
-            console.warn(
-                '[CARRITO] El objetivo no es un Object3D válido.'
-            );
+        if (!objetivoReal?.isObject3D) {
+            console.warn('[CARRITO] Objetivo no válido.');
             return false;
         }
 
-        estado.objetivo = grupoObjetivo;
+        estado.objetivo = objetivoReal;
         estado.distancia = Math.max(0.5, distancia);
         estado.siguiendo = true;
 
@@ -567,10 +433,6 @@ export function crearCarrito(scene, opciones = {}) {
         estado.objetivo = null;
     }
 
-    // ========================================================
-    // ACTUALIZAR POSICIÓN Y ORIENTACIÓN
-    // ========================================================
-
     const posicionObjetivo = new THREE.Vector3();
     const direccion = new THREE.Vector3();
     const posicionDeseada = new THREE.Vector3();
@@ -581,20 +443,14 @@ export function crearCarrito(scene, opciones = {}) {
             estado.eliminado ||
             !estado.siguiendo ||
             !estado.objetivo
-        ) {
-            return;
-        }
+        ) return;
 
         const dt = Math.min(Math.max(delta || 0, 0), 0.05);
 
-        // Obtener posición mundial del cliente.
         estado.objetivo.getWorldPosition(posicionObjetivo);
 
-        // El cliente utiliza un THREE.Group.
-        // Su dirección frontal local es +Z.
         direccion.set(0, 0, 1);
         estado.objetivo.getWorldDirection(direccion);
-
         direccion.y = 0;
 
         if (direccion.lengthSq() < 0.0001) {
@@ -603,9 +459,7 @@ export function crearCarrito(scene, opciones = {}) {
 
         direccion.normalize();
 
-        // El carrito queda delante del personaje.
         posicionDeseada.copy(posicionObjetivo);
-
         posicionDeseada.addScaledVector(
             direccion,
             estado.distancia * config.ladoDelante
@@ -613,18 +467,12 @@ export function crearCarrito(scene, opciones = {}) {
 
         posicionDeseada.y = config.posicion.y;
 
-        // Seguimiento suave.
         grupo.position.lerp(
             posicionDeseada,
             1 - Math.exp(-config.suavizado * dt)
         );
 
-        // El manubrio apunta hacia el cliente.
-        haciaCliente.subVectors(
-            posicionObjetivo,
-            grupo.position
-        );
-
+        haciaCliente.subVectors(posicionObjetivo, grupo.position);
         haciaCliente.y = 0;
 
         if (haciaCliente.lengthSq() > 0.0001) {
@@ -635,14 +483,32 @@ export function crearCarrito(scene, opciones = {}) {
         }
     }
 
-    // ========================================================
+    // ---------------------------------------------------------
+    // POSICIÓN REAL DE DEPÓSITO
+    // ---------------------------------------------------------
+
+    function obtenerPosicionLocalDeposito(indice = estado.productos.length) {
+        const columna = indice % 3;
+        const fila = Math.floor(indice / 3);
+
+        return new THREE.Vector3(
+            (columna - 1) * 0.22,
+            0.68 + fila * 0.12,
+            fila % 2 === 0 ? -0.08 : 0.12
+        );
+    }
+
+    function obtenerPuntoDeposito(indice = estado.productos.length) {
+        const punto = obtenerPosicionLocalDeposito(indice);
+        return objetosEnCesta.localToWorld(punto.clone());
+    }
+
+    // ---------------------------------------------------------
     // INVENTARIO
-    // ========================================================
+    // ---------------------------------------------------------
 
     function agregarProducto(objeto, opcionesProducto = {}) {
-        if (estado.eliminado || !objeto?.isObject3D) {
-            return false;
-        }
+        if (estado.eliminado || !objeto?.isObject3D) return false;
 
         if (estado.productos.some(p => p.objeto === objeto)) {
             return false;
@@ -651,87 +517,71 @@ export function crearCarrito(scene, opciones = {}) {
         const padreOriginal = objeto.parent;
 
         if (!padreOriginal) {
-            console.warn(
-                '[CARRITO] El producto no tiene un padre original.'
-            );
+            console.warn('[CARRITO] El producto no tiene padre original.');
             return false;
         }
-
-        const posicionMundial = objeto.getWorldPosition(
-            new THREE.Vector3()
-        );
-
-        const quaternionMundial = objeto.getWorldQuaternion(
-            new THREE.Quaternion()
-        );
-
-        const escalaMundial = objeto.getWorldScale(
-            new THREE.Vector3()
-        );
 
         const registro = {
             objeto,
             padreOriginal,
-            posicionMundial,
-            quaternionMundial,
-            escalaMundial,
-            nombre: opcionesProducto.nombre ??
-                objeto.name ??
-                'Producto',
+            posicionMundial: objeto.getWorldPosition(new THREE.Vector3()),
+            quaternionMundial: objeto.getWorldQuaternion(new THREE.Quaternion()),
+            escalaMundial: objeto.getWorldScale(new THREE.Vector3()),
+            nombre: opcionesProducto.nombre ?? objeto.userData?.nombre ?? objeto.name ?? 'Producto',
             cantidad: opcionesProducto.cantidad ?? 1,
-            precio: opcionesProducto.precio ?? 0
+            precio: opcionesProducto.precio ?? objeto.userData?.precio ?? 0
         };
 
-        objetosEnCesta.attach(objeto);
+        const indice = estado.productos.length;
+        const posicionLocal = obtenerPosicionLocalDeposito(indice);
 
-        objeto.position.set(
-            (Math.random() - 0.5) * 0.35,
-            0.76 + estado.productos.length * 0.08,
-            (Math.random() - 0.5) * 0.45
-        );
+        objetosEnCesta.attach(objeto);
+        objeto.position.copy(posicionLocal);
 
         objeto.rotation.set(
             0,
-            Math.random() * Math.PI * 2,
+            opcionesProducto.rotacionY ?? Math.random() * Math.PI * 2,
             0
         );
 
-        const escalaActual = objeto.getWorldScale(
-            new THREE.Vector3()
+        // Se limita el tamaño del producto sin alterar su escala mundial
+        // de manera desproporcionada.
+        const escalaActual = objeto.getWorldScale(new THREE.Vector3());
+        const alturaActual = Math.max(
+            escalaActual.x,
+            escalaActual.y,
+            escalaActual.z,
+            0.01
         );
 
-        const factorEscala = Math.min(
-            1,
-            0.65 / Math.max(escalaActual.y, 0.01)
-        );
-
-        objeto.scale.multiplyScalar(factorEscala);
+        if (alturaActual > 0.65) {
+            objeto.scale.multiplyScalar(0.65 / alturaActual);
+        }
 
         estado.productos.push(registro);
+
+        objeto.userData.enCarrito = true;
+        objeto.userData.reservado = false;
 
         return true;
     }
 
     function devolverProducto(objeto) {
-        const indice = estado.productos.findIndex(
-            producto => producto.objeto === objeto
-        );
-
+        const indice = estado.productos.findIndex(p => p.objeto === objeto);
         if (indice === -1) return false;
 
         const registro = estado.productos[indice];
+        const padre = registro.padreOriginal;
 
-        if (!registro.padreOriginal) return false;
+        if (!padre) return false;
 
-        registro.padreOriginal.attach(registro.objeto);
+        padre.attach(registro.objeto);
 
         registro.objeto.position.copy(
-            registro.padreOriginal.worldToLocal(
-                registro.posicionMundial.clone()
-            )
+            padre.worldToLocal(registro.posicionMundial.clone())
         );
 
-        const quaternionPadre = registro.padreOriginal
+        const quaternionPadre = padre
             .getWorldQuaternion(new THREE.Quaternion())
             .invert();
 
@@ -739,9 +589,7 @@ export function crearCarrito(scene, opciones = {}) {
             .copy(quaternionPadre)
             .multiply(registro.quaternionMundial);
 
-        const escalaPadre = registro.padreOriginal.getWorldScale(
-            new THREE.Vector3()
-        );
+        const escalaPadre = padre.getWorldScale(new THREE.Vector3());
 
         registro.objeto.scale.set(
             registro.escalaMundial.x / (escalaPadre.x || 1),
@@ -749,6 +597,7 @@ export function crearCarrito(scene, opciones = {}) {
             registro.escalaMundial.z / (escalaPadre.z || 1)
         );
 
+        registro.objeto.userData.enCarrito = false;
         estado.productos.splice(indice, 1);
 
         return true;
@@ -772,6 +621,10 @@ export function crearCarrito(scene, opciones = {}) {
 
         for (const producto of productos) {
             producto.objeto?.parent?.remove(producto.objeto);
+            if (producto.objeto) {
+                producto.objeto.userData.vendido = true;
+                producto.objeto.userData.enCarrito = false;
+            }
         }
 
         return productos;
@@ -788,15 +641,10 @@ export function crearCarrito(scene, opciones = {}) {
 
     function obtenerTotal() {
         return estado.productos.reduce(
-            (total, registro) =>
-                total + registro.precio * registro.cantidad,
+            (total, registro) => total + registro.precio * registro.cantidad,
             0
         );
     }
-
-    // ========================================================
-    // ELIMINAR CARRITO
-    // ========================================================
 
     function eliminar() {
         if (estado.eliminado) return;
@@ -806,20 +654,9 @@ export function crearCarrito(scene, opciones = {}) {
         estado.objetivo = null;
 
         vaciarInventario();
-
         scene.remove(grupo);
 
-        grupoModelo.traverse(objeto => {
-            if (!objeto.isMesh) return;
-
-            objeto.geometry?.dispose?.();
-
-            if (Array.isArray(objeto.material)) {
-                objeto.material.forEach(m => m.dispose?.());
-            } else {
-                objeto.material?.dispose?.();
-            }
-        });
+        liberarModelo(grupoModelo);
 
         for (const material of Object.values(materiales)) {
             material.dispose();
@@ -830,17 +667,12 @@ export function crearCarrito(scene, opciones = {}) {
         grupo.clear();
     }
 
-    // ========================================================
-    // API PÚBLICA
-    // ========================================================
-
-    const api = {
+    return {
         grupo,
         grupoModelo,
         objetosEnCesta,
 
         actualizar,
-
         seguirObjetivo,
         detenerSeguimiento,
 
@@ -851,6 +683,7 @@ export function crearCarrito(scene, opciones = {}) {
 
         obtenerProductos,
         obtenerTotal,
+        obtenerPuntoDeposito,
 
         eliminar,
 
@@ -870,6 +703,4 @@ export function crearCarrito(scene, opciones = {}) {
             return estado.cargado;
         }
     };
-
-    return api;
 }
