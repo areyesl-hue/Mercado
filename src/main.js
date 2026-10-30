@@ -1,4 +1,3 @@
-
 import * as THREE from 'three';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 
@@ -51,6 +50,7 @@ const CONFIG = {
 
 // ============================================================
 // RUTAS DE CLIENTES
+// SE CONSERVAN PARA LOS VISITANTES QUE LLEGAN EN VEHÍCULOS
 // ============================================================
 
 const CONFIG_CLIENTES = [
@@ -296,7 +296,7 @@ function iniciar() {
     crearInterfaz();
     crearEstructuraSupermercado();
 
-    crearClientesIndependientes();
+    // Clientes independientes desactivados.
     crearLadrones();
     crearSistemaVehiculos();
 
@@ -456,50 +456,6 @@ function crearControles() {
             !controles.isLocked
         ) {
             controles.lock();
-        }
-    });
-}
-
-// ============================================================
-// CLIENTES INDEPENDIENTES
-// ============================================================
-
-function crearClientesIndependientes() {
-    CONFIG_CLIENTES.forEach(config => {
-        try {
-            const cliente = crearClienteSupermercado(escena, {
-                id: config.nombre,
-                modelo: config.modelo,
-
-                posicion: {
-                    x: config.ruta[0].x,
-                    y: 0,
-                    z: config.ruta[0].z
-                },
-
-                velocidad: CONFIG.velocidadCliente,
-                escala: 1,
-
-                ruta: config.ruta.slice(1),
-                repetirRuta: true,
-
-                probabilidadCompra: CONFIG.probabilidadCompra,
-                tiempoExaminar: CONFIG.tiempoExaminar,
-                distanciaRecoger: CONFIG.distanciaRecoger,
-                pausaEntreCompras: CONFIG.pausaEntreCompras,
-
-                distanciaDestino: 0.8,
-                radioColision: 0.42
-            });
-
-            if (!cliente) return;
-
-            cliente.nombre = config.nombre;
-            cliente._esVisitanteIndependiente = true;
-
-            clientesSupermercado.push(cliente);
-        } catch (error) {
-            console.error(`Error creando ${config.nombre}:`, error);
         }
     });
 }
