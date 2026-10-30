@@ -9,33 +9,24 @@ const productosReservadosGlobal = new Map();
 
 const CONFIG_BASE = {
     modelo: '/modelos/Cliente1.glb',
-
     posicion: { x: 0, y: 0, z: 20 },
-
     altura: 1.75,
     escala: 1,
     velocidad: 1.5,
-
     repetirRuta: false,
     inactivo: false,
-
     probabilidadCompra: 0.85,
     distanciaProducto: 1.25,
     tiempoSeleccionProducto: 2.5,
     tiempoEntreProductos: 1.5,
-
     maximoProductos: 3,
-
     radioColision: 0.65,
-
     limiteX: 29,
     limiteZMin: -27,
     limiteZMax: 27,
-
     ruta: [],
     productos: [],
     carrito: null,
-
     alEntrar: null,
     alComprar: null,
     alPagar: null,
@@ -119,9 +110,20 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     let accionCaminar = null;
     let accionReposo = null;
 
+    let modeloCargado = null;
+    let tieneHuesosAnimables = false;
+    let usaAnimacionProcedural = false;
+
     const provisional = new THREE.Group();
     provisional.name = 'MODELO_PROVISIONAL_CLIENTE';
     grupo.add(provisional);
+
+    const articulaciones = {
+        piernaIzquierda: [],
+        piernaDerecha: [],
+        brazoIzquierdo: [],
+        brazoDerecho: []
+    };
 
     // ========================================================
     // MODELO PROVISIONAL
@@ -182,7 +184,148 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         caja('ZAPATO_IZQUIERDO', [0.19, 0.09, 0.29], zapatos, [-0.12, 0.32, 0.045]);
         caja('ZAPATO_DERECHO', [0.19, 0.09, 0.29], zapatos, [0.12, 0.32, 0.045]);
 
+        articulaciones.piernaIzquierda = [
+            provisional.getObjectByName('PIERNA_IZQUIERDA')
+        ];
+
+        articulaciones.piernaDerecha = [
+            provisional.getObjectByName('PIERNA_DERECHA')
+        ];
+
+        articulaciones.brazoIzquierdo = [
+            provisional.getObjectByName('BRAZO_IZQUIERDO')
+        ];
+
+        articulaciones.brazoDerecho = [
+            provisional.getObjectByName('BRAZO_DERECHO')
+        ];
+
         cargado = true;
+    }
+
+    // ========================================================
+    // DETECCIÓN AUTOMÁTICA DE HUESOS
+    // ========================================================
+
+    function normalizarNombre(nombre) {
+        return String(nombre || '')
+            .toLowerCase()
+            .replace(/mixamorig/gi, '')
+            .replace(/[^a-z0-9]/g, '');
+    }
+
+    function buscarHueso(patrones, lado) {
+        const entradas = Object.entries(huesos);
+
+        for (const [nombre, hueso] of entradas) {
+            const normalizado = normalizarNombre(nombre);
+
+            const coincideLado = lado === 'izquierdo'
+                ? /left|izquierdo|izquierda|_l$|^l/.test(normalizado)
+                : /right|derecho|derecha|_r$|^r/.test(normalizado);
+
+            if (!coincideLado) continue;
+
+            if (patrones.some(patron => patron.test(normalizado))) {
+                return hueso;
+            }
+        }
+
+        return null;
+    }
+
+    function agregarArticulacion(lista, hueso) {
+        if (!hueso || lista.includes(hueso)) return;
+
+        lista.push(hueso);
+    }
+
+    function detectarHuesosAnimables() {
+        articulaciones.piernaIzquierda = [];
+        articulaciones.piernaDerecha = [];
+        articulaciones.brazoIzquierdo = [];
+        articulaciones.brazoDerecho = [];
+
+        const patronesPierna = [
+            /upleg/,
+            /upperleg/,
+            /thigh/,
+            /leg$/
+        ];
+
+        const patronesBrazo = [
+            /arm$/,
+            /uparm/,
+            /upperarm/,
+            /shoulder/
+        ];
+
+        const patronesAntebrazo = [
+            /forearm/,
+            /lowerarm/
+        ];
+
+        const patronesPantorrilla = [
+            /calf/,
+            /shin/,
+            /lowerleg/
+        ];
+
+        const izquierdaPierna = buscarHueso(
+            [...patronesPierna, ...patronesPantorrilla],
+            'izquierdo'
+        );
+
+        const derechaPierna = buscarHueso(
+            [...patronesPierna, ...patronesPantorrilla],
+            'derecho'
+        );
+
+        const izquierdaBrazo = buscarHueso(
+            [...patronesBrazo, ...patronesAntebrazo],
+            'izquierdo'
+        );
+
+        const derechaBrazo = buscarHueso(
+            [...patronesBrazo, ...patronesAntebrazo],
+            'derecho'
+        );
+
+        agregarArticulacion(
+            articulaciones.piernaIzquierda,
+            izquierdaPierna
+        );
+
+        agregarArticulacion(
+            articulaciones.piernaDerecha,
+            derechaPierna
+        );
+
+        agregarArticulacion(
+            articulaciones.brazoIzquierdo,
+            izquierdaBrazo
+        );
+
+        agregarArticulacion(
+            articulaciones.brazoDerecho,
+            derechaBrazo
+        );
+
+        tieneHuesosAnimables =
+            articulaciones.piernaIzquierda.length > 0 ||
+            articulaciones.piernaDerecha.length > 0 ||
+            articulaciones.brazoIzquierdo.length > 0 ||
+            articulaciones.brazoDerecho.length > 0;
+
+        usaAnimacionProcedural = tieneHuesosAnimables;
+
+        console.info('[CLIENTE] Huesos detectados:', {
+            piernas: articulaciones.piernaIzquierda.length +
+                articulaciones.piernaDerecha.length,
+            brazos: articulaciones.brazoIzquierdo.length +
+                articulaciones.brazoDerecho.length,
+            animacionProcedural: usaAnimacionProcedural
+        });
     }
 
     // ========================================================
@@ -225,6 +368,10 @@ export function crearClienteSupermercado(scene, opciones = {}) {
                 provisional.visible = false;
                 grupo.add(modelo);
 
+                modeloCargado = modelo;
+
+                detectarHuesosAnimables();
+
                 if (gltf.animations?.length) {
                     mixer = new THREE.AnimationMixer(modelo);
 
@@ -244,11 +391,20 @@ export function crearClienteSupermercado(scene, opciones = {}) {
                         accionReposo = mixer.clipAction(reposo);
                         accionReposo.play();
                     }
+
+                    if (!caminar && !reposo) {
+                        console.info(
+                            '[CLIENTE] El GLB no tiene clips reconocibles de caminar o reposo.'
+                        );
+                    }
                 }
 
                 cargado = true;
 
                 console.info(`[CLIENTE] Modelo cargado: ${config.modelo}`);
+                console.info(
+                    `[CLIENTE] Animación disponible: ${Boolean(accionCaminar || tieneHuesosAnimables)}`
+                );
             },
 
             undefined,
@@ -267,10 +423,43 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     }
 
     // ========================================================
-    // ANIMACIÓN
+    // ANIMACIÓN PROCEDURAL
     // ========================================================
 
+    function animarArticulaciones(lista, valor) {
+        for (const hueso of lista) {
+            if (!hueso) continue;
+
+            if (!hueso.userData.rotacionBaseAnimacion) {
+                hueso.userData.rotacionBaseAnimacion =
+                    hueso.rotation.clone();
+            }
+
+            const base = hueso.userData.rotacionBaseAnimacion;
+
+            hueso.rotation.x = base.x + valor;
+        }
+    }
+
+    function detenerAnimacionProcedural() {
+        for (const lista of Object.values(articulaciones)) {
+            animarArticulaciones(lista, 0);
+        }
+
+        const piernaIzquierda = provisional.getObjectByName('PIERNA_IZQUIERDA');
+        const piernaDerecha = provisional.getObjectByName('PIERNA_DERECHA');
+        const brazoIzquierdo = provisional.getObjectByName('BRAZO_IZQUIERDO');
+        const brazoDerecho = provisional.getObjectByName('BRAZO_DERECHO');
+
+        if (piernaIzquierda) piernaIzquierda.rotation.x = 0;
+        if (piernaDerecha) piernaDerecha.rotation.x = 0;
+        if (brazoIzquierdo) brazoIzquierdo.rotation.x = 0;
+        if (brazoDerecho) brazoDerecho.rotation.x = 0;
+    }
+
     function animarCaminar(activo) {
+        const fase = animacionTiempo * 7;
+
         if (accionCaminar) {
             if (activo) {
                 accionReposo?.stop();
@@ -285,11 +474,36 @@ export function crearClienteSupermercado(scene, opciones = {}) {
                     accionReposo.reset().play();
                 }
             }
-
-            return;
         }
 
-        const fase = animacionTiempo * 7;
+        if (usaAnimacionProcedural) {
+            if (activo) {
+                const movimientoPiernas = Math.sin(fase) * 0.48;
+                const movimientoBrazos = Math.sin(fase) * 0.34;
+
+                animarArticulaciones(
+                    articulaciones.piernaIzquierda,
+                    movimientoPiernas
+                );
+
+                animarArticulaciones(
+                    articulaciones.piernaDerecha,
+                    -movimientoPiernas
+                );
+
+                animarArticulaciones(
+                    articulaciones.brazoIzquierdo,
+                    -movimientoBrazos
+                );
+
+                animarArticulaciones(
+                    articulaciones.brazoDerecho,
+                    movimientoBrazos
+                );
+            } else {
+                detenerAnimacionProcedural();
+            }
+        }
 
         const piernaIzquierda = provisional.getObjectByName('PIERNA_IZQUIERDA');
         const piernaDerecha = provisional.getObjectByName('PIERNA_DERECHA');
@@ -297,21 +511,10 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         const brazoDerecho = provisional.getObjectByName('BRAZO_DERECHO');
 
         if (activo) {
-            if (piernaIzquierda) {
-                piernaIzquierda.rotation.x = Math.sin(fase) * 0.45;
-            }
-
-            if (piernaDerecha) {
-                piernaDerecha.rotation.x = -Math.sin(fase) * 0.45;
-            }
-
-            if (brazoIzquierdo) {
-                brazoIzquierdo.rotation.x = -Math.sin(fase) * 0.3;
-            }
-
-            if (brazoDerecho) {
-                brazoDerecho.rotation.x = Math.sin(fase) * 0.3;
-            }
+            if (piernaIzquierda) piernaIzquierda.rotation.x = Math.sin(fase) * 0.45;
+            if (piernaDerecha) piernaDerecha.rotation.x = -Math.sin(fase) * 0.45;
+            if (brazoIzquierdo) brazoIzquierdo.rotation.x = -Math.sin(fase) * 0.3;
+            if (brazoDerecho) brazoDerecho.rotation.x = Math.sin(fase) * 0.3;
         } else {
             if (piernaIzquierda) piernaIzquierda.rotation.x = 0;
             if (piernaDerecha) piernaDerecha.rotation.x = 0;
@@ -414,11 +617,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             return;
         }
 
-        destino = new THREE.Vector3(
-            punto.x,
-            0,
-            punto.z
-        );
+        destino = new THREE.Vector3(punto.x, 0, punto.z);
     }
 
     function moverHaciaDestino(delta) {
@@ -495,7 +694,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         const candidatos = disponibles
             .map(objeto => {
                 const posicion = new THREE.Vector3();
-
                 objeto.getWorldPosition(posicion);
 
                 return {
@@ -659,7 +857,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
                     recogerProducto();
                 } else {
                     liberarReservaProducto();
-
                     estado = estados.ESPERANDO;
                     tiempoEstado = 0;
                 }
@@ -1095,6 +1292,10 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         get zona() {
             return estado;
+        },
+
+        get animacionDisponible() {
+            return Boolean(accionCaminar || tieneHuesosAnimables);
         }
     };
 
