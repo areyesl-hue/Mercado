@@ -1,11 +1,11 @@
+
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 // ============================================================
 // PRODUCTOS DEL SUPERMERCADO
-// Optimizado para rendimiento e interacción con clientes.
-// Las bebidas permanecen en los refrigeradores.
-// Cada unidad tiene un identificador individual.
+// Precios provisionales en pesos mexicanos (MXN).
+// Cada unidad tiene su propio identificador, precio y estado.
 // ============================================================
 
 export function crearProductosLacteos(scene) {
@@ -22,6 +22,65 @@ export function crearProductosLacteos(scene) {
     scene.add(productos);
 
     const GIRO_FRENTE = Math.PI / 2;
+
+    // ========================================================
+    // PRECIOS PROVISIONALES MXN
+    // ========================================================
+
+    const PRECIOS = {
+        GALLETAS: 23,
+        CEREAL: 58,
+        CEREAL_2: 58,
+        NESQUIK: 55,
+        NESQUIK_EXTRA: 55,
+        ABARROTES: 30,
+        ABARROTES_SURTIDOS: 30,
+        DESPENSA: 30,
+        ENLATADOS: 25,
+        ENLATADOS_SURTIDOS: 25,
+        DORITOS: 22,
+        DORITOS_SURTIDOS: 22,
+        SABRITAS: 18,
+        SABRITAS_SURTIDAS: 18,
+        PAPEL: 35,
+        PAPEL_HOGAR: 35,
+        HIGIENE_PERSONAL: 45,
+        HIGIENE_SURTIDA: 45,
+        TOALLITAS_BEBE: 42,
+        BEBE_SURTIDO: 42,
+
+        SANTA_CLARA: 30,
+        LALA: 29,
+        AGUA: 15,
+        AGUA_FRIA: 15,
+        PEPSI: 20,
+        PEPSI_EXTRA: 20,
+        REFRESCOS_SURTIDOS: 22,
+
+        UVAS: 35,
+        PERA: 12,
+        LIMON: 5,
+        BROCOLI: 18,
+        PEPINO: 12,
+        MANZANA: 10,
+        PLATANO: 8,
+
+        POLLO: 45,
+        FILETE: 55,
+
+        CLORO: 24,
+        DETERGENTE: 48,
+        DETERGENTE_2: 48,
+        SUAVIZANTE: 42,
+        LIMPIADOR: 35,
+
+        BLUSA: 180,
+        SUDADERA_NEGRA: 350,
+        SUDADERA_ROJA: 350,
+        CHAMARRA_NEGRA: 550,
+        PANTALON_MEZCLILLA: 420,
+        VESTIDO: 380
+    };
 
     // Alturas de las superficies de exposición.
     const nivelesGondola = [0.48, 1.12, 1.76];
@@ -126,6 +185,20 @@ export function crearProductosLacteos(scene) {
             .replace(/_\d+$/, '');
     }
 
+    function obtenerPrecio(codigo) {
+        const precio = PRECIOS[codigo];
+
+        if (Number.isFinite(precio)) {
+            return precio;
+        }
+
+        console.warn(
+            `No hay precio configurado para "${codigo}". Se asignarán $0.00 MXN.`
+        );
+
+        return 0;
+    }
+
     // ========================================================
     // CREAR UNA COPIA DE PRODUCTO
     // ========================================================
@@ -154,7 +227,6 @@ export function crearProductosLacteos(scene) {
 
         modelo.updateMatrixWorld(true);
 
-        // Medir el modelo después de aplicar su rotación.
         const cajaInicial = new THREE.Box3().setFromObject(modelo);
         const dimensiones = new THREE.Vector3();
 
@@ -179,7 +251,7 @@ export function crearProductosLacteos(scene) {
         modelo.scale.setScalar(escala);
         modelo.updateMatrixWorld(true);
 
-        // Colocar la base del modelo exactamente sobre la altura indicada.
+        // Colocar la base del modelo sobre la altura indicada.
         const cajaFinal = new THREE.Box3().setFromObject(modelo);
         const centro = new THREE.Vector3();
 
@@ -202,33 +274,38 @@ export function crearProductosLacteos(scene) {
         ).padStart(5, '0')}`;
 
         const codigoCatalogo = obtenerCodigoCatalogo(nombre);
+        const precio = obtenerPrecio(codigoCatalogo);
 
         modelo.userData.esUnidadProducto = true;
+        modelo.userData.tipo = 'producto';
+        modelo.userData.esProducto = true;
 
-        // Identificador exclusivo para esta copia.
+        // Identificadores.
         modelo.userData.idUnidadProducto = idUnidad;
-
-        // codigoProducto es único para evitar confundir unidades.
         modelo.userData.codigoProducto = idUnidad;
-
-        // Código común para identificar el tipo de producto.
         modelo.userData.codigoCatalogo = codigoCatalogo;
         modelo.userData.skuProducto = codigoCatalogo;
 
+        // Nombres.
         modelo.userData.nombreProducto = codigoCatalogo;
         modelo.userData.nombreVisible = nombre;
         modelo.userData.nombreUnidad = nombre;
 
+        // Precio y moneda.
+        modelo.userData.precio = precio;
+        modelo.userData.moneda = 'MXN';
+
+        // Categoría.
         modelo.userData.categoria = categoria;
 
+        // Estado inicial.
         modelo.userData.recogido = false;
         modelo.userData.vendido = false;
         modelo.userData.reservado = false;
-
+        modelo.userData.enCarrito = false;
         modelo.userData.disponible = true;
 
-        // Guardar la posición original para devolver el producto
-        // al estante cuando el sistema de clientes lo requiera.
+        // Posición original para devolverlo al estante.
         modelo.userData.posicionEstante = {
             x: modelo.position.x,
             y: modelo.position.y,
@@ -241,7 +318,6 @@ export function crearProductosLacteos(scene) {
             z: modelo.rotation.z
         };
 
-        // La posición y la geometría quedan actualizadas.
         modelo.updateMatrixWorld(true);
 
         productos.add(modelo);
@@ -472,33 +548,23 @@ export function crearProductosLacteos(scene) {
             config.archivo,
             config.nombre,
             (original) => {
-                nivelesGondola.forEach(
-                    (nivel, nivelIndex) => {
-                        posicionesEstante.forEach(
-                            (desplazamiento, indice) => {
-                                // Mantener los productos sobre la
-                                // zona de exposición de la góndola.
-                                const x =
-                                    config.rackX +
-                                    config.lado * 0.30;
+                nivelesGondola.forEach((nivel, nivelIndex) => {
+                    posicionesEstante.forEach((desplazamiento, indice) => {
+                        const x = config.rackX + config.lado * 0.30;
+                        const z = config.rackZ + desplazamiento;
 
-                                const z =
-                                    config.rackZ + desplazamiento;
-
-                                crearCopia(
-                                    original,
-                                    `${config.codigo}_N${nivelIndex + 1}_${indice + 1}`,
-                                    x,
-                                    nivel + 0.07,
-                                    z,
-                                    config.altura,
-                                    0,
-                                    config.categoria
-                                );
-                            }
+                        crearCopia(
+                            original,
+                            `${config.codigo}_N${nivelIndex + 1}_${indice + 1}`,
+                            x,
+                            nivel + 0.07,
+                            z,
+                            config.altura,
+                            0,
+                            config.categoria
                         );
-                    }
-                );
+                    });
+                });
             }
         );
     }
@@ -573,24 +639,20 @@ export function crearProductosLacteos(scene) {
             config.archivo,
             config.nombre,
             (original) => {
-                nivelesRefrigerador.forEach(
-                    (nivel, nivelIndex) => {
-                        posicionesRefrigerador.forEach(
-                            (dx, indice) => {
-                                crearCopia(
-                                    original,
-                                    `${config.codigo}_N${nivelIndex + 1}_${indice + 1}`,
-                                    config.x + dx,
-                                    nivel + 0.04,
-                                    -26.22,
-                                    config.altura,
-                                    0,
-                                    config.categoria
-                                );
-                            }
+                nivelesRefrigerador.forEach((nivel, nivelIndex) => {
+                    posicionesRefrigerador.forEach((dx, indice) => {
+                        crearCopia(
+                            original,
+                            `${config.codigo}_N${nivelIndex + 1}_${indice + 1}`,
+                            config.x + dx,
+                            nivel + 0.04,
+                            -26.22,
+                            config.altura,
+                            0,
+                            config.categoria
                         );
-                    }
-                );
+                    });
+                });
             }
         );
     });
@@ -600,32 +662,17 @@ export function crearProductosLacteos(scene) {
     // ========================================================
 
     const mesasFrescos = {
-        Mesa_frescos_01: {
-            x: -25.5,
-            z: 15
-        },
-        Mesa_frescos_02: {
-            x: -21.7,
-            z: 15
-        },
-        Mesa_frescos_03: {
-            x: -25.5,
-            z: 10.8
-        },
-        Mesa_frescos_04: {
-            x: -21.7,
-            z: 10.8
-        }
+        Mesa_frescos_01: { x: -25.5, z: 15 },
+        Mesa_frescos_02: { x: -21.7, z: 15 },
+        Mesa_frescos_03: { x: -25.5, z: 10.8 },
+        Mesa_frescos_04: { x: -21.7, z: 10.8 }
     };
 
     function colocarEnMesa(config) {
         const mesa = mesasFrescos[config.mesa];
 
         if (!mesa) {
-            console.error(
-                `Mesa no encontrada: ${config.mesa}`
-            );
-
+            console.error(`Mesa no encontrada: ${config.mesa}`);
             return;
         }
 
@@ -633,20 +680,18 @@ export function crearProductosLacteos(scene) {
             config.archivo,
             config.nombre,
             (original) => {
-                config.posiciones.forEach(
-                    ([dx, dz], indice) => {
-                        crearCopia(
-                            original,
-                            `${config.codigo}_${String(indice + 1).padStart(2, '0')}`,
-                            mesa.x + dx,
-                            1.015,
-                            mesa.z + dz,
-                            config.altura,
-                            0,
-                            'Frutas y verduras'
-                        );
-                    }
-                );
+                config.posiciones.forEach(([dx, dz], indice) => {
+                    crearCopia(
+                        original,
+                        `${config.codigo}_${String(indice + 1).padStart(2, '0')}`,
+                        mesa.x + dx,
+                        1.015,
+                        mesa.z + dz,
+                        config.altura,
+                        0,
+                        'Frutas y verduras'
+                    );
+                });
             }
         );
     }
@@ -658,10 +703,8 @@ export function crearProductosLacteos(scene) {
         mesa: 'Mesa_frescos_01',
         altura: 0.25,
         posiciones: [
-            [-0.55, -0.30],
-            [0.55, -0.30],
-            [-0.55, 0.30],
-            [0.55, 0.30]
+            [-0.55, -0.30], [0.55, -0.30],
+            [-0.55, 0.30], [0.55, 0.30]
         ]
     });
 
@@ -672,12 +715,8 @@ export function crearProductosLacteos(scene) {
         mesa: 'Mesa_frescos_02',
         altura: 0.25,
         posiciones: [
-            [-0.65, -0.30],
-            [0, -0.30],
-            [0.65, -0.30],
-            [-0.65, 0.30],
-            [0, 0.30],
-            [0.65, 0.30]
+            [-0.65, -0.30], [0, -0.30], [0.65, -0.30],
+            [-0.65, 0.30], [0, 0.30], [0.65, 0.30]
         ]
     });
 
@@ -688,8 +727,7 @@ export function crearProductosLacteos(scene) {
         mesa: 'Mesa_frescos_03',
         altura: 0.18,
         posiciones: [
-            [-0.55, -0.30],
-            [0.55, -0.30]
+            [-0.55, -0.30], [0.55, -0.30]
         ]
     });
 
@@ -700,8 +738,7 @@ export function crearProductosLacteos(scene) {
         mesa: 'Mesa_frescos_03',
         altura: 0.28,
         posiciones: [
-            [-0.55, 0.30],
-            [0.55, 0.30]
+            [-0.55, 0.30], [0.55, 0.30]
         ]
     });
 
@@ -712,8 +749,7 @@ export function crearProductosLacteos(scene) {
         mesa: 'Mesa_frescos_03',
         altura: 0.28,
         posiciones: [
-            [-0.55, 0],
-            [0.55, 0]
+            [-0.55, 0], [0.55, 0]
         ]
     });
 
@@ -724,12 +760,8 @@ export function crearProductosLacteos(scene) {
         mesa: 'Mesa_frescos_04',
         altura: 0.25,
         posiciones: [
-            [-0.65, -0.30],
-            [0, -0.30],
-            [0.65, -0.30],
-            [-0.65, 0.30],
-            [0, 0.30],
-            [0.65, 0.30]
+            [-0.65, -0.30], [0, -0.30], [0.65, -0.30],
+            [-0.65, 0.30], [0, 0.30], [0.65, 0.30]
         ]
     });
 
@@ -740,8 +772,7 @@ export function crearProductosLacteos(scene) {
         mesa: 'Mesa_frescos_02',
         altura: 0.25,
         posiciones: [
-            [-0.55, 0.52],
-            [0.55, 0.52]
+            [-0.55, 0.52], [0.55, 0.52]
         ]
     });
 
@@ -754,20 +785,18 @@ export function crearProductosLacteos(scene) {
             config.archivo,
             config.nombre,
             (original) => {
-                config.posiciones.forEach(
-                    ([dx, dz], indice) => {
-                        crearCopia(
-                            original,
-                            `${config.codigo}_${indice + 1}`,
-                            25.1 + dx,
-                            1.24,
-                            -7.3 + dz,
-                            config.altura,
-                            0,
-                            'Carnicería'
-                        );
-                    }
-                );
+                config.posiciones.forEach(([dx, dz], indice) => {
+                    crearCopia(
+                        original,
+                        `${config.codigo}_${indice + 1}`,
+                        25.1 + dx,
+                        1.24,
+                        -7.3 + dz,
+                        config.altura,
+                        0,
+                        'Carnicería'
+                    );
+                });
             }
         );
     }
@@ -778,8 +807,7 @@ export function crearProductosLacteos(scene) {
         codigo: 'POLLO',
         altura: 0.22,
         posiciones: [
-            [-0.55, -0.30],
-            [0.55, -0.30]
+            [-0.55, -0.30], [0.55, -0.30]
         ]
     });
 
@@ -789,8 +817,7 @@ export function crearProductosLacteos(scene) {
         codigo: 'FILETE',
         altura: 0.14,
         posiciones: [
-            [-0.55, 0.30],
-            [0.55, 0.30]
+            [-0.55, 0.30], [0.55, 0.30]
         ]
     });
 
@@ -826,34 +853,28 @@ export function crearProductosLacteos(scene) {
         }
     ];
 
-    productosLimpieza.forEach(
-        (config, productoIndex) => {
-            cargarModelo(
-                config.archivo,
-                config.nombre,
-                (original) => {
-                    nivelesLimpieza.forEach(
-                        (nivel, nivelIndex) => {
-                            posicionesLimpieza.forEach(
-                                (dx, indice) => {
-                                    crearCopia(
-                                        original,
-                                        `${config.codigo}_N${nivelIndex + 1}_${indice + 1}`,
-                                        28.3 + dx,
-                                        nivel + 0.04,
-                                        8.15 + productoIndex * 0.55,
-                                        0.38,
-                                        0,
-                                        'Higiene y limpieza'
-                                    );
-                                }
-                            );
-                        }
-                    );
-                }
-            );
-        }
-    );
+    productosLimpieza.forEach((config, productoIndex) => {
+        cargarModelo(
+            config.archivo,
+            config.nombre,
+            (original) => {
+                nivelesLimpieza.forEach((nivel, nivelIndex) => {
+                    posicionesLimpieza.forEach((dx, indice) => {
+                        crearCopia(
+                            original,
+                            `${config.codigo}_N${nivelIndex + 1}_${indice + 1}`,
+                            28.3 + dx,
+                            nivel + 0.04,
+                            8.15 + productoIndex * 0.55,
+                            0.38,
+                            0,
+                            'Higiene y limpieza'
+                        );
+                    });
+                });
+            }
+        );
+    });
 
     // ========================================================
     // 6. ROPA
@@ -955,8 +976,7 @@ export function crearProductosLacteos(scene) {
         return productos.userData
             .listarUnidades()
             .filter(
-                (objeto) =>
-                    objeto.userData.categoria === categoria
+                (objeto) => objeto.userData.categoria === categoria
             );
     };
 
@@ -968,7 +988,8 @@ export function crearProductosLacteos(scene) {
                     objeto.userData.disponible &&
                     !objeto.userData.recogido &&
                     !objeto.userData.vendido &&
-                    !objeto.userData.reservado
+                    !objeto.userData.reservado &&
+                    !objeto.userData.enCarrito
                 );
             });
     };
@@ -1012,9 +1033,17 @@ export function crearProductosLacteos(scene) {
         };
     };
 
+    productos.userData.obtenerCatalogoPrecios = () => {
+        return { ...PRECIOS };
+    };
+
+    productos.userData.obtenerPrecio = (codigo) => {
+        return PRECIOS[codigo] ?? 0;
+    };
+
     console.info(
         'Catálogo de productos iniciado. ' +
-        'Las estadísticas estarán disponibles conforme carguen los modelos.'
+        'Precios provisionales MXN asignados por unidad.'
     );
 
     return productos;
