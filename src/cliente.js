@@ -5,7 +5,8 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 // ============================================================
 // CLIENTES Y LADRONES DEL SUPERMERCADO
 // Three.js 0.180+
-// Navegación interior/exterior, compras y animaciones
+// Animación manual de esqueleto + clips GLB
+// Compras, navegación, vehículos y caja
 // ============================================================
 
 const loader = new GLTFLoader();
@@ -47,12 +48,22 @@ const CONFIG_BASE = {
 // UTILIDADES
 // ============================================================
 
+const clamp = THREE.MathUtils.clamp;
+
 function distancia(a, b) {
     return Math.hypot(a.x - b.x, a.z - b.z);
 }
 
 function punto(x, z) {
     return new THREE.Vector3(x, 0, z);
+}
+
+function normalizarNombre(nombre) {
+    return String(nombre || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]/g, '');
 }
 
 function obtenerNombre(objeto) {
@@ -88,21 +99,15 @@ function obtenerPrecio(objeto) {
 }
 
 function esUnidadProducto(objeto) {
-    if (!objeto) return false;
-
-    return (
+    return !!objeto && (
         objeto.userData?.esUnidadProducto === true ||
         objeto.userData?.tipo === 'producto' ||
         objeto.userData?.esProducto === true
     );
 }
 
-function obtenerIdentificadorUnidad(objeto) {
-    return objeto.uuid;
-}
-
 // ============================================================
-// NAVEGACIÓN INTERIOR
+// NAVEGACIÓN Y OBSTÁCULOS
 // ============================================================
 
 const CELDA = 1;
@@ -129,9 +134,7 @@ function puntoBloqueado(x, z, radio = 0.55) {
         x > 29 - radio ||
         z < -27 + radio ||
         z > 27 - radio
-    ) {
-        return true;
-    }
+    ) return true;
 
     return OBSTACULOS.some(o =>
         x + radio > o.minX &&
@@ -142,8 +145,6 @@ function puntoBloqueado(x, z, radio = 0.55) {
 }
 
 function puntoExteriorBloqueado(x, z, radio = 0.55) {
-    // El estacionamiento y el camino de vehículos están fuera
-    // de la cuadrícula de góndolas del supermercado.
     return (
         x < -31 + radio ||
         x > 31 - radio ||
@@ -268,9 +269,7 @@ function encontrarRuta(inicio, destino, radio = 0.55) {
                     puntoBloqueado(actual.x + dx, actual.z, radio) ||
                     puntoBloqueado(actual.x, actual.z + dz, radio)
                 )
-            ) {
-                continue;
-            }
+            ) continue;
 
             const coste = dx !== 0 && dz !== 0 ? 1.414 : 1;
             const g = actual.g + coste;
@@ -310,15 +309,33 @@ function encontrarRuta(inicio, destino, radio = 0.55) {
 }
 
 // ============================================================
-// ANIMACIÓN MANUAL DEL ESQUELETO
+// SISTEMA DE ANIMACIÓN DEL ESQUELETO
 // ============================================================
 
-function buscarHueso(huesos, palabras) {
+function buscarHueso(huesos, patrones) {
     const entradas = Object.entries(huesos);
 
-    for (const palabra of palabras) {
+    for (const patron of patrones) {
+        const normalizado = normalizarNombre(patron);
+
         const encontrado = entradas.find(([nombre]) =>
-            nombre.toLowerCase().includes(palabra)
+            normalizarNombre(nombre).includes(normalizado)
+        );
+
+        if (encontrado) return encontrado[1];
+    }
+
+    return null;
+}
+
+function buscarHuesoExacto(huesos, patrones) {
+    const entradas = Object.entries(huesos);
+
+    for (const patron of patrones) {
+        const normalizado = normalizarNombre(patron);
+
+        const encontrado = entradas.find(([nombre]) =>
+            normalizarNombre(nombre) === normalizado
         );
 
         if (encontrado) return encontrado[1];
@@ -336,102 +353,215 @@ function crearControlHuesos(modelo) {
         }
     });
 
+    const lista = Object.values(huesos);
+
     const brazos = {
         izquierdo: buscarHueso(huesos, [
-            'leftarm', 'left_arm', 'upperarm_l',
-            'arm_l', 'brazo_izquierdo'
+            'LeftArm', 'UpperArm_L', 'Arm_L',
+            'BrazoIzquierdo', 'Brazo_I', 'Bip01LUpperArm'
         ]),
         derecho: buscarHueso(huesos, [
-            'rightarm', 'right_arm', 'upperarm_r',
-            'arm_r', 'brazo_derecho'
+            'RightArm', 'UpperArm_R', 'Arm_R',
+            'BrazoDerecho', 'Brazo_D', 'Bip01RUpperArm'
         ])
     };
 
     const antebrazos = {
         izquierdo: buscarHueso(huesos, [
-            'leftforearm', 'lowerarm_l', 'forearm_l'
+            'LeftForeArm', 'LeftLowerArm', 'Forearm_L',
+            'LowerArm_L', 'AntebrazoIzquierdo', 'Bip01LForearm'
         ]),
         derecho: buscarHueso(huesos, [
-            'rightforearm', 'lowerarm_r', 'forearm_r'
+            'RightForeArm', 'RightLowerArm', 'Forearm_R',
+            'LowerArm_R', 'AntebrazoDerecho', 'Bip01RForearm'
+        ])
+    };
+
+    const manos = {
+        izquierdo: buscarHueso(huesos, [
+            'LeftHand', 'Hand_L', 'ManoIzquierda', 'Bip01LHand'
+        ]),
+        derecho: buscarHueso(huesos, [
+            'RightHand', 'Hand_R', 'ManoDerecha', 'Bip01RHand'
         ])
     };
 
     const piernas = {
         izquierdo: buscarHueso(huesos, [
-            'leftupleg', 'thigh_l', 'upperleg_l',
-            'leg_l', 'pierna_izquierda'
+            'LeftUpLeg', 'LeftThigh', 'Thigh_L',
+            'UpperLeg_L', 'Leg_L', 'MusloIzquierdo',
+            'Bip01LThigh'
         ]),
         derecho: buscarHueso(huesos, [
-            'rightupleg', 'thigh_r', 'upperleg_r',
-            'leg_r', 'pierna_derecha'
+            'RightUpLeg', 'RightThigh', 'Thigh_R',
+            'UpperLeg_R', 'Leg_R', 'MusloDerecho',
+            'Bip01RThigh'
         ])
     };
 
     const rodillas = {
         izquierdo: buscarHueso(huesos, [
-            'leftleg', 'calf_l', 'lowerleg_l', 'shin_l'
+            'LeftLeg', 'LeftCalf', 'LowerLeg_L',
+            'Calf_L', 'Shin_L', 'PiernaIzquierda',
+            'Bip01LCalf'
         ]),
         derecho: buscarHueso(huesos, [
-            'rightleg', 'calf_r', 'lowerleg_r', 'shin_r'
+            'RightLeg', 'RightCalf', 'LowerLeg_R',
+            'Calf_R', 'Shin_R', 'PiernaDerecha',
+            'Bip01RCalf'
         ])
     };
 
-    const base = new Map();
+    const pies = {
+        izquierdo: buscarHueso(huesos, [
+            'LeftFoot', 'Foot_L', 'PieIzquierdo', 'Bip01LFoot'
+        ]),
+        derecho: buscarHueso(huesos, [
+            'RightFoot', 'Foot_R', 'PieDerecho', 'Bip01RFoot'
+        ])
+    };
 
-    Object.values(huesos).forEach(hueso => {
-        base.set(hueso, hueso.rotation.clone());
+    const columna = buscarHueso(huesos, [
+        'Spine', 'Spine1', 'Chest', 'Torso', 'Columna'
+    ]);
+
+    const cabeza = buscarHueso(huesos, [
+        'Head', 'Cabeza'
+    ]);
+
+    const caderas = buscarHueso(huesos, [
+        'Hips', 'Pelvis', 'Root', 'Cadera'
+    ]);
+
+    const rotacionesBase = new Map();
+
+    lista.forEach(hueso => {
+        rotacionesBase.set(hueso, hueso.rotation.clone());
     });
 
     function restaurar() {
-        for (const [hueso, rotacion] of base) {
+        for (const [hueso, rotacion] of rotacionesBase) {
             hueso.rotation.copy(rotacion);
         }
     }
 
-    function animar(caminar, tiempo, intensidad = 1) {
+    function animar(tipo, tiempo, intensidad = 1) {
         restaurar();
 
-        if (!caminar) return;
+        const movimiento = tipo === 'caminar' || tipo === 'correr';
+        const amplitud = tipo === 'correr' ? 0.85 : 0.62;
+        const velocidad = tipo === 'correr' ? 12 : 8;
 
-        const movimiento = Math.sin(tiempo * 8) * 0.55 * intensidad;
-        const contrario = -movimiento;
+        if (movimiento) {
+            const fase = tiempo * velocidad;
+            const paso = Math.sin(fase) * amplitud * intensidad;
+            const pasoOpuesto = -paso;
 
-        if (piernas.izquierdo) {
-            piernas.izquierdo.rotation.x += movimiento;
-        }
+            // MUSLOS
+            if (piernas.izquierdo) {
+                piernas.izquierdo.rotation.x += paso;
+            }
 
-        if (piernas.derecho) {
-            piernas.derecho.rotation.x += contrario;
-        }
+            if (piernas.derecho) {
+                piernas.derecho.rotation.x += pasoOpuesto;
+            }
 
-        if (rodillas.izquierdo) {
-            rodillas.izquierdo.rotation.x +=
-                Math.max(0, -movimiento) * 0.65;
-        }
+            // RODILLAS
+            if (rodillas.izquierdo) {
+                rodillas.izquierdo.rotation.x +=
+                    Math.max(0, -paso) * 0.85;
+            }
 
-        if (rodillas.derecho) {
-            rodillas.derecho.rotation.x +=
-                Math.max(0, movimiento) * 0.65;
-        }
+            if (rodillas.derecho) {
+                rodillas.derecho.rotation.x +=
+                    Math.max(0, paso) * 0.85;
+            }
 
-        if (brazos.izquierdo) {
-            brazos.izquierdo.rotation.x += contrario * 0.75;
-        }
+            // BRAZOS EN OPOSICIÓN A LAS PIERNAS
+            if (brazos.izquierdo) {
+                brazos.izquierdo.rotation.x += pasoOpuesto * 0.8;
+            }
 
-        if (brazos.derecho) {
-            brazos.derecho.rotation.x += movimiento * 0.75;
-        }
+            if (brazos.derecho) {
+                brazos.derecho.rotation.x += paso * 0.8;
+            }
 
-        if (antebrazos.izquierdo) {
-            antebrazos.izquierdo.rotation.x += 0.12;
-        }
+            // CODOS
+            if (antebrazos.izquierdo) {
+                antebrazos.izquierdo.rotation.x +=
+                    0.15 + Math.max(0, paso) * 0.22;
+            }
 
-        if (antebrazos.derecho) {
-            antebrazos.derecho.rotation.x += 0.12;
+            if (antebrazos.derecho) {
+                antebrazos.derecho.rotation.x +=
+                    0.15 + Math.max(0, -paso) * 0.22;
+            }
+
+            // PIES
+            if (pies.izquierdo) {
+                pies.izquierdo.rotation.x +=
+                    Math.max(0, -paso) * 0.35;
+            }
+
+            if (pies.derecho) {
+                pies.derecho.rotation.x +=
+                    Math.max(0, paso) * 0.35;
+            }
+
+            // BALANCEO NATURAL DEL CUERPO
+            if (columna) {
+                columna.rotation.z += Math.sin(fase) * 0.035;
+                columna.rotation.x += Math.abs(Math.sin(fase)) * 0.025;
+            }
+
+            if (caderas) {
+                caderas.rotation.z += Math.sin(fase) * 0.025;
+            }
+        } else if (tipo === 'espera') {
+            // Respiración sutil al permanecer quieto.
+            const respiracion = Math.sin(tiempo * 2.1);
+
+            if (columna) {
+                columna.rotation.x += respiracion * 0.018;
+            }
+
+            if (cabeza) {
+                cabeza.rotation.y += Math.sin(tiempo * 0.8) * 0.025;
+            }
+        } else if (tipo === 'recoger') {
+            // Inclinación leve al examinar un producto.
+            if (columna) {
+                columna.rotation.x += 0.12 * intensidad;
+            }
+
+            if (cabeza) {
+                cabeza.rotation.x += 0.16 * intensidad;
+            }
+
+            if (brazos.derecho) {
+                brazos.derecho.rotation.x -= 0.45 * intensidad;
+            }
+
+            if (antebrazos.derecho) {
+                antebrazos.derecho.rotation.x -= 0.35 * intensidad;
+            }
         }
     }
 
-    return { huesos, animar, restaurar };
+    return {
+        huesos,
+        animar,
+        restaurar,
+        brazos,
+        antebrazos,
+        piernas,
+        rodillas,
+        pies,
+        columna,
+        cabeza,
+        caderas,
+        cantidad: lista.length
+    };
 }
 
 // ============================================================
@@ -472,6 +602,10 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     let mixer = null;
     let controlHuesos = null;
     let clipsAnimacion = [];
+    let accionActual = null;
+    let clipCaminar = null;
+    let clipCorrer = null;
+    let clipReposo = null;
 
     let cargado = false;
     let eliminado = false;
@@ -481,7 +615,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
     let ruta = [];
     let indiceRuta = 0;
-
     let tiempoAnimacion = Math.random() * 10;
     let tiempoEstado = 0;
     let tiempoEspera = 0;
@@ -502,7 +635,72 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     let callbackPago = null;
     let callbackRegreso = null;
 
-    let posicionAnterior = grupo.position.clone();
+    const posicionAnterior = grupo.position.clone();
+    const posicionTemporal = new THREE.Vector3();
+
+    // --------------------------------------------------------
+    // SISTEMA DE ANIMACIONES GLB
+    // --------------------------------------------------------
+
+    function elegirClip(patrones) {
+        return clipsAnimacion.find(clip => {
+            const nombre = normalizarNombre(clip.name);
+
+            return patrones.some(patron =>
+                nombre.includes(normalizarNombre(patron))
+            );
+        }) || null;
+    }
+
+    function cambiarClip(clip, velocidad = 1) {
+        if (!mixer || !clip) return false;
+
+        if (accionActual?.getClip() === clip) {
+            accionActual.timeScale = velocidad;
+            return true;
+        }
+
+        const nuevaAccion = mixer.clipAction(clip);
+
+        nuevaAccion.reset();
+        nuevaAccion.enabled = true;
+        nuevaAccion.setEffectiveWeight(1);
+        nuevaAccion.setEffectiveTimeScale(velocidad);
+        nuevaAccion.fadeIn(0.18);
+        nuevaAccion.play();
+
+        if (accionActual) {
+            accionActual.fadeOut(0.18);
+        }
+
+        accionActual = nuevaAccion;
+        return true;
+    }
+
+    function actualizarAnimacion(tipo) {
+        if (mixer) {
+            let clip = null;
+            let velocidad = 1;
+
+            if (tipo === 'correr') {
+                clip = clipCorrer || clipCaminar;
+                velocidad = clipCorrer ? 1 : 1.25;
+            } else if (tipo === 'caminar') {
+                clip = clipCaminar;
+            } else {
+                clip = clipReposo;
+            }
+
+            if (clip) {
+                cambiarClip(clip, velocidad);
+                return;
+            }
+        }
+
+        if (controlHuesos) {
+            controlHuesos.animar(tipo, tiempoAnimacion, 1);
+        }
+    }
 
     // --------------------------------------------------------
     // CARGAR MODELO
@@ -520,10 +718,10 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             modelo.scale.setScalar(config.escala);
 
             modelo.traverse(objeto => {
-                if (!objeto.isMesh) return;
-
-                objeto.castShadow = false;
-                objeto.receiveShadow = false;
+                if (objeto.isMesh) {
+                    objeto.castShadow = false;
+                    objeto.receiveShadow = false;
+                }
             });
 
             const caja = new THREE.Box3().setFromObject(modelo);
@@ -539,15 +737,27 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
             clipsAnimacion = gltf.animations || [];
 
+            // Detectar clips sin reproducir todos simultáneamente.
+            clipCaminar = elegirClip([
+                'walk', 'walking', 'caminar', 'walkingcycle'
+            ]);
+
+            clipCorrer = elegirClip([
+                'run', 'running', 'correr', 'sprint'
+            ]);
+
+            clipReposo = elegirClip([
+                'idle', 'stand', 'standing', 'reposo'
+            ]);
+
             if (clipsAnimacion.length) {
                 mixer = new THREE.AnimationMixer(modelo);
-
-                clipsAnimacion.forEach(clip => {
-                    mixer.clipAction(clip).play();
-                });
-            } else {
-                controlHuesos = crearControlHuesos(modelo);
             }
+
+            // Siempre crear el controlador de huesos.
+            // Se utiliza como respaldo cuando no existe un clip
+            // compatible de caminar o reposo.
+            controlHuesos = crearControlHuesos(modelo);
 
             cargado = true;
 
@@ -555,14 +765,21 @@ export function crearClienteSupermercado(scene, opciones = {}) {
                 estado = config.inactivo ? 'inactivo' : 'recorriendo';
             }
 
-            console.log(
-                `${id}: modelo cargado. Huesos:`,
-                Object.keys(controlHuesos?.huesos || {}).length,
-                'Animaciones:',
-                clipsAnimacion.length
+            console.info(
+                `[${id}] Modelo cargado`,
+                {
+                    huesos: controlHuesos.cantidad,
+                    brazos: !!controlHuesos.brazos.izquierdo &&
+                        !!controlHuesos.brazos.derecho,
+                    piernas: !!controlHuesos.piernas.izquierdo &&
+                        !!controlHuesos.piernas.derecho,
+                    animaciones: clipsAnimacion.map(c => c.name),
+                    caminar: clipCaminar?.name || 'Manual',
+                    correr: clipCorrer?.name || 'Manual'
+                }
             );
 
-            if (config.ruta?.length && !config.inactivo) {
+            if (!config.inactivo && config.ruta?.length) {
                 establecerRuta(config.ruta);
             }
         },
@@ -584,16 +801,20 @@ export function crearClienteSupermercado(scene, opciones = {}) {
                 estado = config.inactivo ? 'inactivo' : 'recorriendo';
             }
 
-            if (config.ruta?.length && !config.inactivo) {
+            if (!config.inactivo && config.ruta?.length) {
                 establecerRuta(config.ruta);
             }
         }
     );
 
     function crearModeloProvisional() {
+        const material = new THREE.MeshStandardMaterial({
+            color: 0x2877bb
+        });
+
         const cuerpo = new THREE.Mesh(
             new THREE.CapsuleGeometry(0.32, 0.85, 4, 8),
-            new THREE.MeshStandardMaterial({ color: 0x2877bb })
+            material
         );
 
         cuerpo.position.y = 0.95;
@@ -635,7 +856,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             if (!objeto || !objeto.parent) return false;
             if (!esUnidadProducto(objeto)) return false;
 
-            const unidadId = obtenerIdentificadorUnidad(objeto);
+            const unidadId = objeto.uuid;
 
             if (productosCompradosGlobal.has(unidadId)) return false;
             if (productosReservadosGlobal.has(unidadId)) return false;
@@ -653,7 +874,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     function reservarProducto(producto) {
         if (!producto) return false;
 
-        const unidadId = obtenerIdentificadorUnidad(producto);
+        const unidadId = producto.uuid;
 
         if (productosCompradosGlobal.has(unidadId)) return false;
         if (productosReservadosGlobal.has(unidadId)) return false;
@@ -670,7 +891,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     function liberarReserva(producto) {
         if (!producto) return;
 
-        const unidadId = obtenerIdentificadorUnidad(producto);
+        const unidadId = producto.uuid;
 
         if (productosReservadosGlobal.get(unidadId) === id) {
             productosReservadosGlobal.delete(unidadId);
@@ -687,7 +908,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     function agregarAlCarrito(producto) {
         if (!producto || !producto.parent) return false;
 
-        const unidadId = obtenerIdentificadorUnidad(producto);
+        const unidadId = producto.uuid;
 
         if (productosCompradosGlobal.has(unidadId)) return false;
         if (productosReservadosGlobal.get(unidadId) !== id) return false;
@@ -701,14 +922,10 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             objeto: producto
         };
 
-        // Primero se intenta agregar al carrito.
-        // Si el carrito está lleno, el producto no se marca como comprado.
         if (carrito?.agregarProducto) {
             const agregado = carrito.agregarProducto(registro);
 
-            if (agregado === false) {
-                return false;
-            }
+            if (agregado === false) return false;
         } else {
             producto.visible = false;
         }
@@ -798,10 +1015,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             );
 
             if (!tramo.length) {
-                console.warn(
-                    `${id}: no se encontró ruta hacia`,
-                    destino
-                );
+                console.warn(`${id}: ruta bloqueada hacia`, destino);
                 continue;
             }
 
@@ -812,13 +1026,12 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         indiceRuta = 0;
         objetivo = ruta[0] || null;
 
-        if (ruta.length) {
-            zona = 'supermercado';
-            estado = 'recorriendo';
-            return true;
-        }
+        if (!ruta.length) return false;
 
-        return false;
+        zona = 'supermercado';
+        estado = 'recorriendo';
+
+        return true;
     }
 
     function establecerRutaDirecta(destino) {
@@ -853,7 +1066,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     }
 
     // ========================================================
-    // MOVIMIENTO
+    // MOVIMIENTO Y GIRO
     // ========================================================
 
     function avanzarRuta(delta) {
@@ -915,10 +1128,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             grupo.position.x = nuevaX;
             grupo.position.z = nuevaZ;
         } else if (!movimientoExterior) {
-            const destino = {
-                x: objetivo.x,
-                z: objetivo.z
-            };
+            const destino = { x: objetivo.x, z: objetivo.z };
 
             if (!establecerRutaDirecta(destino)) {
                 estado = 'esperando';
@@ -926,8 +1136,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
                 return false;
             }
         } else {
-            // Evita que un punto exterior incorrecto deje al
-            // visitante intentando atravesar un límite.
             estado = 'esperando';
             tiempoEspera = 0;
             console.warn(`${id}: ruta exterior bloqueada.`);
@@ -947,7 +1155,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     }
 
     // ========================================================
-    // SELECCIÓN Y RECOGIDA DE PRODUCTOS
+    // COMPRAS
     // ========================================================
 
     function iniciarBusquedaProductos() {
@@ -1021,7 +1229,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         }
 
         productoEnMano = productoObjetivo;
-
         tiempoEstado = 0;
         estado = 'recogiendoProducto';
     }
@@ -1045,10 +1252,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         estado = 'esperandoEntreProductos';
     }
 
-    // ========================================================
-    // FINALIZAR RECORRIDO
-    // ========================================================
-
     function finalizarRecorrido() {
         if (config.repetirRuta && config.ruta?.length) {
             establecerRuta([config.ruta[0]]);
@@ -1063,7 +1266,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     }
 
     // ========================================================
-    // PAGO
+    // CAJA
     // ========================================================
 
     function obtenerTotalCompra() {
@@ -1084,6 +1287,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         return {
             cliente: id,
             productos: detalle,
+            articulos: detalle,
             cantidad: detalle.length,
             total: obtenerTotalCompra()
         };
@@ -1104,8 +1308,9 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     }
 
     function iniciarPago(posicionCaja, callback) {
-        if (eliminado || pagoConfirmado) return false;
-        if (estado === 'pagando') return false;
+        if (eliminado || pagoConfirmado || estado === 'pagando') {
+            return false;
+        }
 
         if (productoEnMano) {
             liberarReserva(productoEnMano);
@@ -1155,39 +1360,8 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     }
 
     // ========================================================
-    // REGRESO AL VEHÍCULO
+    // VEHÍCULOS
     // ========================================================
-
-    function iniciarRegresoVehiculo(plaza, callback) {
-        if (!plaza || !Number.isFinite(Number(plaza.x)) ||
-            !Number.isFinite(Number(plaza.z))) {
-            return false;
-        }
-
-        callbackRegreso = callback || null;
-
-        // No se filtran estos puntos con los obstáculos interiores.
-        // El recorrido utiliza el pasillo central del estacionamiento.
-        ruta = [
-            punto(0, 25.5),
-            punto(0, 30.5),
-            punto(0, 34),
-            punto(0, 78),
-            punto(0, 83),
-            punto(0, 78),
-            punto(plaza.x, 78),
-            punto(plaza.x, plaza.z + 5),
-            punto(plaza.x, plaza.z)
-        ];
-
-        indiceRuta = 0;
-        objetivo = ruta[0];
-
-        zona = 'exterior';
-        estado = 'regresandoVehiculo';
-
-        return true;
-    }
 
     function iniciarDesdeVehiculo(posicion, plaza) {
         if (!posicion || !plaza) return false;
@@ -1211,8 +1385,37 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         indiceRuta = 0;
         objetivo = ruta[0];
-
         estado = 'entrandoSupermercado';
+
+        return true;
+    }
+
+    function iniciarRegresoVehiculo(plaza, callback) {
+        if (
+            !plaza ||
+            !Number.isFinite(Number(plaza.x)) ||
+            !Number.isFinite(Number(plaza.z))
+        ) return false;
+
+        callbackRegreso = callback || null;
+
+        ruta = [
+            punto(0, 25.5),
+            punto(0, 30.5),
+            punto(0, 34),
+            punto(0, 78),
+            punto(0, 83),
+            punto(0, 78),
+            punto(plaza.x, 78),
+            punto(plaza.x, plaza.z + 5),
+            punto(plaza.x, plaza.z)
+        ];
+
+        indiceRuta = 0;
+        objetivo = ruta[0];
+
+        zona = 'exterior';
+        estado = 'regresandoVehiculo';
 
         return true;
     }
@@ -1229,24 +1432,9 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         tiempoAnimacion += delta;
         tiempoEstado += delta;
 
-        if (mixer) {
-            mixer.update(delta);
-        } else {
-            const movimiento = distancia(
-                grupo.position,
-                posicionAnterior
-            );
-
-            const caminando = movimiento > 0.001;
-
-            controlHuesos?.animar(
-                caminando,
-                tiempoAnimacion,
-                estado === 'recogiendoProducto' ? 0.25 : 1
-            );
-        }
-
-        posicionAnterior.copy(grupo.position);
+        // Guardar la posición antes de mover al personaje.
+        const xAnterior = grupo.position.x;
+        const zAnterior = grupo.position.z;
 
         switch (estado) {
             case 'cargando':
@@ -1259,10 +1447,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             case 'recorriendo': {
                 const llego = avanzarRuta(delta);
 
-                if (llego) {
-                    iniciarBusquedaProductos();
-                }
-
+                if (llego) iniciarBusquedaProductos();
                 break;
             }
 
@@ -1273,10 +1458,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             case 'acercandoseProducto': {
                 const llego = avanzarRuta(delta);
 
-                if (llego) {
-                    recogerProducto();
-                }
-
+                if (llego) recogerProducto();
                 break;
             }
 
@@ -1297,10 +1479,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             case 'yendoCaja': {
                 const llego = avanzarRuta(delta);
 
-                if (llego) {
-                    completarPago();
-                }
-
+                if (llego) completarPago();
                 break;
             }
 
@@ -1316,7 +1495,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
                         callback(api);
                     }
                 }
-
                 break;
             }
 
@@ -1336,7 +1514,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
                         establecerRuta(config.ruta);
                     }
                 }
-
                 break;
             }
 
@@ -1354,38 +1531,80 @@ export function crearClienteSupermercado(scene, opciones = {}) {
                 }
                 break;
         }
+
+        // Detectar movimiento real en este fotograma.
+        const dx = grupo.position.x - xAnterior;
+        const dz = grupo.position.z - zAnterior;
+        const velocidadReal = Math.hypot(dx, dz) / Math.max(delta, 0.0001);
+
+        const caminando = velocidadReal > 0.04;
+        const corriendo = velocidadReal > config.velocidad * 1.35;
+
+        // Actualizar animaciones.
+        if (mixer) {
+            mixer.update(delta);
+        }
+
+        const tieneClipMovimiento = corriendo
+            ? !!(clipCorrer || clipCaminar)
+            : !!clipCaminar;
+
+        if (tieneClipMovimiento || (!caminando && clipReposo)) {
+            actualizarAnimacion(
+                caminando
+                    ? (corriendo ? 'correr' : 'caminar')
+                    : 'espera'
+            );
+        } else if (controlHuesos) {
+            const tipoAnimacion = caminando
+                ? (corriendo ? 'correr' : 'caminar')
+                : estado === 'recogiendoProducto'
+                    ? 'recoger'
+                    : 'espera';
+
+            controlHuesos.animar(
+                tipoAnimacion,
+                tiempoAnimacion,
+                1
+            );
+        }
+
+        // Balanceo muy ligero de respiración en reposo.
+        posicionAnterior.copy(grupo.position);
     }
 
     // ========================================================
-    // CONTROL DE ANIMACIONES
+    // CONTROL MANUAL DE ANIMACIONES
     // ========================================================
 
     function detenerAnimacion() {
-        mixer?.stopAllAction();
+        if (mixer) {
+            mixer.stopAllAction();
+            accionActual = null;
+        }
+
         controlHuesos?.restaurar();
     }
 
     function reproducirAnimacion(nombre) {
-        if (!mixer || !modelo || !clipsAnimacion.length) {
+        const texto = normalizarNombre(nombre);
+
+        if (!mixer || !clipsAnimacion.length) {
             return false;
         }
 
-        const texto = String(nombre || '').toLowerCase();
-
         const clip = clipsAnimacion.find(animacion =>
-            animacion.name.toLowerCase().includes(texto)
+            normalizarNombre(animacion.name).includes(texto)
         );
 
         if (!clip) return false;
 
-        mixer.stopAllAction();
-        mixer.clipAction(clip).reset().play();
-
+        cambiarClip(clip);
         return true;
     }
 
     // ========================================================
-    // ELIMINAR CLIENTE
+    // ELIMINAR
     // ========================================================
 
     function eliminar() {
@@ -1402,41 +1621,27 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         productosLocalesReservados.clear();
 
-        if (productoEnMano) {
-            liberarReserva(productoEnMano);
-        }
-
-        if (productoObjetivo) {
-            liberarReserva(productoObjetivo);
-        }
+        if (productoEnMano) liberarReserva(productoEnMano);
+        if (productoObjetivo) liberarReserva(productoObjetivo);
 
         mixer?.stopAllAction();
-        mixer?.uncacheRoot(modelo);
 
-        // No se destruyen geometrías ni materiales del catálogo.
-        // Los modelos GLB pueden compartir recursos entre instancias.
+        if (mixer && modelo) {
+            mixer.uncacheRoot(modelo);
+        }
+
+        // Los modelos GLB pueden compartir geometrías y materiales.
+        // No destruir esos recursos compartidos.
         scene.remove(grupo);
 
         grupo.traverse(objeto => {
             if (!objeto.isMesh) return;
 
-            // Solo se liberan los materiales del personaje provisional.
-            // Los recursos de modelos GLB compartidos se conservan.
             if (
                 objeto.geometry?.type === 'CapsuleGeometry' ||
                 objeto.geometry?.type === 'SphereGeometry'
             ) {
                 objeto.geometry.dispose();
-            }
-
-            const materiales = Array.isArray(objeto.material)
-                ? objeto.material
-                : [objeto.material];
-
-            for (const material of materiales) {
-                if (material?.userData?.recursoProvisional) {
-                    material.dispose();
-                }
             }
         });
 
