@@ -1,3 +1,4 @@
+
 import * as THREE from 'three';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 
@@ -30,20 +31,27 @@ const CONFIG = {
     sombras: false,
     limiteDelta: 0.033,
 
+    // Carritos
     distanciaCarrito: 1.15,
     suavizadoCarrito: 6,
 
+    // Entidades
     velocidadCliente: 1.5,
     velocidadLadron: 1.8,
 
+    // Compras
     probabilidadCompra: 0.75,
     tiempoExaminar: 1.5,
     distanciaRecoger: 2,
     pausaEntreCompras: 1.8,
 
+    // Tiempo de recorrido de compra
     tiempoCompraAuto: 32,
-    tiempoCajaAuto: 5,
 
+    // Posición de la caja registradora
+    posicionCaja: { x: 0, z: 20 },
+
+    // Registro del recorrido
     distanciaRegistro: 0.5,
     maximoRegistros: 20000
 };
@@ -163,7 +171,6 @@ const CONFIG_CLIENTES = [
 
 // ============================================================
 // LADRONES
-// IMPORTANTE: LA POSICIÓN INICIAL ES EL PRIMER PUNTO DE RUTA
 // ============================================================
 
 const CONFIG_LADRONES = [
@@ -275,6 +282,7 @@ const ladronesSupermercado = [];
 const carritosClientes = [];
 const visitantesPorVehiculo = new Map();
 const trayectoriaJugador = [];
+const ticketsGenerados = [];
 
 const LIMITE_JUGADOR = {
     minX: -31,
@@ -307,8 +315,6 @@ function iniciar() {
     crearInterfaz();
     crearEstructuraSupermercado();
 
-    // Se crean después de la estructura para que sus rutas
-    // tengan el escenario y los obstáculos disponibles.
     crearLadrones();
     crearSistemaVehiculos();
 
@@ -441,7 +447,6 @@ function crearSuelo() {
     suelo.rotation.x = -Math.PI / 2;
     suelo.position.y = -0.025;
     suelo.name = 'SUELO_GENERAL';
-
     escena.add(suelo);
 
     const pisoInterior = new THREE.Mesh(
@@ -455,7 +460,6 @@ function crearSuelo() {
     pisoInterior.rotation.x = -Math.PI / 2;
     pisoInterior.position.set(0, 0.005, 0);
     pisoInterior.name = 'PISO_INTERIOR';
-
     escena.add(pisoInterior);
 
     try {
@@ -555,6 +559,7 @@ function crearInterfaz() {
         }
         .boton-supermercado:hover { background:#16875f; }
         .boton-supermercado:active { transform:scale(.96); }
+
         #hud-supermercado {
             position:fixed; left:10px; top:10px; z-index:100;
             max-width:260px; padding:9px 11px; color:white;
@@ -585,6 +590,69 @@ function crearInterfaz() {
             background:rgba(0,0,0,.8); font:12px Arial,sans-serif;
             pointer-events:none; text-align:center;
         }
+
+        #ticket-supermercado {
+            position:fixed;
+            inset:0;
+            z-index:2000;
+            display:none;
+            align-items:center;
+            justify-content:center;
+            padding:15px;
+            box-sizing:border-box;
+            background:rgba(0,0,0,.78);
+            font-family:Arial,sans-serif;
+        }
+        #ticket-contenido {
+            width:min(380px,94vw);
+            max-height:85vh;
+            overflow-y:auto;
+            padding:22px;
+            box-sizing:border-box;
+            color:#202020;
+            background:#fff;
+            border-radius:9px;
+            box-shadow:0 15px 50px rgba(0,0,0,.45);
+        }
+        #ticket-contenido h2 {
+            text-align:center;
+            margin:0 0 5px;
+        }
+        #ticket-contenido .ticket-subtitulo {
+            text-align:center;
+            font-size:12px;
+            color:#555;
+            margin-bottom:15px;
+        }
+        #ticket-contenido table {
+            width:100%;
+            border-collapse:collapse;
+            font-size:12px;
+        }
+        #ticket-contenido th,
+        #ticket-contenido td {
+            padding:7px 3px;
+            border-bottom:1px dashed #bbb;
+            text-align:left;
+        }
+        #ticket-contenido .ticket-total {
+            display:flex;
+            justify-content:space-between;
+            margin-top:15px;
+            padding-top:12px;
+            border-top:2px solid #222;
+            font-size:19px;
+            font-weight:bold;
+        }
+        #ticket-contenido .ticket-botones {
+            display:flex;
+            gap:8px;
+            margin-top:18px;
+        }
+        #ticket-contenido .ticket-botones button {
+            flex:1;
+        }
+
         @media(max-width:650px) {
             #hud-supermercado {
                 top:5px; left:5px; max-width:155px;
@@ -598,6 +666,27 @@ function crearInterfaz() {
             }
             #mensaje-supermercado { bottom:140px; }
             .boton-supermercado { padding:6px 7px; font-size:10px; }
+        }
+
+        @media print {
+            body * { visibility:hidden !important; }
+            #ticket-supermercado,
+            #ticket-supermercado * {
+                visibility:visible !important;
+            }
+            #ticket-supermercado {
+                position:absolute;
+                inset:0;
+                display:flex !important;
+                background:white;
+            }
+            #ticket-contenido {
+                box-shadow:none;
+                max-height:none;
+            }
+            #ticket-contenido .ticket-botones {
+                display:none;
+            }
         }
     `;
 
@@ -647,6 +736,7 @@ function crearInterfaz() {
         <button id="btn-llegada-coche" class="boton-supermercado">Llega un coche</button>
         <button id="btn-entrada" class="boton-supermercado">Volver a entrada</button>
         <button id="btn-exportar-recorrido" class="boton-supermercado">Exportar recorrido</button>
+        <button id="btn-exportar-tickets" class="boton-supermercado">Exportar tickets</button>
     `;
 
     document.body.appendChild(acciones);
@@ -671,8 +761,45 @@ function crearInterfaz() {
     const mensaje = document.createElement('div');
     mensaje.id = 'mensaje-supermercado';
     mensaje.textContent = 'Pulsa ENTRAR para comenzar.';
-
     document.body.appendChild(mensaje);
+
+    // Ventana de ticket.
+    const ticket = document.createElement('div');
+    ticket.id = 'ticket-supermercado';
+
+    ticket.innerHTML = `
+        <div id="ticket-contenido">
+            <h2>SUPERMERCADO 3D</h2>
+            <div class="ticket-subtitulo">
+                COMPROBANTE DE COMPRA
+            </div>
+            <div id="ticket-datos"></div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Producto</th>
+                        <th>Cant.</th>
+                        <th>Importe</th>
+                    </tr>
+                </thead>
+                <tbody id="ticket-articulos"></tbody>
+            </table>
+            <div class="ticket-total">
+                <span>TOTAL</span>
+                <span id="ticket-total">$0.00</span>
+            </div>
+            <div class="ticket-botones">
+                <button id="ticket-imprimir" class="boton-supermercado">
+                    IMPRIMIR
+                </button>
+                <button id="ticket-cerrar" class="boton-supermercado">
+                    CERRAR
+                </button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(ticket);
 
     document.getElementById('btn-entrar').addEventListener('click', () => {
         juegoIniciado = true;
@@ -721,6 +848,17 @@ function crearInterfaz() {
     document.getElementById('btn-exportar-recorrido')
         .addEventListener('click', exportarTrayectoria);
 
+    document.getElementById('btn-exportar-tickets')
+        .addEventListener('click', exportarTickets);
+
+    document.getElementById('ticket-cerrar').addEventListener('click', () => {
+        ticket.style.display = 'none';
+    });
+
+    document.getElementById('ticket-imprimir').addEventListener('click', () => {
+        window.print();
+    });
+
     controlesCamaras.addEventListener('click', evento => {
         const boton = evento.target.closest('[data-vista]');
         if (!boton) return;
@@ -756,6 +894,130 @@ function mostrarMensaje(texto) {
 }
 
 // ============================================================
+// TICKET DE COMPRA
+// ============================================================
+
+function mostrarTicketCompra(ticket, nombreCliente = 'Cliente') {
+    if (!ticket) {
+        console.warn('No se recibió información del ticket.');
+        return;
+    }
+
+    const ventana = document.getElementById('ticket-supermercado');
+    const datos = document.getElementById('ticket-datos');
+    const articulos = document.getElementById('ticket-articulos');
+    const totalElemento = document.getElementById('ticket-total');
+
+    if (!ventana || !datos || !articulos || !totalElemento) return;
+
+    const lineas = Array.isArray(ticket.articulos)
+        ? ticket.articulos
+        : [];
+
+    datos.textContent =
+        `Ticket: ${ticket.idTicket ?? 'SIN FOLIO'} | ` +
+        `Cliente: ${ticket.idCliente ?? nombreCliente} | ` +
+        `Fecha: ${ticket.fecha ?? new Date().toLocaleString('es-MX')}`;
+
+    articulos.replaceChildren();
+
+    for (const articulo of lineas) {
+        const fila = document.createElement('tr');
+
+        const nombre = document.createElement('td');
+        nombre.textContent =
+            articulo.nombre ??
+            articulo.nombreProducto ??
+            articulo.codigoProducto ??
+            'Producto';
+
+        const cantidad = document.createElement('td');
+        cantidad.textContent = String(articulo.cantidad ?? 1);
+
+        const importe = document.createElement('td');
+
+        const subtotal = Number(
+            articulo.subtotal ??
+            articulo.total ??
+            articulo.precioUnitario ??
+            articulo.precio ??
+            0
+        );
+
+        importe.textContent = `$${subtotal.toFixed(2)}`;
+
+        fila.append(nombre, cantidad, importe);
+        articulos.appendChild(fila);
+    }
+
+    const total = Number(ticket.total ?? 0);
+
+    totalElemento.textContent = `$${total.toFixed(2)}`;
+    ventana.style.display = 'flex';
+
+    mostrarMensaje(`Compra finalizada. Total: $${total.toFixed(2)}`);
+}
+
+// ============================================================
+// EXPORTAR TICKETS
+// ============================================================
+
+function exportarTickets() {
+    if (ticketsGenerados.length === 0) {
+        mostrarMensaje('Todavía no hay tickets generados.');
+        return;
+    }
+
+    const filas = [
+        'ticket,cliente,fecha,producto,cantidad,precio_unitario,subtotal,total'
+    ];
+
+    for (const ticket of ticketsGenerados) {
+        for (const articulo of ticket.articulos ?? []) {
+            const valores = [
+                ticket.idTicket,
+                ticket.idCliente,
+                ticket.fecha,
+                articulo.nombre ?? articulo.nombreProducto ?? '',
+                articulo.cantidad ?? 1,
+                articulo.precioUnitario ?? articulo.precio ?? 0,
+                articulo.subtotal ?? 0,
+                ticket.total ?? 0
+            ];
+
+            filas.push(
+                valores.map(valor =>
+                    `"${String(valor ?? '').replaceAll('"', '""')}"`
+                ).join(',')
+            );
+        }
+    }
+
+    descargarCSV(filas.join('\n'), 'tickets_supermercado.csv');
+
+    mostrarMensaje('Tickets exportados a CSV.');
+}
+
+function descargarCSV(contenido, nombreArchivo) {
+    const blob = new Blob(
+        ['\uFEFF', contenido],
+        { type: 'text/csv;charset=utf-8;' }
+    );
+
+    const url = URL.createObjectURL(blob);
+    const enlace = document.createElement('a');
+
+    enlace.href = url;
+    enlace.download = nombreArchivo;
+
+    document.body.appendChild(enlace);
+    enlace.click();
+    enlace.remove();
+
+    URL.revokeObjectURL(url);
+}
+
+// ============================================================
 // CÁMARAS DE SEGURIDAD
 // ============================================================
 
@@ -764,9 +1026,7 @@ function cambiarVistaSeguridad(numero) {
         !Number.isInteger(numero) ||
         numero < 1 ||
         numero > CONFIG_CAMARAS.length
-    ) {
-        return;
-    }
+    ) return;
 
     const config = CONFIG_CAMARAS[numero - 1];
 
@@ -828,7 +1088,6 @@ function actualizarEstadoVista() {
 function crearLadrones() {
     for (const config of CONFIG_LADRONES) {
         try {
-            // Comenzar exactamente en el primer punto de la ruta.
             const primerPunto = config.ruta[0];
 
             const posicionInicial = {
@@ -837,8 +1096,6 @@ function crearLadrones() {
                 z: primerPunto.z
             };
 
-            // El primer punto ya es la posición inicial.
-            // Por eso la ruta comienza en el segundo punto.
             const rutaPatrulla = config.ruta.slice(1).map(p => ({
                 x: p.x,
                 z: p.z
@@ -881,10 +1138,7 @@ function crearLadrones() {
             });
 
         } catch (error) {
-            console.error(
-                `[LADRÓN] Error al crear ${config.nombre}:`,
-                error
-            );
+            console.error(`[LADRÓN] Error al crear ${config.nombre}:`, error);
         }
     }
 }
@@ -1007,6 +1261,7 @@ function crearClienteParaVehiculo(datos) {
 
         if (!cliente) return;
 
+        cliente.nombre = config.nombre;
         clientesSupermercado.push(cliente);
 
         visitantesPorVehiculo.set(idVisita, {
@@ -1015,15 +1270,14 @@ function crearClienteParaVehiculo(datos) {
             carrito,
             plaza: datos.plaza,
             fase: 'entrando',
-            tiempo: 0
+            tiempo: 0,
+            pagoSolicitado: false
         });
 
         if (typeof cliente.iniciarDesdeVehiculo === 'function') {
             cliente.iniciarDesdeVehiculo(posicion, datos.plaza);
         } else {
-            console.warn(
-                `${config.nombre} no tiene iniciarDesdeVehiculo().`
-            );
+            console.warn(`${config.nombre} no tiene iniciarDesdeVehiculo().`);
 
             cliente.establecerPosicion?.(posicion);
             cliente.establecerRuta?.(config.ruta);
@@ -1091,10 +1345,7 @@ function crearCarritoVisitante(cliente, nombreCliente) {
         return carrito;
 
     } catch (error) {
-        console.error(
-            `Error al crear carrito de ${nombreCliente}:`,
-            error
-        );
+        console.error(`Error al crear carrito de ${nombreCliente}:`, error);
 
         carrito?.eliminar?.();
         return null;
@@ -1139,20 +1390,8 @@ function actualizarEntidades(delta) {
         console.error('Error al actualizar vehículos:', error);
     }
 
-    // Cada cliente se actualiza una sola vez.
-    actualizarListaEntidades(
-        clientesSupermercado,
-        delta,
-        'cliente'
-    );
-
-    // Cada ladrón se actualiza una sola vez.
-    // Su movimiento y su ruta son responsabilidad de cliente.js.
-    actualizarListaEntidades(
-        ladronesSupermercado,
-        delta,
-        'ladrón'
-    );
+    actualizarListaEntidades(clientesSupermercado, delta, 'cliente');
+    actualizarListaEntidades(ladronesSupermercado, delta, 'ladrón');
 
     actualizarCarritos(delta);
     actualizarFasesVisitantes(delta);
@@ -1189,7 +1428,6 @@ function actualizarCarritos(delta) {
 
             if (typeof carrito.actualizar === 'function') {
                 carrito.actualizar(delta);
-
             } else if (carrito.grupo && carrito._objetivoCliente) {
                 actualizarSeguimientoCarrito(
                     carrito,
@@ -1205,46 +1443,83 @@ function actualizarCarritos(delta) {
 }
 
 // ============================================================
-// FASES DE VISITANTES
+// FASES DE VISITANTES Y PROCESO DE PAGO
 // ============================================================
 
 function actualizarFasesVisitantes(delta) {
     for (const visita of visitantesPorVehiculo.values()) {
-        if (!visita?.cliente) continue;
+        const cliente = visita?.cliente;
 
-        if (visita.fase === 'comprando') {
-            visita.tiempo += delta;
+        if (!cliente || cliente.eliminado) continue;
 
-            if (visita.tiempo >= CONFIG.tiempoCompraAuto) {
-                visita.fase = 'caja';
-                visita.tiempo = 0;
+        if (visita.fase !== 'comprando') continue;
 
-                visita.cliente.establecerRuta?.([
-                    { x: 0, z: 20 }
-                ]);
-            }
+        visita.tiempo += delta;
 
-        } else if (visita.fase === 'caja') {
-            visita.tiempo += delta;
+        if (visita.tiempo < CONFIG.tiempoCompraAuto) continue;
 
-            if (visita.tiempo >= CONFIG.tiempoCajaAuto) {
-                visita.fase = 'regresando';
-                visita.tiempo = 0;
+        visita.fase = 'caja';
+        visita.tiempo = 0;
 
-                if (
-                    typeof visita.cliente.iniciarRegresoVehiculo === 'function'
-                ) {
-                    visita.cliente.iniciarRegresoVehiculo(
-                        visita.plaza,
-                        () => {
-                            visita.fase = 'esperandoSalida';
-                            visita.tiempo = 0;
-                        }
-                    );
-                } else {
-                    visita.fase = 'esperandoSalida';
+        if (typeof cliente.iniciarPago !== 'function') {
+            console.error(
+                'Este cliente no tiene iniciarPago(). ' +
+                'Revisa la versión de cliente.js.'
+            );
+
+            visita.fase = 'errorPago';
+            mostrarMensaje('Error: el cliente no puede iniciar el pago.');
+            continue;
+        }
+
+        mostrarMensaje(`${cliente.nombre ?? 'Cliente'} se dirige a la caja.`);
+
+        try {
+            const iniciado = cliente.iniciarPago(
+                CONFIG.posicionCaja,
+                ticket => {
+                    // Evitar procesar dos veces el mismo pago.
+                    if (visita.fase !== 'caja') return;
+
+                    visita.fase = 'regresando';
+                    visita.tiempo = 0;
+
+                    if (ticket) {
+                        ticketsGenerados.push(ticket);
+                        mostrarTicketCompra(
+                            ticket,
+                            cliente.nombre ?? 'Cliente'
+                        );
+                    }
+
+                    if (
+                        typeof cliente.iniciarRegresoVehiculo === 'function'
+                    ) {
+                        cliente.iniciarRegresoVehiculo(
+                            visita.plaza,
+                            () => {
+                                visita.fase = 'esperandoSalida';
+                                visita.tiempo = 0;
+
+                                mostrarMensaje(
+                                    'El cliente regresó a su vehículo.'
+                                );
+                            }
+                        );
+                    } else {
+                        visita.fase = 'esperandoSalida';
+                    }
                 }
+            );
+
+            if (iniciado === false) {
+                visita.fase = 'errorPago';
+                mostrarMensaje('No se pudo iniciar el recorrido hacia la caja.');
             }
+
+        } catch (error) {
+            console.error('Error al iniciar el pago:', error);
+            visita.fase = 'errorPago';
         }
     }
 }
@@ -1333,9 +1608,7 @@ function registrarTrayectoria(posicion) {
         const dx = posicion.x - ultimaPosicionRegistrada.x;
         const dz = posicion.z - ultimaPosicionRegistrada.z;
 
-        if (Math.hypot(dx, dz) < CONFIG.distanciaRegistro) {
-            return;
-        }
+        if (Math.hypot(dx, dz) < CONFIG.distanciaRegistro) return;
     }
 
     trayectoriaJugador.push({
@@ -1369,23 +1642,7 @@ function exportarTrayectoria() {
         )
     ];
 
-    const blob = new Blob(
-        [filas.join('\n')],
-        { type: 'text/csv;charset=utf-8;' }
-    );
-
-    const url = URL.createObjectURL(blob);
-    const enlace = document.createElement('a');
-
-    enlace.href = url;
-    enlace.download = 'recorrido_supermercado.csv';
-
-    document.body.appendChild(enlace);
-    enlace.click();
-    enlace.remove();
-
-    URL.revokeObjectURL(url);
-
+    descargarCSV(filas.join('\n'), 'recorrido_supermercado.csv');
     mostrarMensaje('Recorrido exportado.');
 }
 
@@ -1416,7 +1673,8 @@ function actualizarHUD() {
             total += visita.cliente?.obtenerCompras?.().length || 0;
         }
 
-        compras.textContent = `Artículos comprados: ${total}`;
+        compras.textContent =
+            `Artículos comprados: ${total} | Tickets: ${ticketsGenerados.length}`;
     }
 
     actualizarEstadoVista();
