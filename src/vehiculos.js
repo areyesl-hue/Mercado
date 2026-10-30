@@ -4,6 +4,24 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 const loader = new GLTFLoader();
 
+// =====================================================
+// COLORES DE LOS VEHÍCULOS
+// =====================================================
+
+const COLORES_VEHICULOS = [
+    0xd62828, // Rojo
+    0x1769aa, // Azul
+    0xf2f2f2, // Blanco
+    0x202020, // Negro
+    0x858585, // Gris
+    0x168447, // Verde
+    0xe5b51b  // Amarillo
+];
+
+// =====================================================
+// CONFIGURACIÓN
+// =====================================================
+
 const CONFIG_BASE = {
     modelos: [
         '/modelos/auto.glb',
@@ -48,6 +66,10 @@ const CONFIG_BASE = {
     alEstacionar: null,
     alSalir: null
 };
+
+// =====================================================
+// CREAR SISTEMA DE VEHÍCULOS
+// =====================================================
 
 export function crearVehiculos(scene, opciones = {}) {
 
@@ -100,8 +122,6 @@ export function crearVehiculos(scene, opciones = {}) {
     let inicialesProcesadas = false;
     let destruido = false;
 
-    let temporizadorLlegada = 0;
-
     // =====================================================
     // UTILIDADES
     // =====================================================
@@ -124,6 +144,123 @@ export function crearVehiculos(scene, opciones = {}) {
         return plazas.find(
             plaza => !plaza.ocupada && !plaza.reservada
         ) || null;
+    }
+
+    function obtenerColorVehiculo(indice) {
+        return COLORES_VEHICULOS[
+            indice % COLORES_VEHICULOS.length
+        ];
+    }
+
+    // =====================================================
+    // MATERIALES
+    // =====================================================
+
+    function material(color, roughness = 0.7, metalness = 0.1) {
+
+        return new THREE.MeshStandardMaterial({
+            color,
+            roughness,
+            metalness
+        });
+    }
+
+    // =====================================================
+    // PINTAR CARROCERÍA
+    // =====================================================
+
+    function pintarCarroceria(modelo, color) {
+
+        const palabrasProtegidas =
+            /glass|cristal|window|ventana|wheel|rueda|tire|tyre|llanta|rubber|neumatico|light|luz|lamp|chrome|cromo|mirror|espejo|interior|seat|asiento|dashboard|tablero/i;
+
+        const palabrasCarroceria =
+            /body|carroceria|paint|pintura|exterior|chassis|door|puerta|hood|bonnet|roof|techo|fender|bumper|parachoques/i;
+
+        const materialesCarroceria = [];
+
+        modelo.traverse(objeto => {
+
+            if (!objeto.isMesh) return;
+
+            const nombreObjeto = objeto.name || '';
+
+            const materiales = Array.isArray(objeto.material)
+                ? objeto.material
+                : [objeto.material];
+
+            materiales.forEach(mat => {
+
+                if (!mat || !mat.color) return;
+
+                const nombreMaterial = mat.name || '';
+
+                const identificador =
+                    `${nombreObjeto} ${nombreMaterial}`;
+
+                if (palabrasProtegidas.test(identificador)) {
+                    return;
+                }
+
+                if (palabrasCarroceria.test(identificador)) {
+                    materialesCarroceria.push(mat);
+                }
+            });
+        });
+
+        // Si no existen nombres reconocibles,
+        // buscar materiales visibles no protegidos.
+        if (materialesCarroceria.length === 0) {
+
+            modelo.traverse(objeto => {
+
+                if (!objeto.isMesh) return;
+
+                const materiales = Array.isArray(objeto.material)
+                    ? objeto.material
+                    : [objeto.material];
+
+                materiales.forEach(mat => {
+
+                    if (!mat || !mat.color) return;
+
+                    const identificador =
+                        `${objeto.name || ''} ${mat.name || ''}`;
+
+                    if (!palabrasProtegidas.test(identificador)) {
+                        materialesCarroceria.push(mat);
+                    }
+                });
+            });
+        }
+
+        // Crear materiales independientes para cada vehículo.
+        const materialesUnicos = [...new Set(materialesCarroceria)];
+
+        materialesUnicos.forEach(matOriginal => {
+
+            const nuevoMaterial = matOriginal.clone();
+
+            nuevoMaterial.color.setHex(color);
+
+            nuevoMaterial.needsUpdate = true;
+
+            modelo.traverse(objeto => {
+
+                if (!objeto.isMesh) return;
+
+                if (Array.isArray(objeto.material)) {
+
+                    objeto.material = objeto.material.map(mat =>
+                        mat === matOriginal ? nuevoMaterial : mat
+                    );
+
+                } else if (objeto.material === matOriginal) {
+
+                    objeto.material = nuevoMaterial;
+                }
+            });
+        });
     }
 
     // =====================================================
@@ -153,19 +290,6 @@ export function crearVehiculos(scene, opciones = {}) {
     }
 
     // =====================================================
-    // MATERIALES
-    // =====================================================
-
-    function material(color, roughness = 0.7, metalness = 0.1) {
-
-        return new THREE.MeshStandardMaterial({
-            color,
-            roughness,
-            metalness
-        });
-    }
-
-    // =====================================================
     // VEHÍCULO PROVISIONAL
     // =====================================================
 
@@ -184,18 +308,20 @@ export function crearVehiculos(scene, opciones = {}) {
 
         const carroceria = new THREE.Mesh(
             new THREE.BoxGeometry(1.8, 0.8, 3.8),
-            material(0x263d59, 0.55, 0.3)
+            material(vehiculo.color, 0.55, 0.3)
         );
 
         carroceria.position.y = 0.75;
+        carroceria.castShadow = false;
         grupo.add(carroceria);
 
         const techo = new THREE.Mesh(
             new THREE.BoxGeometry(1.5, 0.65, 1.9),
-            material(0x8ca5b9, 0.5, 0.25)
+            material(vehiculo.color, 0.5, 0.25)
         );
 
         techo.position.set(0, 1.43, -0.25);
+        techo.castShadow = false;
         grupo.add(techo);
 
         vehiculo.ruedas = [];
@@ -229,7 +355,7 @@ export function crearVehiculos(scene, opciones = {}) {
         vehiculo.estado = 'esperando';
 
         console.info(
-            `[VEHICULOS] Modelo provisional creado: ${vehiculo.id}`
+            `[VEHICULOS] Modelo provisional creado: ${vehiculo.id} | Color: #${vehiculo.color.toString(16)}`
         );
 
         procesarCola();
@@ -255,6 +381,8 @@ export function crearVehiculos(scene, opciones = {}) {
 
             id,
             grupo,
+
+            color: obtenerColorVehiculo(siguienteId - 1),
 
             modelo: null,
             ruedas: [],
@@ -283,7 +411,7 @@ export function crearVehiculos(scene, opciones = {}) {
     }
 
     // =====================================================
-    // CARGAR MODELO
+    // CARGAR MODELO GLB
     // =====================================================
 
     function cargarModelo(vehiculo) {
@@ -313,6 +441,12 @@ export function crearVehiculos(scene, opciones = {}) {
                 const modelo = gltf.scene;
 
                 modelo.name = 'MODELO_VEHICULO';
+
+                // Aplicar el color individual.
+                pintarCarroceria(
+                    modelo,
+                    vehiculo.color
+                );
 
                 modelo.traverse(objeto => {
 
@@ -347,7 +481,7 @@ export function crearVehiculos(scene, opciones = {}) {
                 vehiculo.estado = 'esperando';
 
                 console.info(
-                    `[VEHICULOS] Cargado: ${rutaModelo}`
+                    `[VEHICULOS] Cargado: ${rutaModelo} | ${vehiculo.id} | Color: #${vehiculo.color.toString(16)}`
                 );
 
                 procesarCola();
@@ -842,10 +976,6 @@ export function crearVehiculos(scene, opciones = {}) {
             )
         );
 
-        const solicitudesExistentes =
-            colaLlegadas.length +
-            tandaEnCurso.length;
-
         if (
             contarPlazasLibres() <
             cantidadReal
@@ -958,6 +1088,8 @@ export function crearVehiculos(scene, opciones = {}) {
                 id: vehiculo.id,
 
                 estado: vehiculo.estado,
+
+                color: `#${vehiculo.color.toString(16).padStart(6, '0')}`,
 
                 tanda: vehiculo.tanda,
 
