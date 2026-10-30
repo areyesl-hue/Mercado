@@ -1,3 +1,4 @@
+
 import * as THREE from 'three';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 
@@ -24,17 +25,14 @@ const CONFIG = {
     colorCieloDia: 0xa9c9e8,
     colorCieloNoche: 0x101827,
 
-    // Rendimiento
     pixelRatioMaximo: 0.85,
     antialias: false,
     sombras: false,
     limiteDelta: 0.033,
 
-    // Carritos
     distanciaCarrito: 1.15,
     suavizadoCarrito: 6,
 
-    // Visitantes
     velocidadCliente: 1.5,
     velocidadLadron: 1.8,
     probabilidadCompra: 0.75,
@@ -44,10 +42,8 @@ const CONFIG = {
     tiempoCompraAuto: 60,
     maximoProductosCliente: 3,
 
-    // Caja
     posicionCaja: { x: 0, z: 20 },
 
-    // Registro de movimiento
     distanciaRegistro: 0.5,
     maximoRegistros: 20000
 };
@@ -264,7 +260,6 @@ let posicionJugadorGuardada = null;
 let quaternionJugadorGuardado = null;
 
 let siguienteModeloCliente = 0;
-let contadorVisitantes = 0;
 let ultimaPosicionRegistrada = null;
 let temporizadorMensaje = null;
 
@@ -552,7 +547,8 @@ function crearSistemaVehiculos() {
             },
 
             alSalir: datos => {
-                limpiarVisitaVehiculo(datos.id);
+                // CORRECCIÓN: el ID está dentro de datos.vehiculo.
+                limpiarVisitaVehiculo(datos.vehiculo?.id);
             }
         });
 
@@ -567,12 +563,16 @@ function crearSistemaVehiculos() {
 // ============================================================
 
 function crearClienteParaVehiculo(datos) {
-    if (!datos?.plaza || !datos?.id) {
-        console.warn('El vehículo no proporcionó un ID o una plaza.');
+    // CORRECCIÓN: obtener el ID desde el objeto vehículo.
+    const idVehiculo = datos?.vehiculo?.id;
+
+    if (!datos?.plaza || idVehiculo === undefined) {
+        console.warn(
+            '[VISITANTE] El vehículo no proporcionó un ID o una plaza.',
+            datos
+        );
         return;
     }
-
-    const idVehiculo = datos.id;
 
     if (visitantesPorVehiculo.has(idVehiculo)) {
         console.warn(`Ya existe una visita para ${idVehiculo}.`);
@@ -587,8 +587,6 @@ function crearClienteParaVehiculo(datos) {
 
     const idVisita = idVehiculo;
 
-    // El coche termina orientado hacia el frente del estacionamiento.
-    // El visitante aparece junto a su plaza, no en la entrada del mercado.
     const posicionInicio = {
         x: datos.plaza.x,
         y: 0,
@@ -627,7 +625,6 @@ function crearClienteParaVehiculo(datos) {
                 visita.fase = 'comprando';
                 visita.tiempo = 0;
 
-                // El carrito se crea una sola vez por visitante.
                 if (!visita.carrito) {
                     visita.carrito = crearCarritoVisitante(
                         visita.cliente,
@@ -674,7 +671,6 @@ function crearClienteParaVehiculo(datos) {
             salidaSolicitada: false
         };
 
-        // Registrar primero la visita para que alEntrar pueda encontrarla.
         visitantesPorVehiculo.set(idVisita, visita);
         clientesSupermercado.push(cliente);
 
@@ -694,7 +690,7 @@ function crearClienteParaVehiculo(datos) {
         }
 
         console.info(
-            `[VISITANTE] ${idVisita} salió de su vehículo en ${visita.plaza.id}.`
+            `[VISITANTE] ${idVisita} salió de su vehículo en plaza ${visita.plaza.id}.`
         );
 
     } catch (error) {
@@ -803,7 +799,6 @@ function actualizarEntidades(delta) {
         }
     }
 
-    // Este método también procesa las llegadas iniciales.
     if (typeof sistemaVehiculos?.actualizarCompleto === 'function') {
         sistemaVehiculos.actualizarCompleto(delta);
     } else if (typeof sistemaVehiculos?.actualizar === 'function') {
@@ -870,7 +865,6 @@ function actualizarFasesVisitantes(delta) {
         const tiempoAgotado =
             visita.tiempo >= CONFIG.tiempoCompraAuto;
 
-        // Nunca enviar al cliente a caja mientras manipula un producto.
         if (clienteEstaOcupadoComprando(estado)) continue;
 
         if (!maximoComprado && !tiempoAgotado) continue;
@@ -1702,7 +1696,7 @@ function crearInterfaz() {
 
         const resultado = sistemaVehiculos.solicitarLlegada();
 
-        if (resultado === false) {
+        if (resultado === false || resultado === 0) {
             mostrarMensaje(
                 'No hay plazas disponibles o no se pudo solicitar el vehículo.'
             );
