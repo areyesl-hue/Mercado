@@ -328,19 +328,11 @@ export function crearProductosLacteos(scene) {
 
     // ========================================================
     // 1. GÓNDOLAS
+    // Se retiraron temporalmente galletas e higiene agrupada.
+    // Doritos y Sabritas permanecen en ambas ubicaciones.
     // ========================================================
 
     const catalogoGondolas = [
-        {
-            nombre: 'Galletas',
-            archivo: '/modelos/galletas.glb',
-            codigo: 'GALLETAS',
-            categoria: 'Abarrotes',
-            rackX: -17,
-            rackZ: -13,
-            lado: -1,
-            altura: 0.40
-        },
         {
             nombre: 'Cereal',
             archivo: '/modelos/cereal.glb',
@@ -422,16 +414,6 @@ export function crearProductosLacteos(scene) {
             altura: 0.30
         },
         {
-            nombre: 'Higiene personal',
-            archivo: '/modelos/higienePersonal.glb',
-            codigo: 'HIGIENE_PERSONAL',
-            categoria: 'Higiene',
-            rackX: -9,
-            rackZ: 0,
-            lado: 1,
-            altura: 0.38
-        },
-        {
             nombre: 'Toallitas para bebé',
             archivo: '/modelos/toallitas_bebe.glb',
             codigo: 'TOALLITAS_BEBE',
@@ -450,16 +432,6 @@ export function crearProductosLacteos(scene) {
             rackZ: -13,
             lado: -1,
             altura: 0.30
-        },
-        {
-            nombre: 'Galletas surtidas',
-            archivo: '/modelos/galletas.glb',
-            codigo: 'GALLETAS_SURTIDAS',
-            categoria: 'Abarrotes',
-            rackX: 17,
-            rackZ: -13,
-            lado: 1,
-            altura: 0.40
         },
         {
             nombre: 'Abarrotes surtidos',
@@ -510,16 +482,6 @@ export function crearProductosLacteos(scene) {
             rackZ: 13,
             lado: -1,
             altura: 0.30
-        },
-        {
-            nombre: 'Productos de higiene',
-            archivo: '/modelos/higienePersonal.glb',
-            codigo: 'HIGIENE_SURTIDA',
-            categoria: 'Higiene',
-            rackX: 9,
-            rackZ: 13,
-            lado: 1,
-            altura: 0.38
         },
         {
             nombre: 'Toallitas de bebé',
@@ -823,6 +785,7 @@ export function crearProductosLacteos(scene) {
 
     // ========================================================
     // 5. LIMPIEZA
+    // Se retiró temporalmente el detergente surtido.
     // ========================================================
 
     const productosLimpieza = [
@@ -835,11 +798,6 @@ export function crearProductosLacteos(scene) {
             nombre: 'Detergente líquido',
             archivo: '/modelos/detergente_liquido.glb',
             codigo: 'DETERGENTE'
-        },
-        {
-            nombre: 'Detergente líquido surtido',
-            archivo: '/modelos/detergente_liquido1.glb',
-            codigo: 'DETERGENTE_2'
         },
         {
             nombre: 'Suavizante líquido',
