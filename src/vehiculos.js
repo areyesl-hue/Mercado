@@ -75,6 +75,7 @@ export function crearVehiculos(scene, opciones = {}) {
 
     let siguienteModelo = 0;
     let siguienteId = 0;
+    let siguienteSolicitud = 0;
     let tandaActual = 0;
 
     let tandaActiva = false;
@@ -83,6 +84,10 @@ export function crearVehiculos(scene, opciones = {}) {
 
     let inicialesProcesadas = false;
     let destruido = false;
+
+    // =========================================================
+    // PLAZAS DE ESTACIONAMIENTO
+    // =========================================================
 
     function crearPlazas() {
         let id = 0;
@@ -107,7 +112,20 @@ export function crearVehiculos(scene, opciones = {}) {
         ) || null;
     }
 
+    function contarPlazasLibres() {
+        return plazas.filter(
+            p => !p.ocupada && !p.reservada
+        ).length;
+    }
+
+    // =========================================================
+    // VEHÍCULO PROVISIONAL
+    // Se utiliza si falla la carga del GLB.
+    // =========================================================
+
     function crearModeloProvisional(vehiculo) {
+        if (destruido || !vehiculo || vehiculo.modeloCargado) return;
+
         const material = new THREE.MeshStandardMaterial({
             color: 0x263d59,
             roughness: 0.55,
@@ -120,6 +138,8 @@ export function crearVehiculos(scene, opciones = {}) {
         );
 
         carroceria.position.y = 0.75;
+        carroceria.castShadow = false;
+        carroceria.receiveShadow = false;
         vehiculo.grupo.add(carroceria);
 
         const techo = new THREE.Mesh(
@@ -157,8 +177,14 @@ export function crearVehiculos(scene, opciones = {}) {
         vehiculo.modeloCargado = true;
         vehiculo.estado = 'esperando';
 
+        // Importante: al terminar la carga se intenta procesar
+        // nuevamente la cola de vehículos.
         procesarCola();
     }
+
+    // =========================================================
+    // CREAR VEHÍCULO
+    // =========================================================
 
     function crearVehiculo() {
         const id = `VEHICULO_${++siguienteId}`;
@@ -190,6 +216,10 @@ export function crearVehiculos(scene, opciones = {}) {
         return vehiculo;
     }
 
+    // =========================================================
+    // CARGAR MODELO GLB
+    // =========================================================
+
     function cargarModelo(vehiculo) {
         const modelos = config.modelos || [];
 
@@ -203,6 +233,7 @@ export function crearVehiculos(scene, opciones = {}) {
 
         loader.load(
             ruta,
+
             gltf => {
                 if (destruido) return;
 
@@ -233,9 +264,12 @@ export function crearVehiculos(scene, opciones = {}) {
                 vehiculo.modeloCargado = true;
                 vehiculo.estado = 'esperando';
 
+                // Reintentar la cola cuando el modelo esté listo.
                 procesarCola();
             },
+
             undefined,
+
             error => {
                 console.warn(`Error cargando ${ruta}:`, error);
 
@@ -246,20 +280,27 @@ export function crearVehiculos(scene, opciones = {}) {
         );
     }
 
+    // =========================================================
+    // OBTENER VEHÍCULOS DISPONIBLES
+    // Incluye vehículos que todavía están cargando.
+    // =========================================================
+
     function obtenerVehiculosDisponibles(cantidad) {
-        const disponibles = vehiculos.filter(
-            v => v.estado === 'esperando' && v.modeloCargado
+        const disponibles = vehiculos.filter(v =>
+            v.estado === 'esperando' ||
+            v.estado === 'cargando'
         );
 
         while (disponibles.length < cantidad) {
-            const nuevo = crearVehiculo();
-
-            // Se incorporará a la tanda cuando termine de cargar.
-            disponibles.push(nuevo);
+            disponibles.push(crearVehiculo());
         }
 
         return disponibles.slice(0, cantidad);
     }
+
+    // =========================================================
+    // RUTA DE ENTRADA
+    // =========================================================
 
     function establecerRutaLlegada(vehiculo, plaza) {
         vehiculo.plaza = plaza;
@@ -268,9 +309,18 @@ export function crearVehiculos(scene, opciones = {}) {
         plaza.vehiculoId = vehiculo.id;
 
         vehiculo.ruta = [
-            { x: config.entrada.x, z: config.entrada.zExterior },
-            { x: config.entrada.x, z: config.entrada.zAcceso },
-            { x: plaza.x, z: plaza.z }
+            {
+                x: config.entrada.x,
+                z: config.entrada.zExterior
+            },
+            {
+                x: config.entrada.x,
+                z: config.entrada.zAcceso
+            },
+            {
+                x: plaza.x,
+                z: plaza.z
+            }
         ];
 
         vehiculo.indiceRuta = 0;
@@ -287,6 +337,10 @@ export function crearVehiculos(scene, opciones = {}) {
         vehiculo.grupo.visible = true;
     }
 
+    // =========================================================
+    // SALIDA DEL ESTACIONAMIENTO
+    // =========================================================
+
     function iniciarSalida(vehiculo) {
         if (!vehiculo || vehiculo.estado !== 'estacionado') {
             return false;
@@ -295,9 +349,18 @@ export function crearVehiculos(scene, opciones = {}) {
         vehiculo.estado = 'saliendo';
 
         vehiculo.ruta = [
-            { x: vehiculo.grupo.position.x, z: vehiculo.grupo.position.z },
-            { x: config.salida.x, z: config.salida.zAcceso },
-            { x: config.salida.x, z: config.salida.zExterior }
+            {
+                x: vehiculo.grupo.position.x,
+                z: vehiculo.grupo.position.z
+            },
+            {
+                x: config.salida.x,
+                z: config.salida.zAcceso
+            },
+            {
+                x: config.salida.x,
+                z: config.salida.zExterior
+            }
         ];
 
         vehiculo.indiceRuta = 0;
@@ -305,6 +368,10 @@ export function crearVehiculos(scene, opciones = {}) {
 
         return true;
     }
+
+    // =========================================================
+    // FINALIZAR LLEGADA
+    // =========================================================
 
     function finalizarLlegada(vehiculo) {
         vehiculo.estado = 'estacionado';
@@ -322,6 +389,10 @@ export function crearVehiculos(scene, opciones = {}) {
             tanda: vehiculo.tanda
         });
     }
+
+    // =========================================================
+    // FINALIZAR SALIDA
+    // =========================================================
 
     function finalizarSalida(vehiculo) {
         const plazaAnterior = vehiculo.plaza;
@@ -343,6 +414,8 @@ export function crearVehiculos(scene, opciones = {}) {
         );
 
         vehiculo.velocidadActual = 0;
+        vehiculo.ruta = [];
+        vehiculo.indiceRuta = 0;
 
         config.alSalir?.({
             id: vehiculo.id,
@@ -354,6 +427,10 @@ export function crearVehiculos(scene, opciones = {}) {
 
         verificarFinTanda();
     }
+
+    // =========================================================
+    // VERIFICAR SI TERMINÓ LA TANDA
+    // =========================================================
 
     function verificarFinTanda() {
         if (!tandaActiva) return;
@@ -367,16 +444,24 @@ export function crearVehiculos(scene, opciones = {}) {
         tandaActiva = false;
         tandaEnCurso = [];
 
+        // Si hay solicitudes acumuladas, inicia la siguiente tanda.
         procesarCola();
     }
+
+    // =========================================================
+    // MOVIMIENTO DE VEHÍCULOS
+    // =========================================================
 
     function moverVehiculo(vehiculo, delta) {
         if (
             vehiculo.estado !== 'entrando' &&
             vehiculo.estado !== 'saliendo'
-        ) return;
+        ) {
+            return;
+        }
 
         const destino = vehiculo.ruta[vehiculo.indiceRuta];
+
         if (!destino) return;
 
         const dx = destino.x - vehiculo.grupo.position.x;
@@ -386,6 +471,7 @@ export function crearVehiculos(scene, opciones = {}) {
         if (distancia < 0.15) {
             vehiculo.grupo.position.x = destino.x;
             vehiculo.grupo.position.z = destino.z;
+
             vehiculo.indiceRuta++;
 
             if (vehiculo.indiceRuta >= vehiculo.ruta.length) {
@@ -419,6 +505,11 @@ export function crearVehiculos(scene, opciones = {}) {
         }
     }
 
+    // =========================================================
+    // PROCESAR COLA DE LLEGADAS
+    // CORREGIDO: NO SE BLOQUEA SI LOS GLB ESTÁN CARGANDO.
+    // =========================================================
+
     function procesarCola() {
         if (destruido || tandaActiva || tandaPreparando) return;
         if (colaLlegadas.length === 0) return;
@@ -428,7 +519,7 @@ export function crearVehiculos(scene, opciones = {}) {
             colaLlegadas.length
         );
 
-        if (plazas.filter(p => !p.ocupada && !p.reservada).length < cantidad) {
+        if (contarPlazasLibres() < cantidad) {
             console.warn('No hay suficientes plazas para la tanda.');
             return;
         }
@@ -437,8 +528,13 @@ export function crearVehiculos(scene, opciones = {}) {
 
         const disponibles = obtenerVehiculosDisponibles(cantidad);
 
-        // Espera a que todos los modelos de la tanda estén listos.
-        if (disponibles.some(v => !v.modeloCargado)) return;
+        // Si hay modelos cargando, liberamos el bloqueo.
+        // Cuando termine cada carga, cargarModelo llamará otra vez
+        // a procesarCola().
+        if (disponibles.some(v => !v.modeloCargado)) {
+            tandaPreparando = false;
+            return;
+        }
 
         const solicitudes = colaLlegadas.splice(0, cantidad);
 
@@ -462,50 +558,85 @@ export function crearVehiculos(scene, opciones = {}) {
 
             establecerRutaLlegada(vehiculo, plaza);
         }
+
+        if (tandaEnCurso.length === 0) {
+            tandaActiva = false;
+            procesarCola();
+        }
     }
+
+    // =========================================================
+    // SOLICITAR UNA LLEGADA
+    // =========================================================
 
     function solicitarLlegada() {
         return solicitarTanda(1);
     }
 
+    // =========================================================
+    // SOLICITAR TANDA
+    // CORREGIDO: PERMITE ACUMULAR SOLICITUDES MIENTRAS
+    // OTRA TANDA ESTÁ ACTIVA.
+    // =========================================================
+
     function solicitarTanda(cantidad = 3) {
-        if (destruido || tandaActiva || tandaPreparando || colaLlegadas.length) {
-            return false;
-        }
+        if (destruido) return false;
 
         const cantidadReal = Math.min(
             Math.max(1, Math.floor(cantidad)),
             config.maximoPorTanda
         );
 
-        const libres = plazas.filter(
-            p => !p.ocupada && !p.reservada
-        ).length;
+        const solicitudesActuales =
+            colaLlegadas.length +
+            tandaEnCurso.length;
 
-        if (libres < cantidadReal) {
+        if (
+            contarPlazasLibres() <
+            cantidadReal + (tandaActiva ? 0 : 0)
+        ) {
             console.warn('No hay suficientes plazas para esta tanda.');
             return false;
         }
 
+        // Se agregan solicitudes a la cola aunque haya vehículos
+        // entrando, estacionados o saliendo.
         for (let i = 0; i < cantidadReal; i++) {
-            colaLlegadas.push({ id: i });
+            colaLlegadas.push({
+                id: ++siguienteSolicitud
+            });
         }
 
         procesarCola();
+
         return true;
     }
 
+    // =========================================================
+    // SOLICITAR SALIDA DE UN VEHÍCULO
+    // =========================================================
+
     function solicitarSalida(id) {
         const vehiculo = vehiculos.find(v => v.id === id);
+
         return iniciarSalida(vehiculo);
     }
 
+    // =========================================================
+    // PROCESAR VEHÍCULOS INICIALES
+    // =========================================================
+
     function procesarIniciales() {
-        if (inicialesProcesadas) return;
+        if (inicialesProcesadas || destruido) return;
 
         inicialesProcesadas = true;
+
         solicitarTanda(config.cochesIniciales);
     }
+
+    // =========================================================
+    // ACTUALIZACIÓN
+    // =========================================================
 
     function actualizar(delta = 0.016) {
         if (destruido) return;
@@ -520,31 +651,44 @@ export function crearVehiculos(scene, opciones = {}) {
     }
 
     function actualizarCompleto(delta = 0.016) {
+        if (destruido) return;
+
         procesarIniciales();
         actualizar(delta);
     }
+
+    // =========================================================
+    // CONSULTAR ESTADO
+    // =========================================================
 
     function obtenerEstado() {
         return {
             tandaActual,
             tandaActiva,
+            tandaPreparando,
+
             vehiculos: vehiculos.map(v => ({
                 id: v.id,
                 estado: v.estado,
                 tanda: v.tanda,
-                plaza: v.plaza?.id ?? null
+                plaza: v.plaza?.id ?? null,
+                modeloCargado: v.modeloCargado
             })),
-            plazasDisponibles: plazas.filter(
-                p => !p.ocupada && !p.reservada
-            ).length,
+
+            plazasDisponibles: contarPlazasLibres(),
             solicitudesPendientes: colaLlegadas.length
         };
     }
+
+    // =========================================================
+    // ELIMINAR SISTEMA
+    // =========================================================
 
     function eliminar() {
         if (destruido) return;
 
         destruido = true;
+
         grupoVehiculos.removeFromParent();
 
         grupoVehiculos.traverse(objeto => {
@@ -553,7 +697,7 @@ export function crearVehiculos(scene, opciones = {}) {
             objeto.geometry?.dispose();
 
             if (Array.isArray(objeto.material)) {
-                objeto.material.forEach(m => m.dispose());
+                objeto.material.forEach(material => material.dispose());
             } else {
                 objeto.material?.dispose();
             }
@@ -563,7 +707,14 @@ export function crearVehiculos(scene, opciones = {}) {
         plazas.length = 0;
         colaLlegadas.length = 0;
         tandaEnCurso.length = 0;
+
+        tandaActiva = false;
+        tandaPreparando = false;
     }
+
+    // =========================================================
+    // INICIALIZACIÓN
+    // =========================================================
 
     crearPlazas();
 
@@ -571,13 +722,20 @@ export function crearVehiculos(scene, opciones = {}) {
         crearVehiculo();
     }
 
+    // =========================================================
+    // API PÚBLICA
+    // =========================================================
+
     return {
         grupo: grupoVehiculos,
+
         actualizar,
         actualizarCompleto,
+
         solicitarLlegada,
         solicitarTanda,
         solicitarSalida,
+
         obtenerEstado,
         eliminar,
 
