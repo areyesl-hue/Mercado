@@ -5,7 +5,8 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 // ============================================================
 // CARRITO DE SUPERMERCADO
 // Three.js 0.180+
-// Posición delante del cliente y manubrio hacia el personaje.
+// Seguimiento delante del cliente.
+// Manubrio orientado hacia el personaje.
 // ============================================================
 
 const loader = new GLTFLoader();
@@ -21,15 +22,13 @@ const CONFIG_DEFAULT = {
     suavizado: 6,
     velocidadMaxima: 5,
 
-    // Corrección exclusiva del modelo GLB.
+    // Corrección exclusiva de la orientación del GLB.
     correccionModelo: Math.PI,
 
     alturaManubrio: 0.9,
     alturaCesta: 0.75,
 
-    // El frente del cliente normalmente apunta hacia -Z
-    // en la orientación inicial del grupo.
-    // Cambia a -1 si tu personaje utiliza la orientación contraria.
+    // +1 coloca el carrito delante del cliente.
     ladoDelante: 1,
 
     cargarModelo: true
@@ -67,7 +66,7 @@ export function crearCarrito(scene, opciones = {}) {
     grupo.scale.setScalar(config.escala);
     scene.add(grupo);
 
-    // Este grupo controla únicamente la orientación del modelo.
+    // Grupo independiente para corregir la orientación del GLB.
     const grupoModelo = new THREE.Group();
     grupoModelo.name = 'MODELO_CARRITO';
     grupo.add(grupoModelo);
@@ -88,7 +87,7 @@ export function crearCarrito(scene, opciones = {}) {
     };
 
     // ========================================================
-    // MATERIALES DEL CARRITO DE RESPALDO
+    // MATERIALES
     // ========================================================
 
     const materiales = {
@@ -140,6 +139,7 @@ export function crearCarrito(scene, opciones = {}) {
         );
 
         mesh.name = nombre;
+
         mesh.position.set(
             posicion.x,
             posicion.y,
@@ -189,7 +189,10 @@ export function crearCarrito(scene, opciones = {}) {
         );
 
         mesh.name = nombre;
-        mesh.position.copy(a).add(b).multiplyScalar(0.5);
+
+        mesh.position.copy(a)
+            .add(b)
+            .multiplyScalar(0.5);
 
         mesh.quaternion.setFromUnitVectors(
             new THREE.Vector3(0, 1, 0),
@@ -202,7 +205,6 @@ export function crearCarrito(scene, opciones = {}) {
 
     // ========================================================
     // CARRITO DE RESPALDO
-    // Manubrio situado en el lado -Z del modelo.
     // ========================================================
 
     function crearModeloRespaldo() {
@@ -316,7 +318,7 @@ export function crearCarrito(scene, opciones = {}) {
                 modelo,
                 'Rejilla_trasera',
                 { x: xIzquierdo, y, z: zTrasero },
-                { x: xDerecho, y, z: zTrasero },
+                { x: xDerecho, y: zTrasero, z: zTrasero },
                 0.012,
                 materiales.metal
             );
@@ -481,15 +483,18 @@ export function crearCarrito(scene, opciones = {}) {
                     modelo.position.y -= caja.min.y;
                 }
 
-                const cajaFinal = new THREE.Box3().setFromObject(modelo);
-                const tamano = cajaFinal.getSize(new THREE.Vector3());
+                // Escalar según su altura real.
+                const cajaFinal = new THREE.Box3()
+                    .setFromObject(modelo);
 
+                const tamano = cajaFinal.getSize(new THREE.Vector3());
                 const altura = tamano.y || 1;
+
                 modelo.scale.multiplyScalar(1.25 / altura);
 
                 grupoModelo.add(modelo);
 
-                // La orientación no afecta la posición de seguimiento.
+                // Corrección independiente del seguimiento.
                 grupoModelo.rotation.y = config.correccionModelo;
 
                 estado.cargado = true;
@@ -567,7 +572,6 @@ export function crearCarrito(scene, opciones = {}) {
     // ========================================================
 
     const posicionObjetivo = new THREE.Vector3();
-    const posicionActual = new THREE.Vector3();
     const direccion = new THREE.Vector3();
     const posicionDeseada = new THREE.Vector3();
     const haciaCliente = new THREE.Vector3();
@@ -583,22 +587,23 @@ export function crearCarrito(scene, opciones = {}) {
 
         const dt = Math.min(Math.max(delta || 0, 0), 0.05);
 
-        // Obtener posición y orientación mundial del personaje.
+        // Obtener posición mundial del cliente.
         estado.objetivo.getWorldPosition(posicionObjetivo);
 
-        // Dirección frontal real del cliente.
-        direccion.set(0, 0, -1);
+        // El cliente utiliza un THREE.Group.
+        // Su dirección frontal local es +Z.
+        direccion.set(0, 0, 1);
         estado.objetivo.getWorldDirection(direccion);
 
         direccion.y = 0;
 
         if (direccion.lengthSq() < 0.0001) {
-            direccion.set(0, 0, -1);
+            direccion.set(0, 0, 1);
         }
 
         direccion.normalize();
 
-        // El carrito se coloca delante del personaje.
+        // El carrito queda delante del personaje.
         posicionDeseada.copy(posicionObjetivo);
 
         posicionDeseada.addScaledVector(
@@ -608,13 +613,13 @@ export function crearCarrito(scene, opciones = {}) {
 
         posicionDeseada.y = config.posicion.y;
 
-        // Suavizar desplazamiento.
+        // Seguimiento suave.
         grupo.position.lerp(
             posicionDeseada,
             1 - Math.exp(-config.suavizado * dt)
         );
 
-        // El manubrio debe quedar hacia el cliente.
+        // El manubrio apunta hacia el cliente.
         haciaCliente.subVectors(
             posicionObjetivo,
             grupo.position
@@ -623,12 +628,10 @@ export function crearCarrito(scene, opciones = {}) {
         haciaCliente.y = 0;
 
         if (haciaCliente.lengthSq() > 0.0001) {
-            const angulo = Math.atan2(
+            grupo.rotation.y = Math.atan2(
                 haciaCliente.x,
                 haciaCliente.z
             );
-
-            grupo.rotation.y = angulo;
         }
     }
 
@@ -672,7 +675,9 @@ export function crearCarrito(scene, opciones = {}) {
             posicionMundial,
             quaternionMundial,
             escalaMundial,
-            nombre: opcionesProducto.nombre ?? objeto.name,
+            nombre: opcionesProducto.nombre ??
+                objeto.name ??
+                'Producto',
             cantidad: opcionesProducto.cantidad ?? 1,
             precio: opcionesProducto.precio ?? 0
         };
