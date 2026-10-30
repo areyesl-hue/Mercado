@@ -1,250 +1,492 @@
+
 import * as THREE from 'three';
 
-// Las plazas se alinean con las coordenadas de vehiculos.js.
-// El estacionamiento se desplaza +7 en Z.
-export function crearEstacionamiento(scene, mercado = null) {
-    if (!scene?.isScene) {
+// ============================================================
+// ESTACIONAMIENTO DEL SUPERMERCADO
+// Compatible con vehiculos.js y main.js
+// Coordenadas globales:
+// X: -30 a 30
+// Z:  25 a 80
+// ============================================================
+
+export function crearEstacionamiento(scene) {
+    if (!scene) {
         throw new Error('crearEstacionamiento necesita una THREE.Scene.');
     }
 
     const estacionamiento = new THREE.Group();
     estacionamiento.name = 'ESTACIONAMIENTO_SUPERMERCADO';
-    estacionamiento.position.set(0, 0, 7);
 
-    const mat = {
+    // --------------------------------------------------------
+    // MATERIALES
+    // --------------------------------------------------------
+
+    const materiales = {
         asfalto: new THREE.MeshStandardMaterial({
-            color: 0x34383d, roughness: 0.95
+            color: 0x30343a,
+            roughness: 0.96
         }),
+
+        banqueta: new THREE.MeshStandardMaterial({
+            color: 0xb9bdc1,
+            roughness: 0.9
+        }),
+
+        linea: new THREE.MeshStandardMaterial({
+            color: 0xf4f1dc,
+            roughness: 0.8
+        }),
+
+        lineaAmarilla: new THREE.MeshStandardMaterial({
+            color: 0xf5c542,
+            roughness: 0.8
+        }),
+
+        jardin: new THREE.MeshStandardMaterial({
+            color: 0x416b37,
+            roughness: 1
+        }),
+
         concreto: new THREE.MeshStandardMaterial({
-            color: 0xa7a9aa, roughness: 0.9
+            color: 0x777e84,
+            roughness: 0.9
         }),
-        blanco: new THREE.MeshStandardMaterial({
-            color: 0xf4f4ee, roughness: 0.7
-        }),
-        amarillo: new THREE.MeshStandardMaterial({
-            color: 0xffc928, roughness: 0.7
-        }),
-        pasto: new THREE.MeshStandardMaterial({
-            color: 0x3d7435, roughness: 1
-        }),
-        tronco: new THREE.MeshStandardMaterial({
-            color: 0x68452d, roughness: 1
-        }),
-        hojas: new THREE.MeshStandardMaterial({
-            color: 0x28613a, roughness: 0.9
-        }),
+
         metal: new THREE.MeshStandardMaterial({
-            color: 0x30363b, metalness: 0.55, roughness: 0.4
+            color: 0x414b55,
+            metalness: 0.7,
+            roughness: 0.35
         }),
+
         luz: new THREE.MeshStandardMaterial({
-            color: 0xfff2cc,
-            emissive: 0xffd98a,
-            emissiveIntensity: 1.2
+            color: 0xfff0c2,
+            emissive: 0xffd27a,
+            emissiveIntensity: 1.8
+        }),
+
+        verde: new THREE.MeshStandardMaterial({
+            color: 0x287b37,
+            roughness: 0.9
+        }),
+
+        tronco: new THREE.MeshStandardMaterial({
+            color: 0x765033,
+            roughness: 1
         })
     };
 
-    function caja(
-        nombre, grupo, x, y, z,
-        ancho, alto, fondo, material
-    ) {
-        const mesh = new THREE.Mesh(
-            new THREE.BoxGeometry(ancho, alto, fondo),
-            material
-        );
+    // --------------------------------------------------------
+    // FUNCIONES AUXILIARES
+    // --------------------------------------------------------
 
-        mesh.name = nombre;
-        mesh.position.set(x, y, z);
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
-        grupo.add(mesh);
+    function agregarCaja(nombre, ancho, alto, largo, x, y, z, material) {
+        const geometria = new THREE.BoxGeometry(ancho, alto, largo);
+        const malla = new THREE.Mesh(geometria, material);
 
-        return mesh;
+        malla.name = nombre;
+        malla.position.set(x, y, z);
+        malla.receiveShadow = true;
+        malla.castShadow = false;
+
+        estacionamiento.add(malla);
+        return malla;
     }
 
-    function cilindro(
-        nombre, grupo, x, y, z,
-        radio, alto, material, segmentos = 12
-    ) {
-        const mesh = new THREE.Mesh(
-            new THREE.CylinderGeometry(
-                radio, radio * 1.2, alto, segmentos
-            ),
-            material
+    function agregarCilindro(nombre, radioSuperior, radioInferior, alto, x, y, z, material, segmentos = 12) {
+        const geometria = new THREE.CylinderGeometry(
+            radioSuperior,
+            radioInferior,
+            alto,
+            segmentos
         );
 
-        mesh.name = nombre;
-        mesh.position.set(x, y, z);
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
-        grupo.add(mesh);
+        const malla = new THREE.Mesh(geometria, material);
+        malla.name = nombre;
+        malla.position.set(x, y, z);
 
-        return mesh;
+        estacionamiento.add(malla);
+        return malla;
     }
 
-    const terreno = new THREE.Group();
-    terreno.name = 'TERRENO_ESTACIONAMIENTO';
-    estacionamiento.add(terreno);
+    // --------------------------------------------------------
+    // PISO PRINCIPAL
+    // --------------------------------------------------------
 
-    const lineas = new THREE.Group();
-    lineas.name = 'LINEAS_CAJONES';
-    estacionamiento.add(lineas);
-
-    const accesorios = new THREE.Group();
-    accesorios.name = 'ACCESOS_Y_JARDINERAS';
-    estacionamiento.add(accesorios);
-
-    const luminarias = new THREE.Group();
-    luminarias.name = 'LUMINARIAS_ESTACIONAMIENTO';
-    estacionamiento.add(luminarias);
-
-    caja(
-        'BASE_ASFALTO', terreno,
-        0, -0.18, 49, 76, 0.35, 48, mat.asfalto
+    agregarCaja(
+        'PISO_ASFALTO_ESTACIONAMIENTO',
+        76,
+        0.18,
+        48,
+        0,
+        -0.09,
+        49,
+        materiales.asfalto
     );
 
-    caja(
-        'BANQUETA_FRENTE', accesorios,
-        0, 0.02, 25, 76, 0.18, 1.8, mat.concreto
+    // --------------------------------------------------------
+    // BANQUETAS
+    // --------------------------------------------------------
+
+    agregarCaja(
+        'BANQUETA_FRONTAL',
+        76,
+        0.24,
+        3,
+        0,
+        0.02,
+        26.5,
+        materiales.banqueta
     );
 
-    caja(
-        'BANQUETA_FONDO', accesorios,
-        0, 0.02, 73, 76, 0.18, 1.8, mat.concreto
+    agregarCaja(
+        'BANQUETA_POSTERIOR',
+        76,
+        0.24,
+        3,
+        0,
+        0.02,
+        71.5,
+        materiales.banqueta
     );
 
-    // Cruce peatonal.
-    caja(
-        'PASO_PEATONAL_BASE', accesorios,
-        0, 0.015, 25.9, 8, 0.035, 1.6, mat.blanco
+    agregarCaja(
+        'BANQUETA_IZQUIERDA',
+        3,
+        0.24,
+        48,
+        -36.5,
+        0.02,
+        49,
+        materiales.banqueta
     );
 
-    for (let i = 0; i < 8; i++) {
-        caja(
-            `FRANJA_PEATONAL_${i + 1}`,
-            accesorios,
-            -3.5 + i, 0.04, 25.9,
-            0.48, 0.025, 1.45, mat.blanco
-        );
-    }
+    agregarCaja(
+        'BANQUETA_DERECHA',
+        3,
+        0.24,
+        48,
+        36.5,
+        0.02,
+        49,
+        materiales.banqueta
+    );
 
-    // Las filas locales 33, 42, 56 y 65 quedan en Z mundial
-    // 40, 49, 63 y 72.
-    const columnas = [-32, -24, -16, -8, 0, 8, 16, 24, 32];
-    const filas = [33, 42, 56, 65];
-    let n = 1;
+    // --------------------------------------------------------
+    // CAJONES DE ESTACIONAMIENTO
+    // 6 columnas x 4 filas = 24 espacios
+    // Las posiciones Z coinciden con vehiculos.js:
+    // 32, 39, 46 y 53.
+    // --------------------------------------------------------
 
-    for (const z of filas) {
-        for (const x of columnas) {
-            caja(
-                `LINEA_CAJON_${n++}`, lineas,
-                x - 3.75, 0.025, z,
-                0.09, 0.035, 5.2, mat.blanco
+    const posicionesX = [-24, -16, -8, 8, 16, 24];
+    const posicionesZ = [32, 39, 46, 53];
+
+    const anchoCajon = 7;
+    const largoCajon = 7;
+
+    posicionesZ.forEach((z, fila) => {
+        posicionesX.forEach((x, columna) => {
+            const id = `CAJON_F${fila + 1}_C${columna + 1}`;
+
+            // Líneas laterales
+            agregarCaja(
+                `${id}_LINEA_IZQUIERDA`,
+                0.12,
+                0.025,
+                largoCajon,
+                x - anchoCajon / 2,
+                0.025,
+                z,
+                materiales.linea
             );
+
+            agregarCaja(
+                `${id}_LINEA_DERECHA`,
+                0.12,
+                0.025,
+                largoCajon,
+                x + anchoCajon / 2,
+                0.025,
+                z,
+                materiales.linea
+            );
+
+            // Línea de fondo
+            agregarCaja(
+                `${id}_LINEA_FONDO`,
+                anchoCajon,
+                0.025,
+                0.12,
+                x,
+                0.025,
+                z - largoCajon / 2,
+                materiales.linea
+            );
+        });
+    });
+
+    // Separación de circulación entre filas
+    [35.5, 42.5, 49.5].forEach((z, i) => {
+        agregarCaja(
+            `SEPARADOR_CIRCULACION_${i + 1}`,
+            58,
+            0.025,
+            0.10,
+            0,
+            0.025,
+            z,
+            materiales.lineaAmarilla
+        );
+    });
+
+    // --------------------------------------------------------
+    // FLECHAS DE CIRCULACIÓN
+    // --------------------------------------------------------
+
+    function crearFlecha(x, z, rotacion, nombre) {
+        const forma = new THREE.Shape();
+
+        forma.moveTo(0, 1.1);
+        forma.lineTo(-0.55, 0.15);
+        forma.lineTo(-0.18, 0.15);
+        forma.lineTo(-0.18, -1.1);
+        forma.lineTo(0.18, -1.1);
+        forma.lineTo(0.18, 0.15);
+        forma.lineTo(0.55, 0.15);
+        forma.closePath();
+
+        const geometria = new THREE.ShapeGeometry(forma);
+        const flecha = new THREE.Mesh(geometria, materiales.lineaAmarilla);
+
+        flecha.name = nombre;
+        flecha.rotation.x = -Math.PI / 2;
+        flecha.rotation.z = rotacion;
+        flecha.position.set(x, 0.035, z);
+
+        estacionamiento.add(flecha);
+    }
+
+    crearFlecha(-5, 36, 0, 'FLECHA_CIRCULACION_1');
+    crearFlecha(5, 36, Math.PI, 'FLECHA_CIRCULACION_2');
+    crearFlecha(-5, 57, 0, 'FLECHA_CIRCULACION_3');
+    crearFlecha(5, 57, Math.PI, 'FLECHA_CIRCULACION_4');
+
+    // --------------------------------------------------------
+    // JARDINERAS
+    // --------------------------------------------------------
+
+    function crearJardinera(x, z, ancho, largo, numero) {
+        agregarCaja(
+            `JARDINERA_${numero}_BASE`,
+            ancho,
+            0.45,
+            largo,
+            x,
+            0.22,
+            z,
+            materiales.concreto
+        );
+
+        agregarCaja(
+            `JARDINERA_${numero}_TIERRA`,
+            ancho - 0.25,
+            0.12,
+            largo - 0.25,
+            x,
+            0.49,
+            z,
+            materiales.jardin
+        );
+
+        const cantidad = Math.max(2, Math.floor(ancho / 2));
+
+        for (let i = 0; i < cantidad; i++) {
+            const px = x - ancho / 2 + 0.8 + i * ((ancho - 1.6) / Math.max(1, cantidad - 1));
+
+            agregarCilindro(
+                `JARDINERA_${numero}_TRONCO_${i}`,
+                0.12,
+                0.16,
+                1.3,
+                px,
+                1.15,
+                z,
+                materiales.tronco,
+                8
+            );
+
+            const copa = new THREE.Mesh(
+                new THREE.SphereGeometry(0.85, 10, 8),
+                materiales.verde
+            );
+
+            copa.name = `JARDINERA_${numero}_ARBOL_${i}`;
+            copa.position.set(px, 2.05, z);
+            copa.scale.set(1, 1.15, 1);
+            estacionamiento.add(copa);
         }
     }
 
-    for (const z of [30.3, 44.7, 53.3, 67.7]) {
-        caja(
-            `LINEA_HORIZONTAL_${z}`, lineas,
-            0, 0.025, z, 70, 0.035, 0.09, mat.blanco
+    crearJardinera(-33, 37, 4, 5, 1);
+    crearJardinera(33, 37, 4, 5, 2);
+    crearJardinera(-33, 65, 4, 5, 3);
+    crearJardinera(33, 65, 4, 5, 4);
+
+    crearJardinera(-29, 56, 3, 5, 5);
+    crearJardinera(29, 56, 3, 5, 6);
+
+    // --------------------------------------------------------
+    // POSTES DE ILUMINACIÓN
+    // --------------------------------------------------------
+
+    function crearPosteLuz(x, z, numero) {
+        agregarCilindro(
+            `POSTE_${numero}_BASE`,
+            0.32,
+            0.4,
+            0.35,
+            x,
+            0.18,
+            z,
+            materiales.concreto
         );
+
+        agregarCilindro(
+            `POSTE_${numero}_CUERPO`,
+            0.09,
+            0.13,
+            5.8,
+            x,
+            3.15,
+            z,
+            materiales.metal
+        );
+
+        agregarCaja(
+            `POSTE_${numero}_BRAZO`,
+            1.5,
+            0.12,
+            0.12,
+            x + 0.55,
+            5.95,
+            z,
+            materiales.metal
+        );
+
+        agregarCaja(
+            `POSTE_${numero}_LUMINARIA`,
+            1.1,
+            0.18,
+            0.65,
+            x + 1.1,
+            5.85,
+            z,
+            materiales.luz
+        );
+
+        const luz = new THREE.PointLight(0xffe3ae, 35, 17, 2);
+        luz.position.set(x + 1.1, 5.55, z);
+        luz.castShadow = false;
+        estacionamiento.add(luz);
     }
-
-    for (const x of [-28, -20, -12, -4, 4, 12, 20, 28]) {
-        caja(
-            `FLECHA_CIRCULACION_${x}`, lineas,
-            x, 0.04, 49, 2.1, 0.035, 0.35, mat.amarillo
-        );
-    }
-
-    caja(
-        'ISLA_CENTRAL', accesorios,
-        0, 0.04, 49, 5.5, 0.08, 2.2, mat.concreto
-    );
-
-    caja(
-        'ISLA_CENTRAL_VERDE', accesorios,
-        0, 0.12, 49, 4.8, 0.12, 1.5, mat.pasto
-    );
-
-    caja(
-        'ISLA_ENTRADA', accesorios,
-        0, 0.06, 27.8, 12, 0.12, 1.2, mat.concreto
-    );
-
-    caja(
-        'FLECHA_ENTRADA', lineas,
-        0, 0.06, 28.5, 3.5, 0.035, 0.25, mat.amarillo
-    );
-
-    caja(
-        'FLECHA_SALIDA', lineas,
-        0, 0.06, 70, 3.5, 0.035, 0.25, mat.amarillo
-    );
-
-    const arboles = [
-        [-33, 29], [33, 29],
-        [-33, 69], [33, 69],
-        [-18, 49], [18, 49]
-    ];
-
-    arboles.forEach(([x, z], i) => {
-        caja(
-            `JARDINERA_${i + 1}`, accesorios,
-            x, 0.08, z, 3.1, 0.16, 3.1, mat.concreto
-        );
-
-        caja(
-            `TIERRA_${i + 1}`, accesorios,
-            x, 0.18, z, 2.75, 0.08, 2.75, mat.pasto
-        );
-
-        cilindro(
-            `TRONCO_${i + 1}`, accesorios,
-            x, 1.15, z, 0.22, 1.9, mat.tronco
-        );
-
-        const copa = new THREE.Mesh(
-            new THREE.SphereGeometry(1.15, 12, 10),
-            mat.hojas
-        );
-
-        copa.name = `COPA_ARBOL_${i + 1}`;
-        copa.position.set(x, 2.65, z);
-        copa.scale.set(1.15, 1.25, 1.15);
-        copa.castShadow = true;
-        accesorios.add(copa);
-    });
 
     const postes = [
-        [1, -27, 38], [2, 0, 38], [3, 27, 38],
-        [4, -27, 61], [5, 0, 61], [6, 27, 61]
+        [-30, 43],
+        [30, 43],
+        [-30, 61],
+        [30, 61],
+        [-12, 61],
+        [12, 61]
     ];
 
-    for (const [i, x, z] of postes) {
-        cilindro(
-            `POSTE_LUMINARIA_${i}`, luminarias,
-            x, 4.2, z, 0.09, 8.4, mat.metal
+    postes.forEach((p, i) => {
+        crearPosteLuz(p[0], p[1], i + 1);
+    });
+
+    // --------------------------------------------------------
+    // SEÑALIZACIÓN DE ENTRADA Y SALIDA
+    // --------------------------------------------------------
+
+    agregarCaja(
+        'LINEA_ENTRADA_ESTACIONAMIENTO',
+        12,
+        0.04,
+        0.22,
+        0,
+        0.04,
+        29,
+        materiales.lineaAmarilla
+    );
+
+    agregarCaja(
+        'LINEA_SALIDA_ESTACIONAMIENTO',
+        12,
+        0.04,
+        0.22,
+        0,
+        0.04,
+        76,
+        materiales.lineaAmarilla
+    );
+
+    // --------------------------------------------------------
+    // ROTULACIÓN
+    // --------------------------------------------------------
+
+    function crearRotulo(texto, x, z, color = '#ffffff') {
+        const canvas = document.createElement('canvas');
+        canvas.width = 512;
+        canvas.height = 128;
+
+        const ctx = canvas.getContext('2d');
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = 'rgba(20, 30, 40, 0.88)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.strokeStyle = '#f5c542';
+        ctx.lineWidth = 8;
+        ctx.strokeRect(4, 4, canvas.width - 8, canvas.height - 8);
+
+        ctx.fillStyle = color;
+        ctx.font = 'bold 58px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(texto, canvas.width / 2, canvas.height / 2);
+
+        const textura = new THREE.CanvasTexture(canvas);
+        textura.colorSpace = THREE.SRGBColorSpace;
+
+        const material = new THREE.MeshBasicMaterial({
+            map: textura,
+            transparent: true,
+            side: THREE.DoubleSide
+        });
+
+        const placa = new THREE.Mesh(
+            new THREE.PlaneGeometry(7, 1.75),
+            material
         );
 
-        caja(
-            `BRAZO_LUMINARIA_${i}`, luminarias,
-            x + 0.55, 8.25, z,
-            1.2, 0.12, 0.12, mat.metal
-        );
-
-        caja(
-            `FOCO_LUMINARIA_${i}`, luminarias,
-            x + 1.05, 8.12, z,
-            0.75, 0.16, 0.55, mat.luz
-        );
+        placa.name = `ROTULO_${texto}`;
+        placa.position.set(x, 3.5, z);
+        placa.rotation.y = Math.PI;
+        estacionamiento.add(placa);
     }
 
-    if (mercado?.add) {
-        mercado.add(estacionamiento);
-    } else {
-        scene.add(estacionamiento);
-    }
+    crearRotulo('ESTACIONAMIENTO', 0, 28);
+    crearRotulo('SALIDA', 0, 78, '#ffe28a');
+
+    // --------------------------------------------------------
+    // GRUPO FINAL
+    // --------------------------------------------------------
+
+    scene.add(estacionamiento);
+
+    console.log('Estacionamiento creado correctamente.');
+    console.log('24 cajones disponibles.');
+    console.log('6 postes de iluminación.');
+    console.log('6 jardineras.');
 
     return estacionamiento;
 }
