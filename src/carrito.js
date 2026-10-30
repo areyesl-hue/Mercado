@@ -1,461 +1,616 @@
-
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
+const loader = new GLTFLoader();
+
+const CONFIG_BASE = {
+    modelo: '/modelos/carrito.glb',
+
+    posicion: {
+        x: 0,
+        y: 0,
+        z: 0
+    },
+
+    escala: 1,
+    altura: 0,
+
+    distancia: 0.95,
+    suavizado: 8,
+
+    capacidad: 20,
+
+    correccionModelo: 0,
+
+    anchoCesta: 0.68,
+    profundidadCesta: 0.55,
+    alturaCesta: 0.62
+};
+
 export function crearCarrito(scene, opciones = {}) {
-    if (!scene?.isScene) {
+    if (!scene) {
         throw new Error('crearCarrito necesita una escena THREE.Scene.');
     }
 
     const config = {
-        modelo: '/modelos/carrito.glb',
-        distancia: 0.95,
-        suavizado: 8,
-        correccionModelo: 0,
-        escala: 1,
-        altura: 0,
-        capacidad: 20,
-        ...opciones
+        ...CONFIG_BASE,
+        ...opciones,
+        posicion: {
+            ...CONFIG_BASE.posicion,
+            ...(opciones.posicion || {})
+        }
     };
 
     const grupo = new THREE.Group();
     grupo.name = 'CARRITO_SUPERMERCADO';
+
+    grupo.position.set(
+        config.posicion.x,
+        config.posicion.y,
+        config.posicion.z
+    );
+
+    grupo.scale.setScalar(config.escala);
+
     scene.add(grupo);
 
-    const contenedorModelo = new THREE.Group();
-    contenedorModelo.name = 'MODELO_CARRITO';
-    contenedorModelo.rotation.y = config.correccionModelo;
-    contenedorModelo.scale.setScalar(config.escala);
-    grupo.add(contenedorModelo);
+    const grupoModelo = new THREE.Group();
+    grupoModelo.name = 'MODELO_CARRITO';
 
-    const loader = new GLTFLoader();
+    grupo.add(grupoModelo);
 
-    let modeloCargado = false;
-    let eliminado = false;
-    let objetivo = null;
-    let distanciaSeguimiento = config.distancia;
+    const objetosEnCesta = new THREE.Group();
+    objetosEnCesta.name = 'PRODUCTOS_DENTRO_CARRITO';
+
+    grupo.add(objetosEnCesta);
 
     const inventario = [];
-    const objetosEnCesta = new THREE.Group();
 
-    objetosEnCesta.name = 'PRODUCTOS_DENTRO_CARRITO';
-    contenedorModelo.add(objetosEnCesta);
+    let objetivo = null;
+    let eliminado = false;
+    let cargado = false;
 
-    const posicionDeseada = new THREE.Vector3();
-    const posicionTemporal = new THREE.Vector3();
-    const quaternionTemporal = new THREE.Quaternion();
+    const vectorObjetivo = new THREE.Vector3();
+    const vectorActual = new THREE.Vector3();
 
-    // ========================================================
-    // CARRITO PROVISIONAL
-    // ========================================================
-
-    const provisional = new THREE.Group();
-    provisional.name = 'CARRITO_PROVISIONAL';
-    contenedorModelo.add(provisional);
-
-    const metal = new THREE.MeshStandardMaterial({
-        color: 0x9ca3af,
+    const materialMetal = new THREE.MeshStandardMaterial({
+        color: 0x929ba2,
         metalness: 0.75,
-        roughness: 0.32
+        roughness: 0.35
     });
 
-    const metalOscuro = new THREE.MeshStandardMaterial({
-        color: 0x4b5563,
-        metalness: 0.65,
-        roughness: 0.4
+    const materialPlastico = new THREE.MeshStandardMaterial({
+        color: 0x263746,
+        roughness: 0.65
     });
 
-    const plastico = new THREE.MeshStandardMaterial({
-        color: 0x2563eb,
-        roughness: 0.55
+    const materialRueda = new THREE.MeshStandardMaterial({
+        color: 0x17191c,
+        roughness: 0.9
     });
 
-    const ruedaMaterial = new THREE.MeshStandardMaterial({
-        color: 0x202124,
-        roughness: 0.8
-    });
+    function crearBarra(inicio, fin, radio = 0.025, material = materialMetal) {
+        const a = new THREE.Vector3(...inicio);
+        const b = new THREE.Vector3(...fin);
 
-    function agregarBarra(
-        nombre,
-        ancho,
-        alto,
-        fondo,
-        x,
-        y,
-        z,
-        material = metal
-    ) {
-        const barra = new THREE.Mesh(
-            new THREE.BoxGeometry(ancho, alto, fondo),
-            material
+        const direccion = new THREE.Vector3().subVectors(b, a);
+        const longitud = direccion.length();
+
+        const geometria = new THREE.CylinderGeometry(
+            radio,
+            radio,
+            longitud,
+            8
         );
 
-        barra.name = nombre;
-        barra.position.set(x, y, z);
-        barra.castShadow = true;
-        barra.receiveShadow = true;
+        const barra = new THREE.Mesh(geometria, material);
 
-        provisional.add(barra);
+        barra.position.copy(a).add(b).multiplyScalar(0.5);
+        barra.quaternion.setFromUnitVectors(
+            new THREE.Vector3(0, 1, 0),
+            direccion.normalize()
+        );
+
+        barra.castShadow = false;
+        barra.receiveShadow = false;
+
+        grupoModelo.add(barra);
+
         return barra;
     }
 
-    // ========================================================
-    // CESTA
-    // ========================================================
-
-    const fondoCesta = 0.90;
-    const alturaPared = 0.40;
-
-    const yFondo = 0.57;
-    const yCentroPared = 0.78;
-    const zCentroCesta = 0.12;
-
-    agregarBarra(
-        'FONDO_CESTA',
-        0.79, 0.035, 0.84,
-        0, yFondo, zCentroCesta,
-        metalOscuro
-    );
-
-    for (let i = 0; i < 7; i++) {
-        const x = -0.32 + i * 0.107;
-
-        agregarBarra(
-            `VARILLA_FONDO_X_${i}`,
-            0.018, 0.018, 0.82,
-            x, yFondo + 0.025, zCentroCesta,
-            metal
-        );
-    }
-
-    for (let i = 0; i < 7; i++) {
-        const z = zCentroCesta - 0.34 + i * 0.113;
-
-        agregarBarra(
-            `VARILLA_FONDO_Z_${i}`,
-            0.76, 0.018, 0.018,
-            0, yFondo + 0.028, z,
-            metal
-        );
-    }
-
-    // Bordes superiores.
-    agregarBarra(
-        'BORDE_SUPERIOR_IZQUIERDO',
-        0.035, 0.035, fondoCesta,
-        -0.425, yCentroPared + alturaPared / 2,
-        zCentroCesta
-    );
-
-    agregarBarra(
-        'BORDE_SUPERIOR_DERECHO',
-        0.035, 0.035, fondoCesta,
-        0.425, yCentroPared + alturaPared / 2,
-        zCentroCesta
-    );
-
-    agregarBarra(
-        'BORDE_SUPERIOR_FRONTAL',
-        0.85, 0.035, 0.035,
-        0, yCentroPared + alturaPared / 2,
-        zCentroCesta + fondoCesta / 2
-    );
-
-    agregarBarra(
-        'BORDE_SUPERIOR_TRASERO',
-        0.85, 0.035, 0.035,
-        0, yCentroPared + alturaPared / 2,
-        zCentroCesta - fondoCesta / 2
-    );
-
-    // Paredes laterales.
-    for (let nivel = 0; nivel < 5; nivel++) {
-        const y = yFondo + 0.08 + nivel * 0.075;
-
-        for (const x of [-0.405, 0.405]) {
-            agregarBarra(
-                `VARILLA_LATERAL_${x}_${nivel}`,
-                0.018, 0.018, 0.86,
-                x, y, zCentroCesta,
-                metal
-            );
-        }
-    }
-
-    // Paredes frontal y trasera.
-    for (let nivel = 0; nivel < 5; nivel++) {
-        const y = yFondo + 0.08 + nivel * 0.075;
-
-        for (const z of [
-            zCentroCesta - fondoCesta / 2,
-            zCentroCesta + fondoCesta / 2
-        ]) {
-            agregarBarra(
-                `VARILLA_PARED_${z}_${nivel}`,
-                0.79, 0.018, 0.018,
-                0, y, z,
-                metal
-            );
-        }
-    }
-
-    // Varillas verticales.
-    for (let i = 0; i < 8; i++) {
-        const x = -0.36 + i * 0.103;
-
-        for (const z of [
-            zCentroCesta - fondoCesta / 2,
-            zCentroCesta + fondoCesta / 2
-        ]) {
-            agregarBarra(
-                `VARILLA_VERTICAL_FRONTAL_${i}_${z}`,
-                0.018, alturaPared, 0.018,
-                x, yCentroPared, z
-            );
-        }
-    }
-
-    for (let i = 0; i < 8; i++) {
-        const z = zCentroCesta - 0.37 + i * 0.106;
-
-        for (const x of [-0.405, 0.405]) {
-            agregarBarra(
-                `VARILLA_VERTICAL_LATERAL_${i}_${x}`,
-                0.018, alturaPared, 0.018,
-                x, yCentroPared, z
-            );
-        }
-    }
-
-    // ========================================================
-    // BASE
-    // ========================================================
-
-    agregarBarra(
-        'BASE_INFERIOR',
-        0.72, 0.07, 0.78,
-        0, 0.34, 0.08,
-        metalOscuro
-    );
-
-    // ========================================================
-    // MANUBRIO
-    // ========================================================
-
-    agregarBarra(
-        'MANUBRIO',
-        0.72, 0.065, 0.065,
-        0, 1.02, -0.55,
-        plastico
-    );
-
-    for (const x of [-0.29, 0.29]) {
-        const soporte = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.018, 0.018, 0.43, 8),
-            metalOscuro
+    function crearRueda(x, z) {
+        const geometria = new THREE.CylinderGeometry(
+            0.085,
+            0.085,
+            0.055,
+            12
         );
 
-        soporte.name = 'SOPORTE_MANUBRIO';
-        soporte.position.set(x, 0.76, -0.43);
-        soporte.rotation.x = -0.25;
-        soporte.castShadow = true;
+        const rueda = new THREE.Mesh(geometria, materialRueda);
 
-        provisional.add(soporte);
+        rueda.rotation.z = Math.PI / 2;
+        rueda.position.set(x, 0.12, z);
+
+        grupoModelo.add(rueda);
     }
 
-    // ========================================================
-    // RUEDAS
-    // ========================================================
+    function crearModeloProvisional() {
+        const ancho = 0.68;
+        const largo = 0.85;
 
-    for (const x of [-0.37, 0.37]) {
-        for (const z of [-0.43, 0.48]) {
-            const rueda = new THREE.Mesh(
-                new THREE.CylinderGeometry(0.09, 0.09, 0.055, 16),
-                ruedaMaterial
+        const baseY = 0.62;
+
+        // Estructura inferior
+        crearBarra(
+            [-0.34, 0.32, -0.40],
+            [0.34, 0.32, -0.40]
+        );
+
+        crearBarra(
+            [-0.34, 0.32, 0.40],
+            [0.34, 0.32, 0.40]
+        );
+
+        crearBarra(
+            [-0.34, 0.32, -0.40],
+            [-0.34, 0.32, 0.40]
+        );
+
+        crearBarra(
+            [0.34, 0.32, -0.40],
+            [0.34, 0.32, 0.40]
+        );
+
+        // Cesta inferior
+        crearBarra(
+            [-ancho / 2, baseY, -largo / 2],
+            [ancho / 2, baseY, -largo / 2]
+        );
+
+        crearBarra(
+            [-ancho / 2, baseY, largo / 2],
+            [ancho / 2, baseY, largo / 2]
+        );
+
+        crearBarra(
+            [-ancho / 2, baseY, -largo / 2],
+            [-ancho / 2, baseY, largo / 2]
+        );
+
+        crearBarra(
+            [ancho / 2, baseY, -largo / 2],
+            [ancho / 2, baseY, largo / 2]
+        );
+
+        // Rejilla inferior
+        for (let i = 1; i < 5; i++) {
+            const z = -largo / 2 + (largo * i) / 5;
+
+            crearBarra(
+                [-ancho / 2, baseY, z],
+                [ancho / 2, baseY, z],
+                0.012
+            );
+        }
+
+        for (let i = 1; i < 4; i++) {
+            const x = -ancho / 2 + (ancho * i) / 4;
+
+            crearBarra(
+                [x, baseY, -largo / 2],
+                [x, baseY, largo / 2],
+                0.012
+            );
+        }
+
+        // Laterales
+        const altura = 0.42;
+
+        for (const x of [-ancho / 2, ancho / 2]) {
+            crearBarra(
+                [x, baseY, -largo / 2],
+                [x, baseY + altura, -largo / 2]
             );
 
-            rueda.name = 'RUEDA_CARRITO';
-            rueda.rotation.z = Math.PI / 2;
-            rueda.position.set(x, 0.14, z);
-            rueda.castShadow = true;
-            rueda.receiveShadow = true;
+            crearBarra(
+                [x, baseY, largo / 2],
+                [x, baseY + altura, largo / 2]
+            );
 
-            provisional.add(rueda);
+            for (let i = 1; i < 5; i++) {
+                const z = -largo / 2 + (largo * i) / 5;
+
+                crearBarra(
+                    [x, baseY + altura * 0.15, z],
+                    [x, baseY + altura * 0.15, z]
+                );
+            }
+
+            for (let j = 1; j <= 3; j++) {
+                const y = baseY + (altura * j) / 4;
+
+                crearBarra(
+                    [x, y, -largo / 2],
+                    [x, y, largo / 2],
+                    0.012
+                );
+            }
         }
+
+        // Parte trasera y delantera
+        for (const z of [-largo / 2, largo / 2]) {
+            crearBarra(
+                [-ancho / 2, baseY + altura, z],
+                [ancho / 2, baseY + altura, z]
+            );
+
+            for (let j = 1; j <= 3; j++) {
+                const y = baseY + (altura * j) / 4;
+
+                crearBarra(
+                    [-ancho / 2, y, z],
+                    [ancho / 2, y, z],
+                    0.012
+                );
+            }
+        }
+
+        // Manubrio
+        crearBarra(
+            [-0.34, 1.05, -0.40],
+            [-0.34, 1.05, -0.72],
+            0.035,
+            materialPlastico
+        );
+
+        crearBarra(
+            [0.34, 1.05, -0.40],
+            [0.34, 1.05, -0.72],
+            0.035,
+            materialPlastico
+        );
+
+        crearBarra(
+            [-0.34, 1.05, -0.72],
+            [0.34, 1.05, -0.72],
+            0.045,
+            materialPlastico
+        );
+
+        // Soportes
+        for (const x of [-0.25, 0.25]) {
+            crearBarra(
+                [x, 0.32, -0.30],
+                [x, 0.62, -0.30]
+            );
+        }
+
+        // Ruedas
+        crearRueda(-0.36, -0.35);
+        crearRueda(0.36, -0.35);
+        crearRueda(-0.36, 0.35);
+        crearRueda(0.36, 0.35);
+
+        cargado = true;
     }
 
-    // ========================================================
-    // INVENTARIO Y COLOCACIÓN DE PRODUCTOS
-    // ========================================================
+    function centrarModelo(modelo) {
+        const caja = new THREE.Box3().setFromObject(modelo);
+
+        if (caja.isEmpty()) return;
+
+        const centro = caja.getCenter(new THREE.Vector3());
+
+        modelo.position.x -= centro.x;
+        modelo.position.z -= centro.z;
+
+        const cajaNueva = new THREE.Box3().setFromObject(modelo);
+
+        modelo.position.y -= cajaNueva.min.y;
+
+        modelo.position.y += config.correccionModelo;
+    }
+
+    function cargarModelo() {
+        if (!config.modelo) {
+            crearModeloProvisional();
+            return;
+        }
+
+        loader.load(
+            config.modelo,
+
+            (gltf) => {
+                if (eliminado) return;
+
+                grupoModelo.clear();
+
+                const modelo = gltf.scene;
+
+                modelo.name = 'MODELO_CARRITO_GLTF';
+
+                modelo.traverse((objeto) => {
+                    if (objeto.isMesh) {
+                        objeto.castShadow = false;
+                        objeto.receiveShadow = false;
+                    }
+                });
+
+                centrarModelo(modelo);
+
+                grupoModelo.add(modelo);
+
+                cargado = true;
+            },
+
+            undefined,
+
+            (error) => {
+                console.warn(
+                    'No se pudo cargar el carrito. Se utilizará el modelo provisional.',
+                    error
+                );
+
+                if (!eliminado) {
+                    crearModeloProvisional();
+                }
+            }
+        );
+    }
 
     function obtenerObjetoProducto(entrada) {
-        if (entrada?.objeto?.isObject3D) {
+        if (!entrada) return null;
+
+        if (entrada.isObject3D) {
+            return entrada;
+        }
+
+        if (entrada.objeto?.isObject3D) {
             return entrada.objeto;
         }
 
-        if (entrada?.modelo?.isObject3D) {
+        if (entrada.modelo?.isObject3D) {
             return entrada.modelo;
-        }
-
-        if (entrada?.isObject3D) {
-            return entrada;
         }
 
         return null;
     }
 
-    function calcularPosicionProducto(indice, dimensiones) {
-        const columnas = 3;
-        const filas = Math.ceil(config.capacidad / columnas);
+    function calcularPosicionProducto(indice) {
+        const columna = indice % 3;
+        const fila = Math.floor(indice / 3);
 
-        const columna = indice % columnas;
-        const fila = Math.floor(indice / columnas);
-
-        const x = -0.23 + columna * 0.23;
-        const z = -0.12 + fila * 0.19;
-
-        const alturaBase = 0.64;
-        const alturaMaxima = 1.12;
-
-        const alturaProducto = Math.min(
-            dimensiones.y,
-            0.25
-        );
-
-        const y = Math.min(
-            alturaBase + alturaProducto / 2 + fila * 0.015,
-            alturaMaxima
-        );
+        const x = -0.21 + columna * 0.21;
+        const z = -0.15 + fila * 0.18;
+        const y = 0.72 + fila * 0.025;
 
         return new THREE.Vector3(x, y, z);
     }
 
     function agregarProducto(entrada) {
-        if (eliminado) return false;
+        if (eliminado) return null;
 
         const objeto = obtenerObjetoProducto(entrada);
 
         if (!objeto) {
-            console.warn(
-                'No se pudo agregar el producto: no contiene un objeto 3D.'
-            );
-            return false;
-        }
-
-        const id = objeto.userData?.idUnidadProducto;
-
-        if (
-            inventario.some(
-                producto => producto.id === id && id
-            )
-        ) {
-            return false;
+            console.warn('El producto no contiene un objeto THREE.Object3D.');
+            return null;
         }
 
         if (inventario.length >= config.capacidad) {
             console.warn('El carrito alcanzó su capacidad máxima.');
-            return false;
+            return null;
         }
 
-        objeto.updateWorldMatrix(true, false);
+        const idUnidad =
+            objeto.userData.idUnidadProducto ||
+            objeto.uuid;
 
-        // Guardar el estado original antes de mover el modelo.
+        const duplicado = inventario.some(
+            (producto) => producto.idUnidad === idUnidad
+        );
+
+        if (duplicado) return null;
+
+        // Actualizar matrices antes de calcular coordenadas.
+        scene.updateMatrixWorld(true);
+
         const cajaOriginal = new THREE.Box3().setFromObject(objeto);
-        const dimensionesOriginales = new THREE.Vector3();
 
-        cajaOriginal.getSize(dimensionesOriginales);
+        if (cajaOriginal.isEmpty()) return null;
 
-        const escalaOriginal = objeto.scale.clone();
-        const posicionOriginal = objeto.getWorldPosition(
+        const dimensiones = cajaOriginal.getSize(
             new THREE.Vector3()
         );
 
-        const rotacionOriginal = objeto.getWorldQuaternion(
-            new THREE.Quaternion()
-        );
-
-        // Reparentar conservando inicialmente su transformación mundial.
-        objetosEnCesta.attach(objeto);
-
-        // Reducir el producto para que quepa dentro de la cesta.
-        const caja = new THREE.Box3().setFromObject(objeto);
-        const dimensiones = new THREE.Vector3();
-
-        caja.getSize(dimensiones);
-
-        const mayorDimension = Math.max(
+        const dimensionMayor = Math.max(
             dimensiones.x,
             dimensiones.y,
-            dimensiones.z
+            dimensiones.z,
+            0.001
         );
 
-        if (mayorDimension > 0.28) {
-            const factor = 0.28 / mayorDimension;
-            objeto.scale.multiplyScalar(factor);
-        }
+        const escalaOriginal = objeto.scale.clone();
 
-        objeto.updateMatrixWorld(true);
+        const posicionOriginal = objeto.position.clone();
+        const rotacionOriginal = objeto.rotation.clone();
 
-        const cajaAjustada = new THREE.Box3().setFromObject(objeto);
-        const centroAjustado = cajaAjustada.getCenter(
+        // Pasar el objeto al carrito conservando su transformación mundial.
+        objetosEnCesta.attach(objeto);
+
+        // Calcular el centro en coordenadas LOCALES de la cesta.
+        objetosEnCesta.updateMatrixWorld(true);
+
+        const cajaDespues = new THREE.Box3().setFromObject(objeto);
+
+        const centroMundo = cajaDespues.getCenter(
             new THREE.Vector3()
         );
 
-        const posicion = calcularPosicionProducto(
-            inventario.length,
-            dimensiones
+        const centroLocal = objetosEnCesta.worldToLocal(
+            centroMundo.clone()
         );
+
+        // Ajustar el tamaño para que los productos sean visibles.
+        const escalaProducto = Math.min(
+            1,
+            0.30 / dimensionMayor
+        );
+
+        objeto.scale.multiplyScalar(escalaProducto);
+
+        objeto.updateMatrixWorld(true);
+        objetosEnCesta.updateMatrixWorld(true);
+
+        const cajaAjustada = new THREE.Box3().setFromObject(objeto);
+
+        const centroAjustadoMundo = cajaAjustada.getCenter(
+            new THREE.Vector3()
+        );
+
+        const centroAjustadoLocal = objetosEnCesta.worldToLocal(
+            centroAjustadoMundo.clone()
+        );
+
+        // Colocar el producto en una posición local de la cesta.
+        const destino = calcularPosicionProducto(inventario.length);
 
         objeto.position.add(
-            posicion.sub(centroAjustado)
+            destino.clone().sub(centroAjustadoLocal)
         );
 
-        objeto.rotation.set(0, 0, 0);
         objeto.updateMatrixWorld(true);
-
-        const precio = Number.isFinite(
-            entrada?.precio
-        )
-            ? entrada.precio
-            : Number(objeto.userData?.precio) || 0;
-
-        const registro = {
-            id: id ?? `PRODUCTO_CARRITO_${inventario.length + 1}`,
-            codigo: objeto.userData?.codigoCatalogo ?? objeto.name,
-            nombre: objeto.userData?.nombreVisible ?? objeto.name,
-            categoria: objeto.userData?.categoria ?? 'General',
-            precio,
-            moneda: 'MXN',
-            objeto,
-
-            transformacionOriginal: {
-                escala: escalaOriginal,
-                posicion: posicionOriginal,
-                rotacion: rotacionOriginal
-            }
-        };
 
         objeto.userData.enCarrito = true;
         objeto.userData.recogido = true;
         objeto.userData.disponible = false;
 
-        inventario.push(registro);
+        const registro = {
+            id: objeto.uuid,
+            idUnidad,
+            nombre:
+                entrada.nombre ||
+                objeto.userData.nombre ||
+                objeto.name ||
+                'Producto',
 
-        console.info(
-            `Producto agregado: ${registro.nombre} | $${precio.toFixed(2)} MXN`
-        );
+            codigo:
+                entrada.codigo ||
+                objeto.userData.codigo ||
+                '',
+
+            precio:
+                Number(
+                    entrada.precio ??
+                    objeto.userData.precio ??
+                    0
+                ),
+
+            objeto,
+
+            posicionOriginal,
+            rotacionOriginal,
+            escalaOriginal
+        };
+
+        inventario.push(registro);
 
         return registro;
     }
 
+    function seguirObjetivo(objeto, distancia = config.distancia) {
+        if (!objeto || eliminado) return;
+
+        objetivo = objeto;
+        config.distancia = distancia;
+    }
+
+    function dejarDeSeguir() {
+        objetivo = null;
+    }
+
+    function actualizar(delta = 0.016) {
+        if (eliminado) return;
+
+        if (!objetivo) return;
+
+        if (objetivo.eliminado) {
+            objetivo = null;
+            return;
+        }
+
+        if (objetivo.isObject3D !== true) {
+            objetivo = null;
+            return;
+        }
+
+        const direccion = new THREE.Vector3(0, 0, 1);
+
+        direccion.applyQuaternion(objetivo.quaternion);
+
+        const posicionObjetivo = objetivo.position.clone();
+
+        vectorObjetivo.copy(posicionObjetivo);
+
+        vectorObjetivo.add(
+            direccion.multiplyScalar(config.distancia)
+        );
+
+        vectorObjetivo.y = config.posicion.y;
+
+        const factor = 1 - Math.exp(
+            -config.suavizado * Math.max(0, delta)
+        );
+
+        grupo.position.lerp(vectorObjetivo, factor);
+
+        const direccionMirada = new THREE.Vector3()
+            .subVectors(posicionObjetivo, grupo.position);
+
+        direccionMirada.y = 0;
+
+        if (direccionMirada.lengthSq() > 0.0001) {
+            const angulo = Math.atan2(
+                direccionMirada.x,
+                direccionMirada.z
+            );
+
+            const rotacionObjetivo = new THREE.Quaternion().setFromAxisAngle(
+                new THREE.Vector3(0, 1, 0),
+                angulo
+            );
+
+            grupo.quaternion.slerp(rotacionObjetivo, factor);
+        }
+    }
+
+    function establecerPosicion(posicion) {
+        if (!posicion) return;
+
+        grupo.position.set(
+            posicion.x ?? grupo.position.x,
+            posicion.y ?? grupo.position.y,
+            posicion.z ?? grupo.position.z
+        );
+    }
+
+    function establecerRotacion(rotacion) {
+        if (!rotacion) return;
+
+        grupo.rotation.set(
+            rotacion.x ?? grupo.rotation.x,
+            rotacion.y ?? grupo.rotation.y,
+            rotacion.z ?? grupo.rotation.z
+        );
+    }
+
     function obtenerProductos() {
-        return inventario.map(producto => ({
+        return inventario.map((producto) => ({
             id: producto.id,
-            codigo: producto.codigo,
             nombre: producto.nombre,
-            categoria: producto.categoria,
+            codigo: producto.codigo,
             precio: producto.precio,
-            moneda: producto.moneda,
             objeto: producto.objeto
         }));
     }
@@ -471,254 +626,66 @@ export function crearCarrito(scene, opciones = {}) {
         return inventario.length;
     }
 
-    function vaciarInventario() {
-        for (const producto of [...inventario]) {
-            devolverProducto(producto.id);
-        }
-    }
-
     function devolverProducto(id) {
         const indice = inventario.findIndex(
-            producto => producto.id === id
+            (producto) =>
+                producto.id === id ||
+                producto.idUnidad === id
         );
 
-        if (indice < 0) return false;
+        if (indice === -1) return false;
 
-        const producto = inventario[indice];
-        const objeto = producto.objeto;
+        const registro = inventario[indice];
+        const objeto = registro.objeto;
 
-        // Volver a colocar el objeto en su contenedor original.
-        const catalogo = scene.getObjectByName(
+        if (!objeto) return false;
+
+        const contenedorProductos = scene.getObjectByName(
             'PRODUCTOS_SUPERMERCADO'
         );
 
-        if (catalogo && objeto) {
-            catalogo.attach(objeto);
-
-            const origen = objeto.userData.posicionEstante;
-
-            if (origen) {
-                objeto.position.set(
-                    origen.x,
-                    origen.y,
-                    origen.z
-                );
-            }
-
-            const rotacion = objeto.userData.rotacionEstante;
-
-            if (rotacion) {
-                objeto.rotation.set(
-                    rotacion.x,
-                    rotacion.y,
-                    rotacion.z
-                );
-            }
-
-            objeto.scale.set(
-                producto.transformacionOriginal.escala.x,
-                producto.transformacionOriginal.escala.y,
-                producto.transformacionOriginal.escala.z
-            );
-
-            objeto.userData.enCarrito = false;
-            objeto.userData.recogido = false;
-            objeto.userData.disponible = true;
-            objeto.userData.reservado = false;
+        if (contenedorProductos) {
+            contenedorProductos.attach(objeto);
+        } else {
+            scene.attach(objeto);
         }
 
+        objeto.position.copy(registro.posicionOriginal);
+        objeto.rotation.copy(registro.rotacionOriginal);
+        objeto.scale.copy(registro.escalaOriginal);
+
+        objeto.userData.enCarrito = false;
+        objeto.userData.recogido = false;
+        objeto.userData.disponible = true;
+
         inventario.splice(indice, 1);
+
         return true;
+    }
+
+    function vaciarInventario() {
+        while (inventario.length > 0) {
+            devolverProducto(inventario[inventario.length - 1].id);
+        }
     }
 
     function confirmarVenta() {
-        const resumen = obtenerProductos();
-
-        for (const producto of inventario) {
-            if (producto.objeto) {
-                producto.objeto.userData.vendido = true;
-                producto.objeto.userData.recogido = true;
-                producto.objeto.userData.enCarrito = false;
-                producto.objeto.userData.disponible = false;
-                producto.objeto.userData.reservado = false;
-            }
-        }
-
-        return {
-            productos: resumen,
-            cantidad: resumen.length,
+        const resumen = {
+            cantidad: inventario.length,
             total: obtenerTotal(),
-            moneda: 'MXN'
+            productos: obtenerProductos()
         };
-    }
 
-    // ========================================================
-    // CARGA DEL GLB
-    // ========================================================
-
-    loader.load(
-        config.modelo,
-
-        gltf => {
-            if (eliminado) return;
-
-            const modelo = gltf.scene;
-            modelo.name = 'CARRITO_MODELO_GLB';
-
-            modelo.traverse(objeto => {
-                if (!objeto.isMesh) return;
-
-                objeto.castShadow = false;
-                objeto.receiveShadow = false;
-
-                const materiales = Array.isArray(objeto.material)
-                    ? objeto.material
-                    : [objeto.material];
-
-                materiales.forEach(material => {
-                    if (!material) return;
-
-                    material.side = THREE.DoubleSide;
-                    material.needsUpdate = true;
-                });
-            });
-
-            modelo.updateMatrixWorld(true);
-
-            const caja = new THREE.Box3().setFromObject(modelo);
-
-            if (!caja.isEmpty()) {
-                const centro = caja.getCenter(new THREE.Vector3());
-
-                modelo.position.x -= centro.x;
-                modelo.position.z -= centro.z;
-                modelo.position.y -= caja.min.y;
+        for (const registro of inventario) {
+            if (registro.objeto) {
+                registro.objeto.userData.vendido = true;
+                registro.objeto.userData.enCarrito = false;
+                registro.objeto.userData.disponible = false;
             }
-
-            contenedorModelo.add(modelo);
-            provisional.visible = false;
-            modeloCargado = true;
-
-            console.info('Carrito GLB cargado:', config.modelo);
-        },
-
-        undefined,
-
-        error => {
-            if (eliminado) return;
-
-            provisional.visible = true;
-
-            console.error(
-                `Error cargando ${config.modelo}. Se utiliza el carrito provisional.`,
-                error
-            );
-        }
-    );
-
-    // ========================================================
-    // SEGUIMIENTO DEL CLIENTE
-    // ========================================================
-
-    function calcularPosicionDeseada() {
-        if (!objetivo || !objetivo.isObject3D) return false;
-
-        objetivo.updateWorldMatrix(true, false);
-
-        posicionTemporal.set(
-            0,
-            0,
-            distanciaSeguimiento
-        );
-
-        objetivo.localToWorld(posicionTemporal);
-
-        posicionDeseada.copy(posicionTemporal);
-        posicionDeseada.y = config.altura;
-
-        objetivo.getWorldQuaternion(quaternionTemporal);
-
-        return true;
-    }
-
-    function seguirObjetivo(
-        objeto,
-        distancia = config.distancia
-    ) {
-        if (!objeto?.isObject3D) {
-            console.warn(
-                'seguirObjetivo necesita un objeto 3D válido.'
-            );
-            return false;
         }
 
-        objetivo = objeto;
-
-        if (Number.isFinite(distancia)) {
-            distanciaSeguimiento = Math.max(0, distancia);
-        }
-
-        if (!calcularPosicionDeseada()) return false;
-
-        grupo.position.copy(posicionDeseada);
-        grupo.quaternion.copy(quaternionTemporal);
-
-        return true;
+        return resumen;
     }
-
-    function actualizar(delta) {
-        if (
-            eliminado ||
-            !Number.isFinite(delta) ||
-            delta <= 0 ||
-            !objetivo
-        ) {
-            return;
-        }
-
-        const dt = Math.min(delta, 0.05);
-
-        if (!calcularPosicionDeseada()) return;
-
-        const factor = 1 - Math.exp(
-            -Math.max(0, config.suavizado) * dt
-        );
-
-        grupo.position.lerp(posicionDeseada, factor);
-        grupo.quaternion.slerp(quaternionTemporal, factor);
-    }
-
-    // ========================================================
-    // POSICIÓN Y ROTACIÓN MANUAL
-    // ========================================================
-
-    function establecerPosicion(x, y = config.altura, z) {
-        if (
-            eliminado ||
-            !Number.isFinite(x) ||
-            !Number.isFinite(y) ||
-            !Number.isFinite(z)
-        ) return;
-
-        grupo.position.set(x, y, z);
-    }
-
-    function establecerRotacion(rotacionY = 0) {
-        if (
-            eliminado ||
-            !Number.isFinite(rotacionY)
-        ) return;
-
-        grupo.rotation.set(0, rotacionY, 0);
-    }
-
-    function dejarDeSeguir() {
-        objetivo = null;
-    }
-
-    // ========================================================
-    // ELIMINAR
-    // ========================================================
 
     function eliminar() {
         if (eliminado) return;
@@ -726,46 +693,41 @@ export function crearCarrito(scene, opciones = {}) {
         eliminado = true;
         objetivo = null;
 
-        scene.remove(grupo);
+        grupo.removeFromParent();
 
-        // Eliminar objetos y liberar geometrías y materiales
-        // propios del carrito y sus productos.
-        grupo.traverse(objeto => {
+        grupo.traverse((objeto) => {
             if (!objeto.isMesh) return;
 
             objeto.geometry?.dispose();
 
-            const materiales = Array.isArray(objeto.material)
-                ? objeto.material
-                : [objeto.material];
-
-            materiales.forEach(material => {
-                material?.dispose();
-            });
+            if (Array.isArray(objeto.material)) {
+                objeto.material.forEach((material) => material.dispose());
+            } else {
+                objeto.material?.dispose();
+            }
         });
 
-        grupo.clear();
         inventario.length = 0;
     }
 
-    // ========================================================
-    // API PÚBLICA
-    // ========================================================
+    cargarModelo();
 
-    return {
+    const api = {
         grupo,
 
         seguirObjetivo,
-        actualizar,
-
-        establecerPosicion,
-        establecerRotacion,
         dejarDeSeguir,
 
+        actualizar,
+        establecerPosicion,
+        establecerRotacion,
+
         agregarProducto,
+
         obtenerProductos,
         obtenerTotal,
         obtenerCantidad,
+
         devolverProducto,
         vaciarInventario,
         confirmarVenta,
@@ -773,7 +735,7 @@ export function crearCarrito(scene, opciones = {}) {
         eliminar,
 
         get cargado() {
-            return modeloCargado;
+            return cargado;
         },
 
         get objetivo() {
@@ -785,7 +747,9 @@ export function crearCarrito(scene, opciones = {}) {
         },
 
         get inventario() {
-            return obtenerProductos();
+            return inventario;
         }
     };
+
+    return api;
 }
