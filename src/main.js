@@ -547,7 +547,6 @@ function crearSistemaVehiculos() {
             },
 
             alSalir: datos => {
-                // CORRECCIÓN: el ID está dentro de datos.vehiculo.
                 limpiarVisitaVehiculo(datos.vehiculo?.id);
             }
         });
@@ -563,10 +562,9 @@ function crearSistemaVehiculos() {
 // ============================================================
 
 function crearClienteParaVehiculo(datos) {
-    // CORRECCIÓN: obtener el ID desde el objeto vehículo.
     const idVehiculo = datos?.vehiculo?.id;
 
-    if (!datos?.plaza || idVehiculo === undefined) {
+    if (!datos?.plaza || idVehiculo === undefined || idVehiculo === null) {
         console.warn(
             '[VISITANTE] El vehículo no proporcionó un ID o una plaza.',
             datos
@@ -625,13 +623,6 @@ function crearClienteParaVehiculo(datos) {
                 visita.fase = 'comprando';
                 visita.tiempo = 0;
 
-                if (!visita.carrito) {
-                    visita.carrito = crearCarritoVisitante(
-                        visita.cliente,
-                        idVisita
-                    );
-                }
-
                 visita.cliente.configurarCompras?.({
                     productos: productosLacteos,
                     carrito: visita.carrito
@@ -671,8 +662,18 @@ function crearClienteParaVehiculo(datos) {
             salidaSolicitada: false
         };
 
+        // Registrar primero la visita para que los callbacks puedan encontrarla.
         visitantesPorVehiculo.set(idVisita, visita);
         clientesSupermercado.push(cliente);
+
+        // CREAR EL CARRITO INMEDIATAMENTE.
+        visita.carrito = crearCarritoVisitante(cliente, idVisita);
+
+        // Vincular el sistema de compras con el carrito desde el principio.
+        cliente.configurarCompras?.({
+            productos: productosLacteos,
+            carrito: visita.carrito
+        });
 
         if (typeof cliente.iniciarDesdeVehiculo === 'function') {
             cliente.iniciarDesdeVehiculo(
@@ -700,6 +701,7 @@ function crearClienteParaVehiculo(datos) {
             cliente.eliminar?.();
         }
 
+        limpiarVisitaVehiculo(idVehiculo);
         sistemaVehiculos?.solicitarSalida?.(idVehiculo);
     }
 }
@@ -709,18 +711,27 @@ function crearClienteParaVehiculo(datos) {
 // ============================================================
 
 function crearCarritoVisitante(cliente, idVisita) {
-    if (!cliente?.grupo) return null;
+    const grupoCliente = cliente?.grupo;
+
+    if (!grupoCliente?.isObject3D) {
+        console.error(
+            `[CARRITO] ${idVisita}: el cliente no tiene un grupo THREE válido.`,
+            cliente
+        );
+        return null;
+    }
 
     try {
-        const posicion = cliente.grupo.position;
+        const posicionMundial = new THREE.Vector3();
+        grupoCliente.getWorldPosition(posicionMundial);
 
         const carrito = crearCarrito(escena, {
             modelo: '/modelos/carrito.glb',
 
             posicion: {
-                x: posicion.x - CONFIG.distanciaCarrito,
+                x: posicionMundial.x - CONFIG.distanciaCarrito,
                 y: 0,
-                z: posicion.z
+                z: posicionMundial.z
             },
 
             escala: 1,
@@ -728,21 +739,28 @@ function crearCarritoVisitante(cliente, idVisita) {
             suavizado: CONFIG.suavizadoCarrito
         });
 
-        if (!carrito) return null;
+        if (!carrito?.grupo) {
+            console.error(`[CARRITO] Falló la creación de ${idVisita}.`);
+            return null;
+        }
 
-        carrito.seguirObjetivo?.(
-            cliente.grupo,
+        carrito.seguirObjetivo(
+            grupoCliente,
             CONFIG.distanciaCarrito
         );
 
         carritosClientes.push(carrito);
 
-        console.info(`[CARRITO] Asignado a ${idVisita}.`);
+        console.info(`[CARRITO] Creado para ${idVisita}.`);
 
         return carrito;
 
     } catch (error) {
-        console.error(`Error creando carrito ${idVisita}:`, error);
+        console.error(
+            `[CARRITO] Error creando carrito de ${idVisita}:`,
+            error
+        );
+
         return null;
     }
 }
@@ -839,7 +857,10 @@ function clienteEstaOcupadoComprando(estado) {
         'entrandosupermercado',
         'acercandoseproducto',
         'recogiendoproducto',
+        'inspeccionando',
+        'decidiendo',
         'guardandoproducto',
+        'devolviendoproducto',
         'yendocaja',
         'pagando',
         'regresandovehiculo'
@@ -977,7 +998,10 @@ function finalizarPagoVisitante(visita, ticket) {
 function solicitarSalidaVisitante(visita) {
     if (!visita || visita.salidaSolicitada) return;
 
-    if (!visita.idVehiculo) {
+    if (
+        visita.idVehiculo === undefined ||
+        visita.idVehiculo === null
+    ) {
         console.warn('La visita no tiene un vehículo asociado.');
         return;
     }
@@ -1277,7 +1301,7 @@ function mostrarTicket(ticket, nombreCliente = 'Cliente') {
         importe.textContent = `$${subtotal.toFixed(2)}`;
 
         fila.append(nombre, cantidad, importe);
-        articulos.appendChild(fila);
+        articulos.append(fila);
     }
 
     const total = Number.isFinite(Number(ticket.total))
