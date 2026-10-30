@@ -5,7 +5,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 // ============================================================
 // SISTEMA DE CLIENTES DEL SUPERMERCADO
 // Clientes, clientas y ladrones
-// Navegación A*, compras y movimiento
+// Navegación A*, compras, carrito y caja registradora
 // ============================================================
 
 const loader = new GLTFLoader();
@@ -36,6 +36,10 @@ const ZONAS_CLIENTES = [
     { nombre: 'Refrigeradores', minX: -28, maxX: -16, minZ: -25, maxZ: -17 },
     { nombre: 'Lácteos', minX: 16, maxX: 28, minZ: 5, maxZ: 22 }
 ];
+
+// ============================================================
+// CONFIGURACIÓN DE MOVIMIENTO
+// ============================================================
 
 const DIRECCIONES = [
     [1, 0, 1],
@@ -171,6 +175,10 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         maxProductosPorBusqueda: 80,
         maxCompras: 5,
 
+        // Configuración de caja
+        posicionCaja: { x: 0, z: 20 },
+        tiempoDuracionPago: 5,
+
         ...opciones
     };
 
@@ -241,6 +249,17 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     let productoEnMano = null;
 
     let anclaMano = null;
+
+    // Datos de caja
+    let posicionCaja = {
+        x: Number(config.posicionCaja?.x ?? 0),
+        z: Number(config.posicionCaja?.z ?? 20)
+    };
+
+    let callbackPago = null;
+    let resumenPago = null;
+    let pagoConfirmado = false;
+    let tiempoAnimacionPago = 0;
 
     const huesos = {};
     const rotacionesBase = new Map();
@@ -673,6 +692,111 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         return true;
     }
 
+    // ========================================================
+    // ENVIAR A CAJA
+    // ========================================================
+
+    function iniciarPago(posicion = config.posicionCaja, alTerminar = null) {
+        if (eliminado || esLadron || pagoConfirmado) return false;
+
+        if (
+            estado === 'yendoCaja' ||
+            estado === 'pagando' ||
+            estado === 'pagoTerminado'
+        ) {
+            return false;
+        }
+
+        liberarReserva();
+
+        const destino = {
+            x: Number(posicion?.x ?? 0),
+            z: Number(posicion?.z ?? 20)
+        };
+
+        if (!Number.isFinite(destino.x) || !Number.isFinite(destino.z)) {
+            return false;
+        }
+
+        const inicio = {
+            x: grupo.position.x,
+            z: grupo.position.z
+        };
+
+        const ruta = buscarCamino(inicio, destino);
+
+        if (!ruta.length) {
+            console.warn(`Cliente ${id}: no se encontró ruta hacia la caja.`);
+            return false;
+        }
+
+        posicionCaja = destino;
+        callbackPago =
+            typeof alTerminar === 'function' ? alTerminar : null;
+
+        pagoConfirmado = false;
+        resumenPago = null;
+        tiempoAnimacionPago = 0;
+
+        detenido = false;
+        estado = 'yendoCaja';
+        tiempoEstado = 0;
+
+        rutaActual = ruta;
+        indiceRuta = 0;
+        objetivoActual = destino;
+
+        return true;
+    }
+
+    function iniciarAnimacionPago() {
+        if (estado !== 'yendoCaja') return;
+
+        estado = 'pagando';
+        tiempoEstado = 0;
+        tiempoAnimacionPago = 0;
+
+        rutaActual = [];
+        indiceRuta = 0;
+        objetivoActual = null;
+
+        grupo.rotation.y = Math.atan2(
+            posicionCaja.x - grupo.position.x,
+            posicionCaja.z - grupo.position.z
+        );
+    }
+
+    function finalizarPago() {
+        if (pagoConfirmado || eliminado) return;
+
+        pagoConfirmado = true;
+
+        resumenPago = confirmarCompra();
+
+        estado = 'pagoTerminado';
+        tiempoEstado = 0;
+
+        console.info(
+            `Cliente ${id}: compra confirmada`,
+            resumenPago
+        );
+
+        const callback = callbackPago;
+        callbackPago = null;
+
+        if (callback) {
+            try {
+                callback(resumenPago);
+            } catch (error) {
+                console.error('Error en callback de pago:', error);
+            }
+        }
+    }
+
+    // ========================================================
+    // POSICIÓN
+    // ========================================================
+
     function establecerPosicion(posicion) {
         if (!posicion) return false;
 
@@ -707,6 +831,8 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         tiempoEstado = 0;
         tiempoCompra = 0;
         yaEntro = false;
+        pagoConfirmado = false;
+        resumenPago = null;
 
         const x = Number(plaza?.x ?? posicion.x);
         const z = Number(plaza?.z ?? posicion.z);
@@ -852,7 +978,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         );
     }
 
-    // Cada unidad tiene su propia identidad.
     function obtenerClaveProducto(objeto) {
         const datos = objeto?.userData ?? {};
 
@@ -1488,6 +1613,8 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         ) {
             if (estado === 'yendoProducto') {
                 comprobarLlegadaProducto();
+            } else if (estado === 'yendoCaja') {
+                iniciarAnimacionPago();
             } else if (!asignarDestino()) {
                 tiempoReintento = 0.7;
             }
@@ -1511,6 +1638,8 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
                 if (estado === 'yendoProducto') {
                     comprobarLlegadaProducto();
+                } else if (estado === 'yendoCaja') {
+                    iniciarAnimacionPago();
                 } else {
                     tiempoCompra = Math.max(
                         tiempoCompra,
@@ -1574,7 +1703,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         ultimaPosicion.copy(grupo.position);
 
-        // Recalcular sin abandonar inmediatamente el producto.
         if (tiempoAtascado > 1.1) {
             tiempoAtascado = 0;
             rutaActual = [];
@@ -1595,6 +1723,22 @@ export function crearClienteSupermercado(scene, opciones = {}) {
                     estado = 'caminando';
                     tiempoReintento = 0.8;
                     asignarDestino();
+                }
+            } else if (estado === 'yendoCaja') {
+                const nuevaRuta = buscarCamino(
+                    {
+                        x: grupo.position.x,
+                        z: grupo.position.z
+                    },
+                    posicionCaja
+                );
+
+                if (nuevaRuta.length) {
+                    rutaActual = nuevaRuta;
+                    indiceRuta = 0;
+                    objetivoActual = posicionCaja;
+                } else {
+                    console.warn(`Cliente ${id}: bloqueado al dirigirse a caja.`);
                 }
             } else if (!asignarDestino()) {
                 tiempoReintento = 0.8;
@@ -1647,7 +1791,8 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             'caminando',
             'yendoProducto',
             'llegando',
-            'regresando'
+            'regresando',
+            'yendoCaja'
         ].includes(estado);
 
         faseCaminar += delta * (caminando ? 8 : 2);
@@ -1670,7 +1815,16 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         rotar('shinL', Math.max(0, -balanceo) * 0.65);
         rotar('shinR', Math.max(0, balanceo) * 0.65);
 
-        if (estado === 'examinando') {
+        if (estado === 'pagando') {
+            const movimiento = Math.sin(faseCaminar * 2.8);
+
+            rotar('armR', -0.85 + movimiento * 0.18);
+            rotar('forearmR', -1.15 + Math.abs(movimiento) * 0.35);
+
+            rotar('armL', -0.75 - movimiento * 0.18);
+            rotar('forearmL', -1.05 + Math.abs(movimiento) * 0.30);
+
+        } else if (estado === 'examinando') {
             rotar('armR', -0.95);
             rotar('forearmR', -0.8);
             rotar('armL', -0.25);
@@ -1773,9 +1927,28 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             return;
         }
 
+        // El cliente permanece en la caja durante la simulación del pago.
+        if (estado === 'pagando') {
+            tiempoAnimacionPago += dt;
+            animarManual(dt);
+
+            if (tiempoAnimacionPago >= config.tiempoDuracionPago) {
+                finalizarPago();
+            }
+
+            return;
+        }
+
+        // El cliente espera a que main.js reciba el ticket y ordene su regreso.
+        if (estado === 'pagoTerminado') {
+            animarManual(dt);
+            return;
+        }
+
         if (
             estado === 'caminando' ||
-            estado === 'yendoProducto'
+            estado === 'yendoProducto' ||
+            estado === 'yendoCaja'
         ) {
             avanzarInterior(dt);
         }
@@ -1784,9 +1957,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             tiempoReintento = Math.max(0, tiempoReintento - dt);
         }
 
-        // Los clientes esperan a que haya unidades disponibles.
-        // No se exige productosListos porque tu productos.js actual
-        // todavía no implementa esa propiedad.
         if (
             !esLadron &&
             estado === 'caminando' &&
@@ -1887,6 +2057,10 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     }
 
     function confirmarCompra() {
+        if (pagoConfirmado && resumenPago) {
+            return resumenPago;
+        }
+
         for (const objeto of articulosEnCarrito) {
             const original = buscarOriginalPorUUID(
                 objeto.userData.idProductoOriginal
@@ -1938,6 +2112,8 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         iniciarDesdeVehiculo,
         iniciarRegresoVehiculo,
 
+        iniciarPago,
+
         detenerAnimacion,
         reproducirAnimacion,
 
@@ -1971,7 +2147,15 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         },
 
         get compraConfirmada() {
-            return articulosEnCarrito.length > 0;
+            return pagoConfirmado;
+        },
+
+        get pagoConfirmado() {
+            return pagoConfirmado;
+        },
+
+        get resumenPago() {
+            return resumenPago;
         },
 
         get productoEnMano() {
