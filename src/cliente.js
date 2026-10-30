@@ -5,6 +5,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 // ============================================================
 // CLIENTES Y LADRONES DEL SUPERMERCADO
 // Three.js 0.180+
+// Navegación interior/exterior, compras y animaciones
 // ============================================================
 
 const loader = new GLTFLoader();
@@ -46,20 +47,12 @@ const CONFIG_BASE = {
 // UTILIDADES
 // ============================================================
 
-function limitar(valor, minimo, maximo) {
-    return Math.max(minimo, Math.min(maximo, valor));
-}
-
 function distancia(a, b) {
     return Math.hypot(a.x - b.x, a.z - b.z);
 }
 
 function punto(x, z) {
     return new THREE.Vector3(x, 0, z);
-}
-
-function numeroAleatorio(min, max) {
-    return min + Math.random() * (max - min);
 }
 
 function obtenerNombre(objeto) {
@@ -75,8 +68,9 @@ function obtenerNombre(objeto) {
 function obtenerCodigo(objeto) {
     return (
         objeto?.userData?.codigo ||
+        objeto?.userData?.codigoProducto ||
+        objeto?.userData?.skuProducto ||
         objeto?.userData?.sku ||
-        objeto?.userData?.idProducto ||
         objeto?.name ||
         'SIN-CODIGO'
     );
@@ -90,7 +84,7 @@ function obtenerPrecio(objeto) {
         0
     );
 
-    return Number.isFinite(precio) ? precio : 0;
+    return Number.isFinite(precio) && precio >= 0 ? precio : 0;
 }
 
 function esUnidadProducto(objeto) {
@@ -108,13 +102,12 @@ function obtenerIdentificadorUnidad(objeto) {
 }
 
 // ============================================================
-// NAVEGACIÓN Y OBSTÁCULOS
+// NAVEGACIÓN INTERIOR
 // ============================================================
 
 const CELDA = 1;
 
 const OBSTACULOS = [
-    // Góndolas centrales
     { minX: -18.7, maxX: -7.3, minZ: -15.5, maxZ: -10.5 },
     { minX: -18.7, maxX: -7.3, minZ: -2.5, maxZ: 2.5 },
     { minX: -18.7, maxX: -7.3, minZ: 10.5, maxZ: 15.5 },
@@ -123,11 +116,9 @@ const OBSTACULOS = [
     { minX: 7.3, maxX: 18.7, minZ: -2.5, maxZ: 2.5 },
     { minX: 7.3, maxX: 18.7, minZ: 10.5, maxZ: 15.5 },
 
-    // Muebles laterales
     { minX: -29, maxX: -25, minZ: -27, maxZ: -24 },
     { minX: 25, maxX: 29, minZ: -27, maxZ: -24 },
 
-    // Refrigeradores laterales
     { minX: -29, maxX: -15, minZ: -28, maxZ: -25.5 },
     { minX: 15, maxX: 29, minZ: -28, maxZ: -25.5 }
 ];
@@ -147,6 +138,17 @@ function puntoBloqueado(x, z, radio = 0.55) {
         x - radio < o.maxX &&
         z + radio > o.minZ &&
         z - radio < o.maxZ
+    );
+}
+
+function puntoExteriorBloqueado(x, z, radio = 0.55) {
+    // El estacionamiento y el camino de vehículos están fuera
+    // de la cuadrícula de góndolas del supermercado.
+    return (
+        x < -31 + radio ||
+        x > 31 - radio ||
+        z < 20 ||
+        z > 98
     );
 }
 
@@ -192,8 +194,10 @@ function encontrarRuta(inicio, destino, radio = 0.55) {
     const origen = punto(inicio.x, inicio.z);
     const final = punto(destino.x, destino.z);
 
-    if (!puntoBloqueado(final.x, final.z, radio) &&
-        segmentoLibre(origen, final, radio)) {
+    if (
+        !puntoBloqueado(final.x, final.z, radio) &&
+        segmentoLibre(origen, final, radio)
+    ) {
         return [final];
     }
 
@@ -258,7 +262,6 @@ function encontrarRuta(inicio, destino, radio = 0.55) {
 
             if (puntoBloqueado(px, pz, radio)) continue;
 
-            // Evitar atravesar esquinas de obstáculos.
             if (
                 dx !== 0 && dz !== 0 &&
                 (
@@ -271,7 +274,6 @@ function encontrarRuta(inicio, destino, radio = 0.55) {
 
             const coste = dx !== 0 && dz !== 0 ? 1.414 : 1;
             const g = actual.g + coste;
-
             const anterior = nodos.get(llave);
 
             if (!anterior || g < anterior.g) {
@@ -291,21 +293,20 @@ function encontrarRuta(inicio, destino, radio = 0.55) {
 
     if (!resultado) return [];
 
-    const ruta = [];
+    const rutaCalculada = [];
 
     while (resultado) {
-        ruta.unshift(punto(
-            resultado.x * CELDA,
-            resultado.z * CELDA
-        ));
+        rutaCalculada.unshift(
+            punto(resultado.x * CELDA, resultado.z * CELDA)
+        );
 
         resultado = resultado.padre;
     }
 
-    ruta[0] = origen;
-    ruta[ruta.length - 1] = final;
+    rutaCalculada[0] = origen;
+    rutaCalculada[rutaCalculada.length - 1] = final;
 
-    return simplificarRuta(ruta, radio).slice(1);
+    return simplificarRuta(rutaCalculada, radio).slice(1);
 }
 
 // ============================================================
@@ -393,14 +394,14 @@ function crearControlHuesos(modelo) {
         if (!caminar) return;
 
         const movimiento = Math.sin(tiempo * 8) * 0.55 * intensidad;
-        const movimientoContrario = -movimiento;
+        const contrario = -movimiento;
 
         if (piernas.izquierdo) {
             piernas.izquierdo.rotation.x += movimiento;
         }
 
         if (piernas.derecho) {
-            piernas.derecho.rotation.x += movimientoContrario;
+            piernas.derecho.rotation.x += contrario;
         }
 
         if (rodillas.izquierdo) {
@@ -414,7 +415,7 @@ function crearControlHuesos(modelo) {
         }
 
         if (brazos.izquierdo) {
-            brazos.izquierdo.rotation.x += movimientoContrario * 0.75;
+            brazos.izquierdo.rotation.x += contrario * 0.75;
         }
 
         if (brazos.derecho) {
@@ -453,7 +454,8 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         }
     };
 
-    const id = config.id || `CLIENTE_${THREE.MathUtils.generateUUID()}`;
+    const id = config.id ||
+        `CLIENTE_${THREE.MathUtils.generateUUID()}`;
 
     const grupo = new THREE.Group();
     grupo.name = id;
@@ -469,6 +471,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     let modelo = null;
     let mixer = null;
     let controlHuesos = null;
+    let clipsAnimacion = [];
 
     let cargado = false;
     let eliminado = false;
@@ -481,7 +484,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
     let tiempoAnimacion = Math.random() * 10;
     let tiempoEstado = 0;
-    let tiempoCompra = 0;
     let tiempoEspera = 0;
 
     let objetivo = null;
@@ -508,6 +510,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
     loader.load(
         config.modelo,
+
         gltf => {
             if (eliminado) return;
 
@@ -534,16 +537,17 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
             grupo.add(modelo);
 
-            mixer = new THREE.AnimationMixer(modelo);
+            clipsAnimacion = gltf.animations || [];
 
-            if (gltf.animations?.length) {
-                gltf.animations.forEach(clip => {
-                    const accion = mixer.clipAction(clip);
-                    accion.play();
+            if (clipsAnimacion.length) {
+                mixer = new THREE.AnimationMixer(modelo);
+
+                clipsAnimacion.forEach(clip => {
+                    mixer.clipAction(clip).play();
                 });
+            } else {
+                controlHuesos = crearControlHuesos(modelo);
             }
-
-            controlHuesos = crearControlHuesos(modelo);
 
             cargado = true;
 
@@ -553,9 +557,9 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
             console.log(
                 `${id}: modelo cargado. Huesos:`,
-                Object.keys(controlHuesos.huesos).length,
+                Object.keys(controlHuesos?.huesos || {}).length,
                 'Animaciones:',
-                gltf.animations?.length || 0
+                clipsAnimacion.length
             );
 
             if (config.ruta?.length && !config.inactivo) {
@@ -571,11 +575,17 @@ export function crearClienteSupermercado(scene, opciones = {}) {
                 error
             );
 
+            if (eliminado) return;
+
             crearModeloProvisional();
             cargado = true;
 
             if (estado === 'cargando') {
                 estado = config.inactivo ? 'inactivo' : 'recorriendo';
+            }
+
+            if (config.ruta?.length && !config.inactivo) {
+                establecerRuta(config.ruta);
             }
         }
     );
@@ -625,7 +635,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             if (!objeto || !objeto.parent) return false;
             if (!esUnidadProducto(objeto)) return false;
 
-            // Cada unidad física tiene su propio UUID.
             const unidadId = obtenerIdentificadorUnidad(objeto);
 
             if (productosCompradosGlobal.has(unidadId)) return false;
@@ -634,6 +643,8 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
             if (objeto.userData.disponible === false) return false;
             if (objeto.userData.enCarrito) return false;
+            if (objeto.userData.recogido) return false;
+            if (objeto.userData.vendido) return false;
 
             return true;
         });
@@ -651,6 +662,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         productosLocalesReservados.add(unidadId);
 
         producto.userData.reservadoPor = id;
+        producto.userData.reservado = true;
 
         return true;
     }
@@ -668,6 +680,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         if (producto.userData.reservadoPor === id) {
             delete producto.userData.reservadoPor;
+            producto.userData.reservado = false;
         }
     }
 
@@ -688,6 +701,18 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             objeto: producto
         };
 
+        // Primero se intenta agregar al carrito.
+        // Si el carrito está lleno, el producto no se marca como comprado.
+        if (carrito?.agregarProducto) {
+            const agregado = carrito.agregarProducto(registro);
+
+            if (agregado === false) {
+                return false;
+            }
+        } else {
+            producto.visible = false;
+        }
+
         productosCarrito.push(registro);
 
         productosCompradosGlobal.add(unidadId);
@@ -695,14 +720,12 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         productosLocalesReservados.delete(unidadId);
 
         producto.userData.enCarrito = true;
+        producto.userData.recogido = true;
+        producto.userData.disponible = false;
+        producto.userData.vendido = false;
         producto.userData.compradoPor = id;
+        producto.userData.reservado = false;
         producto.userData.reservadoPor = null;
-
-        if (carrito?.agregarProducto) {
-            carrito.agregarProducto(producto);
-        } else {
-            producto.visible = false;
-        }
 
         if (typeof config.alComprar === 'function') {
             config.alComprar(registro, api);
@@ -726,6 +749,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
             if (d < menorDistancia && d < 18) {
                 menorDistancia = d;
+
                 mejor = {
                     objeto: producto,
                     posicion,
@@ -744,20 +768,20 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     }
 
     // ========================================================
-    // RUTAS
+    // RUTAS INTERIORES
     // ========================================================
 
     function establecerRuta(puntos) {
         if (!Array.isArray(puntos) || !puntos.length) return false;
 
-        const destino = puntos.map(p => ({
+        const destinos = puntos.map(p => ({
             x: Number(p.x),
             z: Number(p.z)
         })).filter(p =>
             Number.isFinite(p.x) && Number.isFinite(p.z)
         );
 
-        if (!destino.length) return false;
+        if (!destinos.length) return false;
 
         ruta = [];
 
@@ -766,29 +790,30 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             z: grupo.position.z
         };
 
-        for (const destinoPunto of destino) {
+        for (const destino of destinos) {
             const tramo = encontrarRuta(
                 actual,
-                destinoPunto,
+                destino,
                 config.radioColision
             );
 
             if (!tramo.length) {
                 console.warn(
-                    `${id}: no se pudo encontrar ruta hacia`,
-                    destinoPunto
+                    `${id}: no se encontró ruta hacia`,
+                    destino
                 );
                 continue;
             }
 
             ruta.push(...tramo);
-            actual = destinoPunto;
+            actual = destino;
         }
 
         indiceRuta = 0;
         objetivo = ruta[0] || null;
 
         if (ruta.length) {
+            zona = 'supermercado';
             estado = 'recorriendo';
             return true;
         }
@@ -823,7 +848,13 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             posicion.y ?? grupo.position.y,
             posicion.z ?? grupo.position.z
         );
+
+        posicionAnterior.copy(grupo.position);
     }
+
+    // ========================================================
+    // MOVIMIENTO
+    // ========================================================
 
     function avanzarRuta(delta) {
         if (!ruta.length || indiceRuta >= ruta.length) {
@@ -834,7 +865,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         const dx = objetivo.x - grupo.position.x;
         const dz = objetivo.z - grupo.position.z;
-
         const d = Math.hypot(dx, dz);
 
         if (d < 0.12) {
@@ -856,17 +886,35 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         const direccionX = dx / d;
         const direccionZ = dz / d;
 
-        const velocidad = config.velocidad;
-        const avance = Math.min(d, velocidad * delta);
+        const avance = Math.min(
+            d,
+            Math.max(0, config.velocidad) * delta
+        );
 
         const nuevaX = grupo.position.x + direccionX * avance;
         const nuevaZ = grupo.position.z + direccionZ * avance;
 
-        if (!puntoBloqueado(nuevaX, nuevaZ, config.radioColision)) {
+        const movimientoExterior =
+            zona === 'exterior' ||
+            estado === 'entrandoSupermercado' ||
+            estado === 'regresandoVehiculo';
+
+        const bloqueado = movimientoExterior
+            ? puntoExteriorBloqueado(
+                nuevaX,
+                nuevaZ,
+                config.radioColision
+            )
+            : puntoBloqueado(
+                nuevaX,
+                nuevaZ,
+                config.radioColision
+            );
+
+        if (!bloqueado) {
             grupo.position.x = nuevaX;
             grupo.position.z = nuevaZ;
-        } else {
-            // Recalcular ruta si el punto queda bloqueado.
+        } else if (!movimientoExterior) {
             const destino = {
                 x: objetivo.x,
                 z: objetivo.z
@@ -877,6 +925,13 @@ export function crearClienteSupermercado(scene, opciones = {}) {
                 tiempoEspera = 0;
                 return false;
             }
+        } else {
+            // Evita que un punto exterior incorrecto deje al
+            // visitante intentando atravesar un límite.
+            estado = 'esperando';
+            tiempoEspera = 0;
+            console.warn(`${id}: ruta exterior bloqueada.`);
+            return false;
         }
 
         const angulo = Math.atan2(direccionX, direccionZ);
@@ -892,7 +947,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     }
 
     // ========================================================
-    // SELECCIÓN DE PRODUCTOS
+    // SELECCIÓN Y RECOGIDA DE PRODUCTOS
     // ========================================================
 
     function iniciarBusquedaProductos() {
@@ -991,14 +1046,12 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     }
 
     // ========================================================
-    // RECORRIDO DEL CLIENTE
+    // FINALIZAR RECORRIDO
     // ========================================================
 
     function finalizarRecorrido() {
         if (config.repetirRuta && config.ruta?.length) {
-            const primera = config.ruta[0];
-
-            establecerRuta([primera]);
+            establecerRuta([config.ruta[0]]);
             estado = 'recorriendo';
         } else {
             estado = 'finalizado';
@@ -1041,14 +1094,18 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         compraConfirmada = true;
         pagoConfirmado = true;
-
         resumenPago = obtenerResumenCompra();
+
+        if (carrito?.confirmarVenta) {
+            carrito.confirmarVenta();
+        }
 
         return resumenPago;
     }
 
     function iniciarPago(posicionCaja, callback) {
         if (eliminado || pagoConfirmado) return false;
+        if (estado === 'pagando') return false;
 
         if (productoEnMano) {
             liberarReserva(productoEnMano);
@@ -1060,8 +1117,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             productoObjetivo = null;
         }
 
-        if (estado === 'pagando') return false;
-
         callbackPago = callback || null;
 
         const destino = posicionCaja || { x: 0, z: 20 };
@@ -1071,7 +1126,9 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             return false;
         }
 
+        zona = 'supermercado';
         estado = 'yendoCaja';
+
         return true;
     }
 
@@ -1102,33 +1159,34 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     // ========================================================
 
     function iniciarRegresoVehiculo(plaza, callback) {
-        if (!plaza) return false;
+        if (!plaza || !Number.isFinite(Number(plaza.x)) ||
+            !Number.isFinite(Number(plaza.z))) {
+            return false;
+        }
 
         callbackRegreso = callback || null;
 
-        const destino = [
-            { x: 0, z: 25.5 },
-            { x: 0, z: 30.5 },
-            { x: 8, z: 34 },
-            { x: 20, z: 34 },
-            { x: 30, z: 34 },
-            { x: 30, z: plaza.z + 5 },
-            { x: plaza.x, z: plaza.z + 5 },
-            { x: plaza.x, z: plaza.z }
+        // No se filtran estos puntos con los obstáculos interiores.
+        // El recorrido utiliza el pasillo central del estacionamiento.
+        ruta = [
+            punto(0, 25.5),
+            punto(0, 30.5),
+            punto(0, 34),
+            punto(0, 78),
+            punto(0, 83),
+            punto(0, 78),
+            punto(plaza.x, 78),
+            punto(plaza.x, plaza.z + 5),
+            punto(plaza.x, plaza.z)
         ];
 
-        const puntosValidos = destino.filter(p =>
-            !puntoBloqueado(p.x, p.z, config.radioColision)
-        );
-
-        // La ruta exterior no utiliza la cuadrícula interior.
-        ruta = puntosValidos.map(p => punto(p.x, p.z));
         indiceRuta = 0;
+        objetivo = ruta[0];
 
-        estado = 'regresandoVehiculo';
         zona = 'exterior';
+        estado = 'regresandoVehiculo';
 
-        return ruta.length > 0;
+        return true;
     }
 
     function iniciarDesdeVehiculo(posicion, plaza) {
@@ -1152,6 +1210,8 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         ];
 
         indiceRuta = 0;
+        objetivo = ruta[0];
+
         estado = 'entrandoSupermercado';
 
         return true;
@@ -1171,28 +1231,29 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         if (mixer) {
             mixer.update(delta);
+        } else {
+            const movimiento = distancia(
+                grupo.position,
+                posicionAnterior
+            );
+
+            const caminando = movimiento > 0.001;
+
+            controlHuesos?.animar(
+                caminando,
+                tiempoAnimacion,
+                estado === 'recogiendoProducto' ? 0.25 : 1
+            );
         }
 
-        const movimiento = distancia(
-            grupo.position,
-            posicionAnterior
-        );
-
         posicionAnterior.copy(grupo.position);
-
-        const caminando = movimiento > 0.001;
-
-        controlHuesos?.animar(
-            caminando,
-            tiempoAnimacion,
-            estado === 'recogiendoProducto' ? 0.25 : 1
-        );
 
         switch (estado) {
             case 'cargando':
             case 'inactivo':
             case 'finalizado':
             case 'pagando':
+            case 'esperandoSalida':
                 break;
 
             case 'recorriendo': {
@@ -1284,7 +1345,12 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
                 if (tiempoEspera > 2) {
                     tiempoEspera = 0;
-                    estado = 'buscandoProducto';
+
+                    if (zona === 'exterior') {
+                        estado = 'regresandoVehiculo';
+                    } else {
+                        estado = 'buscandoProducto';
+                    }
                 }
                 break;
         }
@@ -1300,12 +1366,14 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     }
 
     function reproducirAnimacion(nombre) {
-        if (!mixer || !modelo) return false;
+        if (!mixer || !modelo || !clipsAnimacion.length) {
+            return false;
+        }
 
-        const clips = mixer._root?.animations || [];
+        const texto = String(nombre || '').toLowerCase();
 
-        const clip = clips.find(a =>
-            a.name.toLowerCase().includes(nombre.toLowerCase())
+        const clip = clipsAnimacion.find(animacion =>
+            animacion.name.toLowerCase().includes(texto)
         );
 
         if (!clip) return false;
@@ -1343,18 +1411,32 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         }
 
         mixer?.stopAllAction();
+        mixer?.uncacheRoot(modelo);
 
+        // No se destruyen geometrías ni materiales del catálogo.
+        // Los modelos GLB pueden compartir recursos entre instancias.
         scene.remove(grupo);
 
         grupo.traverse(objeto => {
             if (!objeto.isMesh) return;
 
-            objeto.geometry?.dispose();
+            // Solo se liberan los materiales del personaje provisional.
+            // Los recursos de modelos GLB compartidos se conservan.
+            if (
+                objeto.geometry?.type === 'CapsuleGeometry' ||
+                objeto.geometry?.type === 'SphereGeometry'
+            ) {
+                objeto.geometry.dispose();
+            }
 
-            if (Array.isArray(objeto.material)) {
-                objeto.material.forEach(material => material.dispose());
-            } else {
-                objeto.material?.dispose();
+            const materiales = Array.isArray(objeto.material)
+                ? objeto.material
+                : [objeto.material];
+
+            for (const material of materiales) {
+                if (material?.userData?.recursoProvisional) {
+                    material.dispose();
+                }
             }
         });
 
