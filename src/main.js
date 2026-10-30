@@ -39,6 +39,7 @@ const CONFIG = {
     tiempoExaminar: 1.5,
     distanciaRecoger: 2,
     pausaEntreCompras: 1.8,
+
     tiempoCompraAuto: 60,
     maximoProductosCliente: 3,
 
@@ -49,7 +50,7 @@ const CONFIG = {
 };
 
 // ============================================================
-// RUTAS DE CLIENTES
+// CONFIGURACIÓN DE CLIENTES
 // ============================================================
 
 const CONFIG_CLIENTES = [
@@ -162,7 +163,7 @@ const CONFIG_CLIENTES = [
 ];
 
 // ============================================================
-// RUTAS DE LADRONES
+// CONFIGURACIÓN DE LADRONES
 // ============================================================
 
 const CONFIG_LADRONES = [
@@ -206,7 +207,7 @@ const CONFIG_LADRONES = [
 ];
 
 // ============================================================
-// 21 CÁMARAS ORIGINALES
+// CÁMARAS DE SEGURIDAD
 // ============================================================
 
 const CONFIG_CAMARAS = [
@@ -234,7 +235,7 @@ const CONFIG_CAMARAS = [
 ];
 
 // ============================================================
-// VARIABLES GLOBALES
+// VARIABLES
 // ============================================================
 
 let escena;
@@ -514,7 +515,7 @@ function crearLadrones() {
 }
 
 // ============================================================
-// SISTEMA DE VEHÍCULOS
+// VEHÍCULOS
 // ============================================================
 
 function crearSistemaVehiculos() {
@@ -558,7 +559,7 @@ function crearSistemaVehiculos() {
 }
 
 // ============================================================
-// VISITANTES: CREACIÓN AL ESTACIONAR EL VEHÍCULO
+// CREAR CLIENTE AL ESTACIONARSE
 // ============================================================
 
 function crearClienteParaVehiculo(datos) {
@@ -583,8 +584,6 @@ function crearClienteParaVehiculo(datos) {
 
     siguienteModeloCliente++;
 
-    const idVisita = idVehiculo;
-
     const posicionInicio = {
         x: datos.plaza.x,
         y: 0,
@@ -595,7 +594,7 @@ function crearClienteParaVehiculo(datos) {
 
     try {
         cliente = crearClienteSupermercado(escena, {
-            id: `VISITANTE_${idVisita}`,
+            id: `VISITANTE_${idVehiculo}`,
             modelo: config.modelo,
 
             posicion: posicionInicio,
@@ -615,13 +614,22 @@ function crearClienteParaVehiculo(datos) {
             distanciaDestino: 0.8,
             radioColision: 0.42,
 
+            // El carrito se crea únicamente al entrar.
             alEntrar: () => {
-                const visita = visitantesPorVehiculo.get(idVisita);
+                const visita = visitantesPorVehiculo.get(idVehiculo);
 
                 if (!visita || visita.fase !== 'entrando') return;
 
                 visita.fase = 'comprando';
                 visita.tiempo = 0;
+
+                // CREACIÓN DEL CARRITO AL ENTRAR AL SUPERMERCADO.
+                if (!visita.carrito) {
+                    visita.carrito = crearCarritoVisitante(
+                        visita.cliente,
+                        idVehiculo
+                    );
+                }
 
                 visita.cliente.configurarCompras?.({
                     productos: productosLacteos,
@@ -635,7 +643,7 @@ function crearClienteParaVehiculo(datos) {
         });
 
         if (!cliente) {
-            console.error(`No se pudo crear el visitante ${idVisita}.`);
+            console.error(`No se pudo crear el visitante ${idVehiculo}.`);
             sistemaVehiculos?.solicitarSalida?.(idVehiculo);
             return;
         }
@@ -643,7 +651,7 @@ function crearClienteParaVehiculo(datos) {
         cliente.nombre = config.nombre;
 
         const visita = {
-            id: idVisita,
+            id: idVehiculo,
             idVehiculo,
 
             cliente,
@@ -662,18 +670,12 @@ function crearClienteParaVehiculo(datos) {
             salidaSolicitada: false
         };
 
-        // Registrar primero la visita para que los callbacks puedan encontrarla.
-        visitantesPorVehiculo.set(idVisita, visita);
+        visitantesPorVehiculo.set(idVehiculo, visita);
         clientesSupermercado.push(cliente);
 
-        // CREAR EL CARRITO INMEDIATAMENTE.
-        visita.carrito = crearCarritoVisitante(cliente, idVisita);
-
-        // Vincular el sistema de compras con el carrito desde el principio.
-        cliente.configurarCompras?.({
-            productos: productosLacteos,
-            carrito: visita.carrito
-        });
+        // IMPORTANTE:
+        // Aquí NO se crea ningún carrito.
+        // El visitante camina hasta entrar al supermercado.
 
         if (typeof cliente.iniciarDesdeVehiculo === 'function') {
             cliente.iniciarDesdeVehiculo(
@@ -682,7 +684,7 @@ function crearClienteParaVehiculo(datos) {
             );
         } else {
             console.error(
-                `El cliente ${idVisita} no tiene iniciarDesdeVehiculo().`
+                `El cliente ${idVehiculo} no tiene iniciarDesdeVehiculo().`
             );
 
             visita.fase = 'errorEntrada';
@@ -691,23 +693,21 @@ function crearClienteParaVehiculo(datos) {
         }
 
         console.info(
-            `[VISITANTE] ${idVisita} salió de su vehículo en plaza ${visita.plaza.id}.`
+            `[VISITANTE] ${idVehiculo} salió del vehículo sin carrito.`
         );
 
     } catch (error) {
         console.error('Error al crear visitante:', error);
 
-        if (cliente) {
-            cliente.eliminar?.();
-        }
-
+        cliente?.eliminar?.();
         limpiarVisitaVehiculo(idVehiculo);
+
         sistemaVehiculos?.solicitarSalida?.(idVehiculo);
     }
 }
 
 // ============================================================
-// CARRITOS DE VISITANTES
+// CREAR CARRITO AL ENTRAR AL SUPERMERCADO
 // ============================================================
 
 function crearCarritoVisitante(cliente, idVisita) {
@@ -715,32 +715,38 @@ function crearCarritoVisitante(cliente, idVisita) {
 
     if (!grupoCliente?.isObject3D) {
         console.error(
-            `[CARRITO] ${idVisita}: el cliente no tiene un grupo THREE válido.`,
+            `[CARRITO] ${idVisita}: no se encontró el grupo THREE del cliente.`,
             cliente
         );
         return null;
     }
 
     try {
-        const posicionMundial = new THREE.Vector3();
-        grupoCliente.getWorldPosition(posicionMundial);
+        const posicion = new THREE.Vector3();
+
+        grupoCliente.getWorldPosition(posicion);
 
         const carrito = crearCarrito(escena, {
             modelo: '/modelos/carrito.glb',
 
             posicion: {
-                x: posicionMundial.x - CONFIG.distanciaCarrito,
+                x: posicion.x,
                 y: 0,
-                z: posicionMundial.z
+                z: posicion.z
             },
 
             escala: 1,
             distancia: CONFIG.distanciaCarrito,
-            suavizado: CONFIG.suavizadoCarrito
+            suavizado: CONFIG.suavizadoCarrito,
+
+            // Ajuste de orientación del modelo GLB.
+            correccionModelo: Math.PI
         });
 
         if (!carrito?.grupo) {
-            console.error(`[CARRITO] Falló la creación de ${idVisita}.`);
+            console.error(
+                `[CARRITO] No se pudo crear el carrito de ${idVisita}.`
+            );
             return null;
         }
 
@@ -751,7 +757,9 @@ function crearCarritoVisitante(cliente, idVisita) {
 
         carritosClientes.push(carrito);
 
-        console.info(`[CARRITO] Creado para ${idVisita}.`);
+        console.info(
+            `[CARRITO] Apareció al entrar el visitante ${idVisita}.`
+        );
 
         return carrito;
 
@@ -766,7 +774,7 @@ function crearCarritoVisitante(cliente, idVisita) {
 }
 
 // ============================================================
-// LIMPIEZA DE VISITANTES
+// ELIMINAR VISITA
 // ============================================================
 
 function limpiarVisitaVehiculo(idVehiculo) {
@@ -845,7 +853,7 @@ function actualizarLista(lista, delta) {
 }
 
 // ============================================================
-// COMPRAS Y CONTROL DE ESTADOS
+// COMPRAS
 // ============================================================
 
 function obtenerEstadoCliente(cliente) {
@@ -935,7 +943,7 @@ function iniciarPagoVisitante(visita) {
 }
 
 // ============================================================
-// FINALIZAR PAGO Y REGRESAR AL VEHÍCULO
+// FINALIZAR PAGO
 // ============================================================
 
 function finalizarPagoVisitante(visita, ticket) {
@@ -998,14 +1006,6 @@ function finalizarPagoVisitante(visita, ticket) {
 function solicitarSalidaVisitante(visita) {
     if (!visita || visita.salidaSolicitada) return;
 
-    if (
-        visita.idVehiculo === undefined ||
-        visita.idVehiculo === null
-    ) {
-        console.warn('La visita no tiene un vehículo asociado.');
-        return;
-    }
-
     const resultado = sistemaVehiculos?.solicitarSalida?.(
         visita.idVehiculo
     );
@@ -1016,7 +1016,6 @@ function solicitarSalidaVisitante(visita) {
         mostrarMensaje(
             `El vehículo de ${visita.cliente.nombre} está saliendo.`
         );
-
     } else {
         visita.salidaSolicitada = false;
 
@@ -1107,7 +1106,7 @@ function actualizarJugador(delta) {
 }
 
 // ============================================================
-// REGISTRO DE RECORRIDO
+// REGISTRO DEL RECORRIDO
 // ============================================================
 
 function registrarTrayectoria(posicion) {
@@ -1158,7 +1157,7 @@ function exportarTrayectoria() {
 }
 
 // ============================================================
-// TICKETS Y EXPORTACIÓN CSV
+// TICKETS
 // ============================================================
 
 function obtenerArticulosTicket(ticket) {
@@ -1257,7 +1256,7 @@ function descargarCSV(contenido, nombreArchivo) {
 }
 
 // ============================================================
-// TICKET VISUAL
+// MOSTRAR TICKET
 // ============================================================
 
 function mostrarTicket(ticket, nombreCliente = 'Cliente') {
@@ -1354,6 +1353,7 @@ function crearInterfazCamaras() {
     });
 
     const botonJugador = document.createElement('button');
+
     botonJugador.textContent = 'JUGADOR';
     botonJugador.className = 'boton-supermercado';
     botonJugador.addEventListener('click', volverAlJugador);
