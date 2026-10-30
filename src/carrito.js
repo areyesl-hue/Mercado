@@ -3,10 +3,8 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 export function crearCarrito(scene, opciones = {}) {
-    if (!scene || !scene.isScene) {
-        throw new Error(
-            'crearCarrito necesita una escena THREE.Scene.'
-        );
+    if (!scene?.isScene) {
+        throw new Error('crearCarrito necesita una escena THREE.Scene.');
     }
 
     const config = {
@@ -23,8 +21,6 @@ export function crearCarrito(scene, opciones = {}) {
     grupo.name = 'CARRITO_SUPERMERCADO';
     scene.add(grupo);
 
-    // Los productos se añaden al grupo exterior.
-    // El modelo del carrito mantiene sus transformaciones por separado.
     const contenedorModelo = new THREE.Group();
     contenedorModelo.name = 'MODELO_CARRITO';
     contenedorModelo.rotation.y = config.correccionModelo;
@@ -42,10 +38,9 @@ export function crearCarrito(scene, opciones = {}) {
     const posicionTemporal = new THREE.Vector3();
     const quaternionTemporal = new THREE.Quaternion();
 
-    // --------------------------------------------------
+    // ========================================================
     // CARRITO PROVISIONAL
-    // Visible mientras carga el modelo GLB o si falla.
-    // --------------------------------------------------
+    // ========================================================
 
     const provisional = new THREE.Group();
     provisional.name = 'CARRITO_PROVISIONAL';
@@ -97,12 +92,10 @@ export function crearCarrito(scene, opciones = {}) {
         return barra;
     }
 
-    // --------------------------------------------------
-    // CESTA ABIERTA
-    // La cesta no utiliza una caja sólida que tape la compra.
-    // --------------------------------------------------
+    // ========================================================
+    // CESTA
+    // ========================================================
 
-    const anchoCesta = 0.85;
     const fondoCesta = 0.90;
     const alturaPared = 0.40;
 
@@ -110,30 +103,20 @@ export function crearCarrito(scene, opciones = {}) {
     const yCentroPared = 0.78;
     const zCentroCesta = 0.12;
 
-    // Fondo de la cesta.
     agregarBarra(
         'FONDO_CESTA',
-        0.79,
-        0.035,
-        0.84,
-        0,
-        yFondo,
-        zCentroCesta,
+        0.79, 0.035, 0.84,
+        0, yFondo, zCentroCesta,
         metalOscuro
     );
 
-    // Varillas del fondo para dar apariencia de cesta metálica.
     for (let i = 0; i < 7; i++) {
         const x = -0.32 + i * 0.107;
 
         agregarBarra(
             `VARILLA_FONDO_X_${i}`,
-            0.018,
-            0.018,
-            0.82,
-            x,
-            yFondo + 0.025,
-            zCentroCesta,
+            0.018, 0.018, 0.82,
+            x, yFondo + 0.025, zCentroCesta,
             metal
         );
     }
@@ -143,76 +126,56 @@ export function crearCarrito(scene, opciones = {}) {
 
         agregarBarra(
             `VARILLA_FONDO_Z_${i}`,
-            0.76,
-            0.018,
-            0.018,
-            0,
-            yFondo + 0.028,
-            z,
+            0.76, 0.018, 0.018,
+            0, yFondo + 0.028, z,
             metal
         );
     }
 
-    // Cuatro bordes superiores.
+    // Bordes superiores.
     agregarBarra(
         'BORDE_SUPERIOR_IZQUIERDO',
-        0.035,
-        0.035,
-        fondoCesta,
-        -anchoCesta / 2,
-        yCentroPared + alturaPared / 2,
+        0.035, 0.035, fondoCesta,
+        -0.425, yCentroPared + alturaPared / 2,
         zCentroCesta
     );
 
     agregarBarra(
         'BORDE_SUPERIOR_DERECHO',
-        0.035,
-        0.035,
-        fondoCesta,
-        anchoCesta / 2,
-        yCentroPared + alturaPared / 2,
+        0.035, 0.035, fondoCesta,
+        0.425, yCentroPared + alturaPared / 2,
         zCentroCesta
     );
 
     agregarBarra(
         'BORDE_SUPERIOR_FRONTAL',
-        anchoCesta,
-        0.035,
-        0.035,
-        0,
-        yCentroPared + alturaPared / 2,
+        0.85, 0.035, 0.035,
+        0, yCentroPared + alturaPared / 2,
         zCentroCesta + fondoCesta / 2
     );
 
     agregarBarra(
         'BORDE_SUPERIOR_TRASERO',
-        anchoCesta,
-        0.035,
-        0.035,
-        0,
-        yCentroPared + alturaPared / 2,
+        0.85, 0.035, 0.035,
+        0, yCentroPared + alturaPared / 2,
         zCentroCesta - fondoCesta / 2
     );
 
-    // Varillas horizontales de las paredes laterales.
+    // Paredes laterales.
     for (let nivel = 0; nivel < 5; nivel++) {
         const y = yFondo + 0.08 + nivel * 0.075;
 
         for (const x of [-0.405, 0.405]) {
             agregarBarra(
                 `VARILLA_LATERAL_${x}_${nivel}`,
-                0.018,
-                0.018,
-                0.86,
-                x,
-                y,
-                zCentroCesta,
+                0.018, 0.018, 0.86,
+                x, y, zCentroCesta,
                 metal
             );
         }
     }
 
-    // Varillas horizontales de las paredes frontal y trasera.
+    // Paredes frontal y trasera.
     for (let nivel = 0; nivel < 5; nivel++) {
         const y = yFondo + 0.08 + nivel * 0.075;
 
@@ -222,18 +185,14 @@ export function crearCarrito(scene, opciones = {}) {
         ]) {
             agregarBarra(
                 `VARILLA_PARED_${z}_${nivel}`,
-                0.79,
-                0.018,
-                0.018,
-                0,
-                y,
-                z,
+                0.79, 0.018, 0.018,
+                0, y, z,
                 metal
             );
         }
     }
 
-    // Varillas verticales en las cuatro paredes.
+    // Varillas verticales.
     for (let i = 0; i < 8; i++) {
         const x = -0.36 + i * 0.103;
 
@@ -243,12 +202,8 @@ export function crearCarrito(scene, opciones = {}) {
         ]) {
             agregarBarra(
                 `VARILLA_VERTICAL_FRONTAL_${i}_${z}`,
-                0.018,
-                alturaPared,
-                0.018,
-                x,
-                yCentroPared,
-                z
+                0.018, alturaPared, 0.018,
+                x, yCentroPared, z
             );
         }
     }
@@ -259,54 +214,38 @@ export function crearCarrito(scene, opciones = {}) {
         for (const x of [-0.405, 0.405]) {
             agregarBarra(
                 `VARILLA_VERTICAL_LATERAL_${i}_${x}`,
-                0.018,
-                alturaPared,
-                0.018,
-                x,
-                yCentroPared,
-                z
+                0.018, alturaPared, 0.018,
+                x, yCentroPared, z
             );
         }
     }
 
-    // --------------------------------------------------
-    // BASE INFERIOR
-    // --------------------------------------------------
+    // ========================================================
+    // BASE
+    // ========================================================
 
     agregarBarra(
         'BASE_INFERIOR',
-        0.72,
-        0.07,
-        0.78,
-        0,
-        0.34,
-        0.08,
+        0.72, 0.07, 0.78,
+        0, 0.34, 0.08,
         metalOscuro
     );
 
-    // --------------------------------------------------
-    // MANUBRIO Y SOPORTES
-    // El manubrio queda detrás, hacia -Z.
-    // --------------------------------------------------
+    // ========================================================
+    // MANUBRIO
+    // ========================================================
 
     agregarBarra(
         'MANUBRIO',
-        0.72,
-        0.065,
-        0.065,
-        0,
-        1.02,
-        -0.55,
+        0.72, 0.065, 0.065,
+        0, 1.02, -0.55,
         plastico
     );
 
     for (const x of [-0.29, 0.29]) {
         const soporte = new THREE.Mesh(
             new THREE.CylinderGeometry(
-                0.018,
-                0.018,
-                0.43,
-                8
+                0.018, 0.018, 0.43, 8
             ),
             metalOscuro
         );
@@ -319,18 +258,15 @@ export function crearCarrito(scene, opciones = {}) {
         provisional.add(soporte);
     }
 
-    // --------------------------------------------------
+    // ========================================================
     // RUEDAS
-    // --------------------------------------------------
+    // ========================================================
 
     for (const x of [-0.37, 0.37]) {
         for (const z of [-0.43, 0.48]) {
             const rueda = new THREE.Mesh(
                 new THREE.CylinderGeometry(
-                    0.09,
-                    0.09,
-                    0.055,
-                    16
+                    0.09, 0.09, 0.055, 16
                 ),
                 ruedaMaterial
             );
@@ -345,87 +281,81 @@ export function crearCarrito(scene, opciones = {}) {
         }
     }
 
-    // --------------------------------------------------
-    // CARGA DEL MODELO GLB
-    // --------------------------------------------------
+    // ========================================================
+    // CARGA DEL GLB
+    // ========================================================
 
     loader.load(
         config.modelo,
-        (gltf) => {
+        gltf => {
             if (eliminado) return;
 
             const modelo = gltf.scene;
             modelo.name = 'CARRITO_MODELO_GLB';
 
-            modelo.traverse((objeto3D) => {
-                if (!objeto3D.isMesh) return;
+            modelo.traverse(objeto => {
+                if (!objeto.isMesh) return;
 
-                objeto3D.castShadow = true;
-                objeto3D.receiveShadow = true;
+                objeto.castShadow = false;
+                objeto.receiveShadow = false;
 
-                const materiales = Array.isArray(objeto3D.material)
-                    ? objeto3D.material
-                    : [objeto3D.material];
+                const materiales = Array.isArray(objeto.material)
+                    ? objeto.material
+                    : [objeto.material];
 
-                materiales.forEach((material) => {
-                    if (material) {
-                        material.side = THREE.DoubleSide;
-                        material.needsUpdate = true;
-                    }
+                materiales.forEach(material => {
+                    if (!material) return;
+
+                    material.side = THREE.DoubleSide;
+                    material.needsUpdate = true;
                 });
             });
 
-            // Ajustar el origen del modelo a la base.
-            // La escala general la aplica contenedorModelo.
             modelo.updateMatrixWorld(true);
 
-            const cajaInicial = new THREE.Box3().setFromObject(modelo);
+            const caja = new THREE.Box3().setFromObject(modelo);
 
-            if (!cajaInicial.isEmpty()) {
-                const centro = cajaInicial.getCenter(
-                    new THREE.Vector3()
-                );
+            if (!caja.isEmpty()) {
+                const centro = caja.getCenter(new THREE.Vector3());
 
                 modelo.position.x -= centro.x;
                 modelo.position.z -= centro.z;
-                modelo.position.y -= cajaInicial.min.y;
+                modelo.position.y -= caja.min.y;
             }
 
             contenedorModelo.add(modelo);
-
             provisional.visible = false;
             modeloCargado = true;
 
             console.info(
-                'Carrito GLB cargado correctamente:',
+                'Carrito GLB cargado:',
                 config.modelo
             );
         },
         undefined,
-        (error) => {
+        error => {
             if (eliminado) return;
 
             provisional.visible = true;
 
             console.error(
-                `No se pudo cargar ${config.modelo}. ` +
-                'Se utilizará el carrito provisional.',
+                `Error cargando ${config.modelo}. Se utiliza el carrito provisional.`,
                 error
             );
         }
     );
 
-    // --------------------------------------------------
-    // SEGUIR AL CLIENTE
-    // --------------------------------------------------
+    // ========================================================
+    // SEGUIMIENTO DEL CLIENTE
+    // ========================================================
 
     function calcularPosicionDeseada() {
-        if (!objetivo) return false;
+        if (!objetivo || !objetivo.isObject3D) return false;
 
         objetivo.updateWorldMatrix(true, false);
 
-        // El cliente avanza mirando hacia su eje local +Z.
-        // El carrito se coloca delante de su posición.
+        // El carrito se coloca delante del cliente,
+        // en el eje local positivo Z.
         posicionTemporal.set(
             0,
             0,
@@ -446,11 +376,11 @@ export function crearCarrito(scene, opciones = {}) {
         objeto,
         distancia = config.distancia
     ) {
-        if (!objeto || !objeto.isObject3D) {
+        if (!objeto?.isObject3D) {
             console.warn(
                 'seguirObjetivo necesita un objeto 3D válido.'
             );
-            return;
+            return false;
         }
 
         objetivo = objeto;
@@ -459,10 +389,12 @@ export function crearCarrito(scene, opciones = {}) {
             distanciaSeguimiento = Math.max(0, distancia);
         }
 
-        if (!calcularPosicionDeseada()) return;
+        if (!calcularPosicionDeseada()) return false;
 
         grupo.position.copy(posicionDeseada);
         grupo.quaternion.copy(quaternionTemporal);
+
+        return true;
     }
 
     function actualizar(delta) {
@@ -479,18 +411,17 @@ export function crearCarrito(scene, opciones = {}) {
 
         if (!calcularPosicionDeseada()) return;
 
-        // Suavizado independiente de la tasa de fotogramas.
         const factor = 1 - Math.exp(
-            -Math.max(0, config.suavizado) * dt
+            Math.max(0, config.suavizado) * -dt
         );
 
         grupo.position.lerp(posicionDeseada, factor);
         grupo.quaternion.slerp(quaternionTemporal, factor);
     }
 
-    // --------------------------------------------------
-    // UTILIDADES
-    // --------------------------------------------------
+    // ========================================================
+    // POSICIÓN Y ROTACIÓN MANUAL
+    // ========================================================
 
     function establecerPosicion(
         x,
@@ -502,9 +433,7 @@ export function crearCarrito(scene, opciones = {}) {
             !Number.isFinite(x) ||
             !Number.isFinite(y) ||
             !Number.isFinite(z)
-        ) {
-            return;
-        }
+        ) return;
 
         grupo.position.set(x, y, z);
     }
@@ -513,12 +442,18 @@ export function crearCarrito(scene, opciones = {}) {
         if (
             eliminado ||
             !Number.isFinite(rotacionY)
-        ) {
-            return;
-        }
+        ) return;
 
         grupo.rotation.set(0, rotacionY, 0);
     }
+
+    function dejarDeSeguir() {
+        objetivo = null;
+    }
+
+    // ========================================================
+    // ELIMINAR
+    // ========================================================
 
     function eliminar() {
         if (eliminado) return;
@@ -527,10 +462,12 @@ export function crearCarrito(scene, opciones = {}) {
         objetivo = null;
 
         scene.remove(grupo);
-
-        // No liberar las geometrías del GLB aquí porque podrían
-        // estar compartidas con otros objetos de la escena.
+        grupo.clear();
     }
+
+    // ========================================================
+    // API PÚBLICA
+    // ========================================================
 
     return {
         grupo,
@@ -538,6 +475,7 @@ export function crearCarrito(scene, opciones = {}) {
         actualizar,
         establecerPosicion,
         establecerRotacion,
+        dejarDeSeguir,
         eliminar,
 
         get cargado() {
@@ -546,6 +484,10 @@ export function crearCarrito(scene, opciones = {}) {
 
         get objetivo() {
             return objetivo;
+        },
+
+        get eliminado() {
+            return eliminado;
         }
     };
 }
