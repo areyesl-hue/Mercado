@@ -5,6 +5,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 // ============================================================
 // PRODUCTOS DEL SUPERMERCADO
 // OPTIMIZADO PARA MEJORAR EL RENDIMIENTO
+// BEBIDAS SOLAMENTE EN REFRIGERADORES
 // ============================================================
 
 export function crearProductosLacteos(scene) {
@@ -168,7 +169,7 @@ export function crearProductosLacteos(scene) {
     // ========================================================
     // 1. GÓNDOLAS
     // 6 unidades por producto.
-    // Se elimina completamente bebidas.glb.
+    // SIN BEBIDAS, REFRESCOS NI AGUA.
     // ========================================================
 
     const catalogoGondolas = [
@@ -218,6 +219,7 @@ export function crearProductosLacteos(scene) {
 
     // ========================================================
     // 2. REFRIGERADORES
+    // AQUÍ SE CONSERVAN LAS BEBIDAS.
     // ========================================================
 
     const catalogoRefrigeradores = [
