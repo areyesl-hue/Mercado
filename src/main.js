@@ -514,7 +514,6 @@ function crearLadrones() {
         }
     }
 }
-
 // ============================================================
 // VEHÍCULOS
 // ============================================================
@@ -525,11 +524,7 @@ function crearSistemaVehiculos() {
             modelos: [
                 '/modelos/auto.glb',
                 '/modelos/auto2.glb',
-                '/modelos/auto3.glb',
-                '/modelos/auto4.glb',
-                '/modelos/auto5.glb',
-                '/modelos/auto6.glb',
-                '/modelos/auto7.glb'
+                '/modelos/auto3.glb'
             ],
 
             escala: 1,
@@ -545,20 +540,30 @@ function crearSistemaVehiculos() {
             maximoPorTanda: 3,
 
             alEstacionar: datos => {
+                console.info('[VEHÍCULO] Auto estacionado:', datos);
                 crearClienteParaVehiculo(datos);
             },
 
             alSalir: datos => {
+                console.info('[VEHÍCULO] Auto saliendo:', datos);
+
                 const id = datos?.vehiculo?.id;
+
                 if (id !== undefined && id !== null) {
                     limpiarVisitaVehiculo(id);
                 }
             }
         });
 
-        console.info('Sistema de vehículos iniciado.');
+        if (!sistemaVehiculos) {
+            console.error('[VEHÍCULOS] No se pudo inicializar el sistema.');
+            return;
+        }
+
+        console.info('[VEHÍCULOS] Sistema iniciado correctamente.');
+
     } catch (error) {
-        console.error('Error al crear vehículos:', error);
+        console.error('[VEHÍCULOS] Error al crear vehículos:', error);
     }
 }
 
