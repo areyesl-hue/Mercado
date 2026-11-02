@@ -108,6 +108,48 @@ export function crearVehiculos(scene, opciones = {}) {
     let sistemaEliminado = false;
 
     // --------------------------------------------------------
+    // VARIEDAD DE MODELOS
+    // --------------------------------------------------------
+
+    let bolsaModelos = [];
+    let ultimoModelo = null;
+
+    function mezclarModelos() {
+        bolsaModelos = [...config.modelos];
+
+        for (let i = bolsaModelos.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+
+            [bolsaModelos[i], bolsaModelos[j]] =
+                [bolsaModelos[j], bolsaModelos[i]];
+        }
+
+        if (
+            bolsaModelos.length > 1 &&
+            bolsaModelos[bolsaModelos.length - 1] === ultimoModelo
+        ) {
+            [
+                bolsaModelos[0],
+                bolsaModelos[bolsaModelos.length - 1]
+            ] = [
+                bolsaModelos[bolsaModelos.length - 1],
+                bolsaModelos[0]
+            ];
+        }
+    }
+
+    function obtenerModeloAleatorio() {
+        if (bolsaModelos.length === 0) {
+            mezclarModelos();
+        }
+
+        const modelo = bolsaModelos.pop();
+        ultimoModelo = modelo;
+
+        return modelo;
+    }
+
+    // --------------------------------------------------------
     // PLAZAS
     // --------------------------------------------------------
 
@@ -125,7 +167,17 @@ export function crearVehiculos(scene, opciones = {}) {
     }
 
     function obtenerPlazaDisponible() {
-        return plazas.find(p => !p.ocupada && !p.reservada) || null;
+        const disponibles = plazas.filter(
+            p => !p.ocupada && !p.reservada
+        );
+
+        if (disponibles.length === 0) return null;
+
+        const indice = Math.floor(
+            Math.random() * disponibles.length
+        );
+
+        return disponibles[indice];
     }
 
     function obtenerVehiculoDisponible() {
@@ -148,8 +200,7 @@ export function crearVehiculos(scene, opciones = {}) {
             return null;
         }
 
-        const rutaModelo =
-            config.modelos[Math.floor(Math.random() * config.modelos.length)];
+        const rutaModelo = obtenerModeloAleatorio();
 
         const id = `VEHICULO_${++contadorVehiculos}`;
         const grupo = new THREE.Group();
