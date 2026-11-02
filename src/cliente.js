@@ -1948,6 +1948,11 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             const tramo = encontrarCamino(actual, punto);
 
             if (!tramo.length) {
+                console.warn(
+                    `[CLIENTE ${id}] No pudo calcular el tramo de puerta:`,
+                    punto
+                );
+
                 return [];
             }
 
@@ -2049,7 +2054,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
     function iniciarRegresoVehiculo(plaza, callback) {
 
-        if (!plaza) return false;
+        if (!plaza || eliminado) return false;
 
         if (
             estado === ESTADOS.REGRESANDO ||
@@ -2100,17 +2105,23 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         cambiarEstado(ESTADOS.REGRESANDO);
 
+        console.log(
+            `[CLIENTE ${id}] Regresando a su vehículo.`
+        );
+
         return true;
     }
 
     function finalizarRegreso() {
 
+        if (estado !== ESTADOS.REGRESANDO) return;
+
         cambiarEstado(ESTADOS.FINALIZADO);
 
-        if (callbackRegreso) {
+        const callback = callbackRegreso;
+        callbackRegreso = null;
 
-            const callback = callbackRegreso;
-            callbackRegreso = null;
+        if (typeof callback === 'function') {
 
             try {
                 callback(api);
@@ -2331,10 +2342,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
                 break;
             }
 
-            // =================================================
-            // CORRECCIÓN PRINCIPAL: FINALIZAR PAGO
-            // =================================================
-
             case ESTADOS.PAGANDO: {
 
                 animarPagarProcedural();
@@ -2354,12 +2361,9 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
                     } else {
 
-                        // Primero recuperamos el callback.
                         const callback = callbackPagoPendiente;
                         callbackPagoPendiente = null;
 
-                        // Ejecutamos el callback mientras el cliente
-                        // todavía está en estado PAGANDO.
                         if (typeof callback === 'function') {
 
                             try {
@@ -2375,9 +2379,8 @@ export function crearClienteSupermercado(scene, opciones = {}) {
                             }
                         }
 
-                        // IMPORTANTE:
-                        // El callback puede haber iniciado el regreso.
-                        // Si el estado cambió a REGRESANDO, no lo tocamos.
+                        // El callback puede iniciar el regreso.
+                        // No sobrescribir REGRESANDO con FINALIZADO.
                         if (estado === ESTADOS.PAGANDO) {
                             cambiarEstado(ESTADOS.FINALIZADO);
                         }
