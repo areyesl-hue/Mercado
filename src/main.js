@@ -525,18 +525,22 @@ function crearSistemaVehiculos() {
             modelos: [
                 '/modelos/auto.glb',
                 '/modelos/auto2.glb',
-                '/modelos/auto3.glb'
+                '/modelos/auto3.glb',
+                '/modelos/auto4.glb',
+                '/modelos/auto5.glb',
+                '/modelos/auto6.glb',
+                '/modelos/auto7.glb'
             ],
 
             escala: 1,
             longitudVehiculo: 4.3,
             anchoVehiculo: 1.9,
 
-            velocidad: 5.5,
-            aceleracion: 3.5,
+            velocidad: 6.0,
+            aceleracion: 4.0,
             velocidadMaxima: 7,
 
-            tiempoEntreLlegadas: 7,
+            tiempoEntreLlegadas: 5,
             cochesIniciales: 3,
             maximoPorTanda: 3,
 
