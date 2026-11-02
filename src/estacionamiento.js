@@ -3,10 +3,17 @@ import * as THREE from 'three';
 
 // ============================================================
 // ESTACIONAMIENTO DEL SUPERMERCADO
-// Compatible con vehiculos.js y main.js
-// Coordenadas globales:
-// X: -30 a 30
-// Z:  25 a 80
+// Three.js + Vite
+//
+// Compatible con vehiculos.js actualizado.
+//
+// DISTRIBUCIÓN:
+// X: -38 a 38
+// Z: 25 a 73
+//
+// 24 cajones: 6 columnas x 4 filas
+// Carril posterior: Z = 67
+// Acceso y salida: Z = 75
 // ============================================================
 
 export function crearEstacionamiento(scene) {
@@ -79,9 +86,26 @@ export function crearEstacionamiento(scene) {
     // FUNCIONES AUXILIARES
     // --------------------------------------------------------
 
-    function agregarCaja(nombre, ancho, alto, largo, x, y, z, material) {
-        const geometria = new THREE.BoxGeometry(ancho, alto, largo);
-        const malla = new THREE.Mesh(geometria, material);
+    function agregarCaja(
+        nombre,
+        ancho,
+        alto,
+        largo,
+        x,
+        y,
+        z,
+        material
+    ) {
+        const geometria = new THREE.BoxGeometry(
+            ancho,
+            alto,
+            largo
+        );
+
+        const malla = new THREE.Mesh(
+            geometria,
+            material
+        );
 
         malla.name = nombre;
         malla.position.set(x, y, z);
@@ -89,10 +113,21 @@ export function crearEstacionamiento(scene) {
         malla.castShadow = false;
 
         estacionamiento.add(malla);
+
         return malla;
     }
 
-    function agregarCilindro(nombre, radioSuperior, radioInferior, alto, x, y, z, material, segmentos = 12) {
+    function agregarCilindro(
+        nombre,
+        radioSuperior,
+        radioInferior,
+        alto,
+        x,
+        y,
+        z,
+        material,
+        segmentos = 12
+    ) {
         const geometria = new THREE.CylinderGeometry(
             radioSuperior,
             radioInferior,
@@ -100,11 +135,16 @@ export function crearEstacionamiento(scene) {
             segmentos
         );
 
-        const malla = new THREE.Mesh(geometria, material);
+        const malla = new THREE.Mesh(
+            geometria,
+            material
+        );
+
         malla.name = nombre;
         malla.position.set(x, y, z);
 
         estacionamiento.add(malla);
+
         return malla;
     }
 
@@ -173,13 +213,12 @@ export function crearEstacionamiento(scene) {
 
     // --------------------------------------------------------
     // CAJONES DE ESTACIONAMIENTO
-    // 6 columnas x 4 filas = 24 espacios
-    // Las posiciones Z coinciden con vehiculos.js:
-    // 32, 39, 46 y 53.
+    // 6 COLUMNAS x 4 FILAS = 24 CAJONES
+    // Coordenadas sincronizadas con vehiculos.js
     // --------------------------------------------------------
 
     const posicionesX = [-24, -16, -8, 8, 16, 24];
-    const posicionesZ = [32, 39, 46, 53];
+    const posicionesZ = [36, 43, 50, 57];
 
     const anchoCajon = 7;
     const largoCajon = 7;
@@ -188,11 +227,11 @@ export function crearEstacionamiento(scene) {
         posicionesX.forEach((x, columna) => {
             const id = `CAJON_F${fila + 1}_C${columna + 1}`;
 
-            // Líneas laterales
+            // Línea izquierda
             agregarCaja(
                 `${id}_LINEA_IZQUIERDA`,
                 0.12,
-                0.025,
+                0.035,
                 largoCajon,
                 x - anchoCajon / 2,
                 0.025,
@@ -200,10 +239,11 @@ export function crearEstacionamiento(scene) {
                 materiales.linea
             );
 
+            // Línea derecha
             agregarCaja(
                 `${id}_LINEA_DERECHA`,
                 0.12,
-                0.025,
+                0.035,
                 largoCajon,
                 x + anchoCajon / 2,
                 0.025,
@@ -211,11 +251,11 @@ export function crearEstacionamiento(scene) {
                 materiales.linea
             );
 
-            // Línea de fondo
+            // Fondo del cajón
             agregarCaja(
                 `${id}_LINEA_FONDO`,
                 anchoCajon,
-                0.025,
+                0.035,
                 0.12,
                 x,
                 0.025,
@@ -225,19 +265,46 @@ export function crearEstacionamiento(scene) {
         });
     });
 
-    // Separación de circulación entre filas
-    [35.5, 42.5, 49.5].forEach((z, i) => {
-        agregarCaja(
-            `SEPARADOR_CIRCULACION_${i + 1}`,
-            58,
-            0.025,
-            0.10,
-            0,
-            0.025,
-            z,
-            materiales.lineaAmarilla
-        );
-    });
+    // --------------------------------------------------------
+    // CARRIL POSTERIOR DE CIRCULACIÓN
+    // Los autos recorren este pasillo para estacionarse.
+    // Z = 67, igual que vehiculos.js
+    // --------------------------------------------------------
+
+    agregarCaja(
+        'CARRIL_CIRCULACION_POSTERIOR',
+        58,
+        0.025,
+        5,
+        0,
+        0.025,
+        67,
+        materiales.concreto
+    );
+
+    // Línea superior
+    agregarCaja(
+        'CARRIL_LINEA_SUPERIOR',
+        58,
+        0.035,
+        0.12,
+        0,
+        0.055,
+        69.5,
+        materiales.lineaAmarilla
+    );
+
+    // Línea inferior
+    agregarCaja(
+        'CARRIL_LINEA_INFERIOR',
+        58,
+        0.035,
+        0.12,
+        0,
+        0.055,
+        64.5,
+        materiales.lineaAmarilla
+    );
 
     // --------------------------------------------------------
     // FLECHAS DE CIRCULACIÓN
@@ -256,26 +323,47 @@ export function crearEstacionamiento(scene) {
         forma.closePath();
 
         const geometria = new THREE.ShapeGeometry(forma);
-        const flecha = new THREE.Mesh(geometria, materiales.lineaAmarilla);
+
+        const flecha = new THREE.Mesh(
+            geometria,
+            materiales.lineaAmarilla
+        );
 
         flecha.name = nombre;
         flecha.rotation.x = -Math.PI / 2;
         flecha.rotation.z = rotacion;
-        flecha.position.set(x, 0.035, z);
+        flecha.position.set(x, 0.055, z);
 
         estacionamiento.add(flecha);
+
+        return flecha;
     }
 
-    crearFlecha(-5, 36, 0, 'FLECHA_CIRCULACION_1');
-    crearFlecha(5, 36, Math.PI, 'FLECHA_CIRCULACION_2');
-    crearFlecha(-5, 57, 0, 'FLECHA_CIRCULACION_3');
-    crearFlecha(5, 57, Math.PI, 'FLECHA_CIRCULACION_4');
+    crearFlecha(
+        -12,
+        67,
+        Math.PI / 2,
+        'FLECHA_CARRIL_1'
+    );
+
+    crearFlecha(
+        12,
+        67,
+        Math.PI / 2,
+        'FLECHA_CARRIL_2'
+    );
 
     // --------------------------------------------------------
     // JARDINERAS
     // --------------------------------------------------------
 
-    function crearJardinera(x, z, ancho, largo, numero) {
+    function crearJardinera(
+        x,
+        z,
+        ancho,
+        largo,
+        numero
+    ) {
         agregarCaja(
             `JARDINERA_${numero}_BASE`,
             ancho,
@@ -298,10 +386,18 @@ export function crearEstacionamiento(scene) {
             materiales.jardin
         );
 
-        const cantidad = Math.max(2, Math.floor(ancho / 2));
+        const cantidad = Math.max(
+            2,
+            Math.floor(ancho / 2)
+        );
 
         for (let i = 0; i < cantidad; i++) {
-            const px = x - ancho / 2 + 0.8 + i * ((ancho - 1.6) / Math.max(1, cantidad - 1));
+            const px =
+                x - ancho / 2 + 0.8 +
+                i * (
+                    (ancho - 1.6) /
+                    Math.max(1, cantidad - 1)
+                );
 
             agregarCilindro(
                 `JARDINERA_${numero}_TRONCO_${i}`,
@@ -316,19 +412,27 @@ export function crearEstacionamiento(scene) {
             );
 
             const copa = new THREE.Mesh(
-                new THREE.SphereGeometry(0.85, 10, 8),
+                new THREE.SphereGeometry(
+                    0.85,
+                    10,
+                    8
+                ),
                 materiales.verde
             );
 
-            copa.name = `JARDINERA_${numero}_ARBOL_${i}`;
+            copa.name =
+                `JARDINERA_${numero}_ARBOL_${i}`;
+
             copa.position.set(px, 2.05, z);
             copa.scale.set(1, 1.15, 1);
+
             estacionamiento.add(copa);
         }
     }
 
     crearJardinera(-33, 37, 4, 5, 1);
     crearJardinera(33, 37, 4, 5, 2);
+
     crearJardinera(-33, 65, 4, 5, 3);
     crearJardinera(33, 65, 4, 5, 4);
 
@@ -384,9 +488,21 @@ export function crearEstacionamiento(scene) {
             materiales.luz
         );
 
-        const luz = new THREE.PointLight(0xffe3ae, 35, 17, 2);
-        luz.position.set(x + 1.1, 5.55, z);
+        const luz = new THREE.PointLight(
+            0xffe3ae,
+            35,
+            17,
+            2
+        );
+
+        luz.position.set(
+            x + 1.1,
+            5.55,
+            z
+        );
+
         luz.castShadow = false;
+
         estacionamiento.add(luz);
     }
 
@@ -433,28 +549,58 @@ export function crearEstacionamiento(scene) {
     // ROTULACIÓN
     // --------------------------------------------------------
 
-    function crearRotulo(texto, x, z, color = '#ffffff') {
+    function crearRotulo(
+        texto,
+        x,
+        z,
+        color = '#ffffff'
+    ) {
         const canvas = document.createElement('canvas');
+
         canvas.width = 512;
         canvas.height = 128;
 
         const ctx = canvas.getContext('2d');
 
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.clearRect(
+            0,
+            0,
+            canvas.width,
+            canvas.height
+        );
+
         ctx.fillStyle = 'rgba(20, 30, 40, 0.88)';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.fillRect(
+            0,
+            0,
+            canvas.width,
+            canvas.height
+        );
 
         ctx.strokeStyle = '#f5c542';
         ctx.lineWidth = 8;
-        ctx.strokeRect(4, 4, canvas.width - 8, canvas.height - 8);
+
+        ctx.strokeRect(
+            4,
+            4,
+            canvas.width - 8,
+            canvas.height - 8
+        );
 
         ctx.fillStyle = color;
         ctx.font = 'bold 58px Arial';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(texto, canvas.width / 2, canvas.height / 2);
+
+        ctx.fillText(
+            texto,
+            canvas.width / 2,
+            canvas.height / 2
+        );
 
         const textura = new THREE.CanvasTexture(canvas);
+
         textura.colorSpace = THREE.SRGBColorSpace;
 
         const material = new THREE.MeshBasicMaterial({
@@ -471,22 +617,37 @@ export function crearEstacionamiento(scene) {
         placa.name = `ROTULO_${texto}`;
         placa.position.set(x, 3.5, z);
         placa.rotation.y = Math.PI;
+
         estacionamiento.add(placa);
     }
 
-    crearRotulo('ESTACIONAMIENTO', 0, 28);
-    crearRotulo('SALIDA', 0, 78, '#ffe28a');
+    crearRotulo(
+        'ESTACIONAMIENTO',
+        0,
+        28
+    );
+
+    crearRotulo(
+        'SALIDA',
+        0,
+        78,
+        '#ffe28a'
+    );
 
     // --------------------------------------------------------
-    // GRUPO FINAL
+    // AGREGAR A LA ESCENA
     // --------------------------------------------------------
 
     scene.add(estacionamiento);
 
-    console.log('Estacionamiento creado correctamente.');
-    console.log('24 cajones disponibles.');
-    console.log('6 postes de iluminación.');
-    console.log('6 jardineras.');
+    console.log('======================================');
+    console.log('ESTACIONAMIENTO CREADO');
+    console.log('24 cajones disponibles');
+    console.log('6 jardineras');
+    console.log('6 postes de iluminación');
+    console.log('Carril posterior en Z = 67');
+    console.log('Coordenadas sincronizadas con vehiculos.js');
+    console.log('======================================');
 
     return estacionamiento;
 }
