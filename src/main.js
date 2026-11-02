@@ -56,7 +56,7 @@ const CONFIG = {
 const CONFIG_CLIENTES = [
     {
         nombre: 'Cliente1',
-        modelo: '/modelos/Cliente2.glb',
+        modelo: '/modelos/Cliente1.glb',
         ruta: [
             { x: -27, z: 18 },
             { x: -23, z: 15 },
@@ -149,7 +149,7 @@ const CONFIG_CLIENTES = [
     },
     {
         nombre: 'Clienta3',
-        modelo: '/modelos/Clienta1.glb',
+        modelo: '/modelos/Clienta3.glb',
         ruta: [
             { x: 24, z: -6 },
             { x: 17, z: -10 },
