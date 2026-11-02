@@ -433,7 +433,7 @@ export function crearMobiliario(scene, mercado = null) {
 
     // ============================================================
     // 11. CAJAS REGISTRADORAS
-    // CUATRO CAJAS CON ACCESO FRONTAL
+    // CUATRO CAJAS EN LA ZONA FRONTAL DE PAGO
     // ============================================================
 
     function crearCajaRegistradora(padre, nombre, x, z, numero) {
@@ -477,8 +477,8 @@ export function crearMobiliario(scene, mercado = null) {
             { tipo: 'caja' }
         );
 
-        // Coordenadas locales del punto de atención.
-        // El cliente se coloca delante del mostrador.
+        // Punto de atención delante del mostrador.
+        // Los clientes deben llegar aquí para pagar.
         g.userData.posicionAtencion = {
             x: 0,
             y: 0,
@@ -491,11 +491,12 @@ export function crearMobiliario(scene, mercado = null) {
     {
         const dep = departamento('11_CAJAS_REGISTRADORAS');
 
+        // Distribución frontal de las cuatro cajas.
         const posiciones = [
-            [-17, 22.5],
-            [-12, 22.5],
-            [12, 22.5],
-            [17, 22.5]
+            [-17, 21.5],
+            [-12, 21.5],
+            [12, 21.5],
+            [17, 21.5]
         ];
 
         posiciones.forEach(([x, z], i) => {
@@ -815,7 +816,7 @@ export function crearMobiliario(scene, mercado = null) {
 
     // ============================================================
     // 19. FILAS DE CAJAS
-    // POSTES SIN BLOQUEAR EL ACCESO A LOS MOSTRADORES
+    // POSTES LATERALES SIN BLOQUEAR EL ACCESO
     // ============================================================
 
     {
@@ -922,12 +923,12 @@ export function crearMobiliario(scene, mercado = null) {
         );
     });
 
-    // Cuatro luminarias alineadas con las cuatro cajas.
+    // Luminarias sobre las cuatro cajas.
     [
-        [-17, 3, 22.5],
-        [-12, 3, 22.5],
-        [12, 3, 22.5],
-        [17, 3, 22.5]
+        [-17, 3, 21.5],
+        [-12, 3, 21.5],
+        [12, 3, 21.5],
+        [17, 3, 21.5]
     ].forEach(([x, y, z], i) => {
         crearLuminaria(
             `Luminaria_cajas_${i + 1}`,
@@ -1053,7 +1054,7 @@ export function crearMobiliario(scene, mercado = null) {
     };
 
     // ============================================================
-    // OBTENER CAJAS REGISTRADORAS Y PUNTOS DE ATENCIÓN
+    // OBTENER LAS CUATRO CAJAS Y SUS PUNTOS DE ATENCIÓN
     // ============================================================
 
     mobiliario.userData.obtenerCajas = () => {
