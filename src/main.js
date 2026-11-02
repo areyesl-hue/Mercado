@@ -1,4 +1,3 @@
-
 import * as THREE from 'three';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 
@@ -43,7 +42,13 @@ const CONFIG = {
     tiempoCompraAuto: 60,
     maximoProductosCliente: 3,
 
-    posicionCaja: { x: 0, z: 20 },
+    // CUATRO CAJAS REGISTRADORAS
+    cajasRegistradoras: [
+        { id: 1, x: -17, z: 23.95 },
+        { id: 2, x: -12, z: 23.95 },
+        { id: 3, x: 12, z: 23.95 },
+        { id: 4, x: 17, z: 23.95 }
+    ],
 
     distanciaRegistro: 0.5,
     maximoRegistros: 20000
@@ -271,6 +276,10 @@ const ladronesSupermercado = [];
 const carritosClientes = [];
 
 const visitantesPorVehiculo = new Map();
+
+// Control de ocupación de cajas.
+const cajasOcupadas = new Map();
+
 const trayectoriaJugador = [];
 const ticketsGenerados = [];
 
@@ -285,6 +294,57 @@ const vectorAdelante = new THREE.Vector3();
 const vectorDerecha = new THREE.Vector3();
 const movimientoJugador = new THREE.Vector3();
 const ejeVertical = new THREE.Vector3(0, 1, 0);
+
+// ============================================================
+// SISTEMA DE RESERVACIÓN DE CAJAS
+// ============================================================
+
+function obtenerCajaDisponible() {
+    for (const caja of CONFIG.cajasRegistradoras) {
+        if (!cajasOcupadas.has(caja.id)) {
+            return caja;
+        }
+    }
+
+    return null;
+}
+
+function reservarCaja(visita) {
+    if (!visita) return null;
+
+    if (visita.cajaAsignada) {
+        return visita.cajaAsignada;
+    }
+
+    const caja = obtenerCajaDisponible();
+
+    if (!caja) return null;
+
+    cajasOcupadas.set(caja.id, visita.idVehiculo);
+    visita.cajaAsignada = caja;
+
+    console.info(
+        `[CAJA ${caja.id}] Reservada para ${visita.nombreCliente}.`
+    );
+
+    return caja;
+}
+
+function liberarCajaVisitante(visita) {
+    if (!visita?.cajaAsignada) return;
+
+    const caja = visita.cajaAsignada;
+
+    if (cajasOcupadas.get(caja.id) === visita.idVehiculo) {
+        cajasOcupadas.delete(caja.id);
+
+        console.info(
+            `[CAJA ${caja.id}] Liberada por ${visita.nombreCliente}.`
+        );
+    }
+
+    visita.cajaAsignada = null;
+}
 
 // ============================================================
 // INICIO
@@ -314,6 +374,7 @@ function iniciar() {
 
     console.info('Supermercado 3D iniciado.');
     console.info(`Cámaras de seguridad: ${CONFIG_CAMARAS.length}`);
+    console.info(`Cajas registradoras: ${CONFIG.cajasRegistradoras.length}`);
 }
 
 // ============================================================
@@ -679,10 +740,11 @@ function crearClienteParaVehiculo(datos) {
 
             pagoSolicitado: false,
             salidaSolicitada: false,
-            intentosSalida: 0
+            intentosSalida: 0,
+
+            cajaAsignada: null
         };
 
-        // Registrar antes de iniciar el movimiento.
         visitantesPorVehiculo.set(idVehiculo, visita);
         clientesSupermercado.push(cliente);
 
@@ -780,21 +842,18 @@ function retirarClienteYCarritoDeVisita(visita) {
     const cliente = visita.cliente;
     const carrito = visita.carrito;
 
-    // Retirar el carrito de la escena.
     try {
         carrito?.eliminar?.();
     } catch (error) {
         console.warn('No se pudo retirar el carrito:', error);
     }
 
-    // Retirar el personaje de la escena.
     try {
         cliente?.eliminar?.();
     } catch (error) {
         console.warn('No se pudo retirar el cliente:', error);
     }
 
-    // Quitar referencias de las listas de actualización.
     const indiceCliente = clientesSupermercado.indexOf(cliente);
 
     if (indiceCliente !== -1) {
@@ -807,8 +866,6 @@ function retirarClienteYCarritoDeVisita(visita) {
         carritosClientes.splice(indiceCarrito, 1);
     }
 
-    // Mantener el nombre y el registro de la visita.
-    // El registro se elimina cuando el vehículo termina de salir.
     visita.cliente = null;
     visita.carrito = null;
 
@@ -825,6 +882,9 @@ function limpiarVisitaVehiculo(idVehiculo) {
     const visita = visitantesPorVehiculo.get(idVehiculo);
 
     if (!visita) return;
+
+    // Liberar cualquier caja que haya quedado reservada.
+    liberarCajaVisitante(visita);
 
     try {
         visita.carrito?.eliminar?.();
@@ -944,6 +1004,7 @@ function obtenerComprasCliente(cliente) {
 
     if (typeof cliente?.obtenerResumen === 'function') {
         const resumen = cliente.obtenerResumen();
+
         if (Array.isArray(resumen?.compras)) return resumen.compras;
         if (Array.isArray(resumen?.productos)) return resumen.productos;
     }
@@ -962,6 +1023,13 @@ function actualizarFasesVisitantes(delta) {
         const cliente = visita.cliente;
 
         if (!cliente || cliente.eliminado) continue;
+
+        // Si espera una caja, intentar reservar una disponible.
+        if (visita.fase === 'esperandoCaja') {
+            iniciarPagoVisitante(visita);
+            continue;
+        }
+
         if (visita.fase !== 'comprando') continue;
         if (visita.pagoSolicitado) continue;
 
@@ -980,7 +1048,6 @@ function actualizarFasesVisitantes(delta) {
         if (!maximoComprado && !tiempoAgotado) continue;
 
         visita.pagoSolicitado = true;
-        visita.fase = 'caja';
 
         iniciarPagoVisitante(visita);
     }
@@ -1003,30 +1070,67 @@ function actualizarFasesVisitantes(delta) {
 // ============================================================
 
 function iniciarPagoVisitante(visita) {
+    if (!visita) return;
+
     const cliente = visita.cliente;
 
     if (!cliente || typeof cliente.iniciarPago !== 'function') {
         visita.fase = 'errorPago';
+        visita.pagoSolicitado = false;
+
         console.error('El cliente no tiene iniciarPago().');
         return;
     }
 
-    mostrarMensaje(`${cliente.nombre} se dirige a la caja.`);
+    // Reservar una caja libre.
+    const caja = reservarCaja(visita);
+
+    // Si no hay cajas, esperar.
+    if (!caja) {
+        visita.fase = 'esperandoCaja';
+        visita.pagoSolicitado = false;
+
+        mostrarMensaje(
+            `${visita.nombreCliente} está esperando una caja libre.`
+        );
+
+        return;
+    }
+
+    visita.fase = 'caja';
+    visita.pagoSolicitado = true;
+
+    mostrarMensaje(
+        `${visita.nombreCliente} se dirige a la caja ${caja.id}.`
+    );
 
     try {
         const iniciado = cliente.iniciarPago(
-            CONFIG.posicionCaja,
-            ticket => finalizarPagoVisitante(visita, ticket)
+            {
+                x: caja.x,
+                z: caja.z
+            },
+            ticket => {
+                liberarCajaVisitante(visita);
+                finalizarPagoVisitante(visita, ticket);
+            }
         );
 
         if (iniciado === false) {
+            liberarCajaVisitante(visita);
+
             visita.fase = 'errorPago';
             visita.pagoSolicitado = false;
+
             mostrarMensaje('No se pudo iniciar el recorrido a caja.');
         }
+
     } catch (error) {
+        liberarCajaVisitante(visita);
+
         visita.fase = 'errorPago';
         visita.pagoSolicitado = false;
+
         console.error('Error al iniciar pago:', error);
     }
 }
@@ -1037,6 +1141,9 @@ function iniciarPagoVisitante(visita) {
 
 function finalizarPagoVisitante(visita, ticket) {
     if (!visita || visita.fase !== 'caja') return;
+
+    // La caja queda libre al terminar el pago.
+    liberarCajaVisitante(visita);
 
     visita.fase = 'regresando';
 
@@ -1068,18 +1175,14 @@ function finalizarPagoVisitante(visita, ticket) {
             () => {
                 if (visita.fase !== 'regresando') return;
 
-                // El cliente ya llegó a su vehículo.
                 visita.fase = 'esperandoSalida';
 
                 mostrarMensaje(
                     `${visita.nombreCliente} regresó a su vehículo.`
                 );
 
-                // CORRECCIÓN:
-                // Retirar personaje y carrito ANTES de que salga el auto.
                 retirarClienteYCarritoDeVisita(visita);
 
-                // El vehículo sigue existiendo y realiza su salida normal.
                 solicitarSalidaVisitante(visita);
             }
         );
