@@ -46,10 +46,10 @@ const CONFIG = {
     // CUATRO CAJAS REGISTRADORAS
     // Coordenadas de los puntos donde pagan los clientes.
     cajasRegistradoras: [
-        { id: 1, x: -18, z: 22.3 },
-        { id: 2, x: -6, z: 22.3 },
-        { id: 3, x: 6, z: 22.3 },
-        { id: 4, x: 18, z: 22.3 }
+    { id: 1, x: -17, z: 26.95 },
+    { id: 2, x: -12, z: 26.95 },
+    { id: 3, x: 12, z: 26.95 },
+    { id: 4, x: 17, z: 26.95 }
     ],
 
     distanciaRegistro: 0.5,
