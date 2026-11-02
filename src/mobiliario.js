@@ -433,7 +433,7 @@ export function crearMobiliario(scene, mercado = null) {
 
     // ============================================================
     // 11. CAJAS REGISTRADORAS
-    // CUATRO CAJAS
+    // CUATRO CAJAS CON ACCESO FRONTAL
     // ============================================================
 
     function crearCajaRegistradora(padre, nombre, x, z, numero) {
@@ -468,12 +468,21 @@ export function crearMobiliario(scene, mercado = null) {
 
         g.userData.numeroCaja = numero;
 
-        registrarColision(nombre, x, z, 3.05, 1.45, { tipo: 'caja' });
-
-        g.userData.posicionAtencion = {
+        registrarColision(
+            nombre,
             x,
+            z,
+            3.05,
+            1.45,
+            { tipo: 'caja' }
+        );
+
+        // Coordenadas locales del punto de atención.
+        // El cliente se coloca delante del mostrador.
+        g.userData.posicionAtencion = {
+            x: 0,
             y: 0,
-            z: z + 1.45
+            z: 1.45
         };
 
         return g;
@@ -493,7 +502,9 @@ export function crearMobiliario(scene, mercado = null) {
             crearCajaRegistradora(
                 dep,
                 `Caja_registradora_${String(i + 1).padStart(2, '0')}`,
-                x, z, i + 1
+                x,
+                z,
+                i + 1
             );
         });
     }
@@ -804,6 +815,7 @@ export function crearMobiliario(scene, mercado = null) {
 
     // ============================================================
     // 19. FILAS DE CAJAS
+    // POSTES SIN BLOQUEAR EL ACCESO A LOS MOSTRADORES
     // ============================================================
 
     {
@@ -811,10 +823,10 @@ export function crearMobiliario(scene, mercado = null) {
 
         const posicionesPostes = [
             [-26, 25.5],
-            [-19, 25.5],
-            [-14, 25.5],
-            [14, 25.5],
-            [19, 25.5],
+            [-22, 25.5],
+            [-7, 25.5],
+            [7, 25.5],
+            [22, 25.5],
             [26, 25.5]
         ];
 
@@ -1040,9 +1052,13 @@ export function crearMobiliario(scene, mercado = null) {
         almacenZ: -29
     };
 
-    // Obtener las cuatro cajas y sus posiciones globales.
+    // ============================================================
+    // OBTENER CAJAS REGISTRADORAS Y PUNTOS DE ATENCIÓN
+    // ============================================================
+
     mobiliario.userData.obtenerCajas = () => {
         const dep = departamentos['11_CAJAS_REGISTRADORAS'];
+
         if (!dep) return [];
 
         return dep.children.map(cajaGrupo => {
@@ -1051,17 +1067,13 @@ export function crearMobiliario(scene, mercado = null) {
 
             const atencionLocal = cajaGrupo.userData.posicionAtencion;
 
-            let posicionAtencion = null;
+            const posicionAtencion = new THREE.Vector3(
+                atencionLocal.x,
+                atencionLocal.y,
+                atencionLocal.z
+            );
 
-            if (atencionLocal) {
-                posicionAtencion = new THREE.Vector3(
-                    atencionLocal.x,
-                    atencionLocal.y,
-                    atencionLocal.z
-                );
-
-                cajaGrupo.localToWorld(posicionAtencion);
-            }
+            cajaGrupo.localToWorld(posicionAtencion);
 
             return {
                 numero: cajaGrupo.userData.numeroCaja,
@@ -1070,6 +1082,10 @@ export function crearMobiliario(scene, mercado = null) {
             };
         });
     };
+
+    // ============================================================
+    // AGREGAR A LA ESCENA
+    // ============================================================
 
     scene.add(mobiliario);
 
