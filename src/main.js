@@ -1,3 +1,4 @@
+
 import * as THREE from 'three';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 
@@ -43,11 +44,12 @@ const CONFIG = {
     maximoProductosCliente: 3,
 
     // CUATRO CAJAS REGISTRADORAS
+    // Coordenadas de los puntos donde pagan los clientes.
     cajasRegistradoras: [
-        { id: 1, x: -17, z: 23.95 },
-        { id: 2, x: -12, z: 23.95 },
-        { id: 3, x: 12, z: 23.95 },
-        { id: 4, x: 17, z: 23.95 }
+        { id: 1, x: -18, z: 22.3 },
+        { id: 2, x: -6, z: 22.3 },
+        { id: 3, x: 6, z: 22.3 },
+        { id: 4, x: 18, z: 22.3 }
     ],
 
     distanciaRegistro: 0.5,
@@ -276,8 +278,6 @@ const ladronesSupermercado = [];
 const carritosClientes = [];
 
 const visitantesPorVehiculo = new Map();
-
-// Control de ocupación de cajas.
 const cajasOcupadas = new Map();
 
 const trayectoriaJugador = [];
@@ -296,37 +296,26 @@ const movimientoJugador = new THREE.Vector3();
 const ejeVertical = new THREE.Vector3(0, 1, 0);
 
 // ============================================================
-// SISTEMA DE RESERVACIÓN DE CAJAS
+// RESERVACIÓN DE CAJAS
 // ============================================================
 
 function obtenerCajaDisponible() {
-    for (const caja of CONFIG.cajasRegistradoras) {
-        if (!cajasOcupadas.has(caja.id)) {
-            return caja;
-        }
-    }
-
-    return null;
+    return CONFIG.cajasRegistradoras.find(
+        caja => !cajasOcupadas.has(caja.id)
+    ) ?? null;
 }
 
 function reservarCaja(visita) {
     if (!visita) return null;
-
-    if (visita.cajaAsignada) {
-        return visita.cajaAsignada;
-    }
+    if (visita.cajaAsignada) return visita.cajaAsignada;
 
     const caja = obtenerCajaDisponible();
-
     if (!caja) return null;
 
     cajasOcupadas.set(caja.id, visita.idVehiculo);
     visita.cajaAsignada = caja;
 
-    console.info(
-        `[CAJA ${caja.id}] Reservada para ${visita.nombreCliente}.`
-    );
-
+    console.info(`[CAJA ${caja.id}] Reservada para ${visita.nombreCliente}.`);
     return caja;
 }
 
@@ -337,10 +326,7 @@ function liberarCajaVisitante(visita) {
 
     if (cajasOcupadas.get(caja.id) === visita.idVehiculo) {
         cajasOcupadas.delete(caja.id);
-
-        console.info(
-            `[CAJA ${caja.id}] Liberada por ${visita.nombreCliente}.`
-        );
+        console.info(`[CAJA ${caja.id}] Liberada.`);
     }
 
     visita.cajaAsignada = null;
@@ -373,8 +359,8 @@ function iniciar() {
     iniciarAnimacion();
 
     console.info('Supermercado 3D iniciado.');
-    console.info(`Cámaras de seguridad: ${CONFIG_CAMARAS.length}`);
-    console.info(`Cajas registradoras: ${CONFIG.cajasRegistradoras.length}`);
+    console.info(`Cámaras: ${CONFIG_CAMARAS.length}`);
+    console.info(`Cajas: ${CONFIG.cajasRegistradoras.length}`);
 }
 
 // ============================================================
@@ -518,11 +504,7 @@ function crearControles() {
     controles.addEventListener('unlock', limpiarTeclas);
 
     renderizador.domElement.addEventListener('click', () => {
-        if (
-            juegoIniciado &&
-            vistaSeguridad === null &&
-            !controles.isLocked
-        ) {
+        if (juegoIniciado && vistaSeguridad === null && !controles.isLocked) {
             controles.lock();
         }
     });
@@ -540,24 +522,19 @@ function crearLadrones() {
             const ladron = crearClienteSupermercado(escena, {
                 id: config.nombre,
                 modelo: config.modelo,
-
                 posicion: {
                     x: primerPunto.x,
                     y: 0,
                     z: primerPunto.z
                 },
-
                 velocidad: config.velocidad,
                 escala: 1,
-
                 ruta: config.ruta.slice(1),
                 repetirRuta: true,
-
                 probabilidadCompra: 0,
                 tiempoExaminar: 0,
                 distanciaRecoger: 0,
                 pausaEntreCompras: 0,
-
                 distanciaDestino: 0.8,
                 radioColision: 0.42
             });
@@ -566,7 +543,6 @@ function crearLadrones() {
 
             ladron.nombre = config.nombre;
             ladron._esLadron = true;
-
             ladronesSupermercado.push(ladron);
 
             console.info(`[LADRÓN] ${config.nombre} creado.`);
@@ -592,15 +568,12 @@ function crearSistemaVehiculos() {
                 '/modelos/auto6.glb',
                 '/modelos/auto7.glb'
             ],
-
             escala: 1,
             longitudVehiculo: 4.3,
             anchoVehiculo: 1.9,
-
-            velocidad: 6.0,
-            aceleracion: 4.0,
+            velocidad: 6,
+            aceleracion: 4,
             velocidadMaxima: 7,
-
             tiempoEntreLlegadas: 5,
             cochesIniciales: 3,
             maximoPorTanda: 3,
@@ -612,7 +585,6 @@ function crearSistemaVehiculos() {
 
             alSalir: datos => {
                 console.info('[VEHÍCULO] Auto saliendo:', datos);
-
                 const id = datos?.vehiculo?.id;
 
                 if (id !== undefined && id !== null) {
@@ -627,7 +599,6 @@ function crearSistemaVehiculos() {
         }
 
         console.info('[VEHÍCULOS] Sistema iniciado correctamente.');
-
     } catch (error) {
         console.error('[VEHÍCULOS] Error al crear vehículos:', error);
     }
@@ -645,10 +616,7 @@ function crearClienteParaVehiculo(datos) {
         return;
     }
 
-    if (visitantesPorVehiculo.has(idVehiculo)) {
-        console.warn(`Ya existe una visita para ${idVehiculo}.`);
-        return;
-    }
+    if (visitantesPorVehiculo.has(idVehiculo)) return;
 
     const config = CONFIG_CLIENTES[
         siguienteModeloCliente % CONFIG_CLIENTES.length
@@ -669,20 +637,16 @@ function crearClienteParaVehiculo(datos) {
             id: `VISITANTE_${idVehiculo}`,
             modelo: config.modelo,
             posicion: posicionInicio,
-
             velocidad: CONFIG.velocidadCliente,
             escala: 1,
-
             ruta: config.ruta,
             repetirRuta: false,
             inactivo: true,
-
             probabilidadCompra: CONFIG.probabilidadCompra,
             tiempoExaminar: CONFIG.tiempoExaminar,
             distanciaRecoger: CONFIG.distanciaRecoger,
             pausaEntreCompras: CONFIG.pausaEntreCompras,
             maximoProductos: CONFIG.maximoProductosCliente,
-
             distanciaDestino: 0.8,
             radioColision: 0.42,
 
@@ -708,9 +672,7 @@ function crearClienteParaVehiculo(datos) {
                     });
                 }
 
-                mostrarMensaje(
-                    `${visita.nombreCliente} entró al supermercado.`
-                );
+                mostrarMensaje(`${visita.nombreCliente} entró al supermercado.`);
             }
         });
 
@@ -728,20 +690,16 @@ function crearClienteParaVehiculo(datos) {
             cliente,
             carrito: null,
             nombreCliente: config.nombre,
-
             plaza: {
                 id: datos.plaza.id,
                 x: datos.plaza.x,
                 z: datos.plaza.z
             },
-
             fase: 'entrando',
             tiempo: 0,
-
             pagoSolicitado: false,
             salidaSolicitada: false,
             intentosSalida: 0,
-
             cajaAsignada: null
         };
 
@@ -768,13 +726,10 @@ function crearClienteParaVehiculo(datos) {
         }
 
         console.info(`[VISITANTE] ${idVehiculo} comenzó a caminar.`);
-
     } catch (error) {
         console.error('Error al crear visitante:', error);
-
         cliente?.eliminar?.();
         limpiarVisitaVehiculo(idVehiculo);
-
         sistemaVehiculos?.solicitarSalida?.(idVehiculo);
     }
 }
@@ -797,13 +752,11 @@ function crearCarritoVisitante(cliente, idVisita) {
 
         const carrito = crearCarrito(escena, {
             modelo: '/modelos/carrito.glb',
-
             posicion: {
                 x: posicion.x,
                 y: 0,
                 z: posicion.z
             },
-
             escala: 1,
             distancia: CONFIG.distanciaCarrito,
             suavizado: CONFIG.suavizadoCarrito,
@@ -815,17 +768,11 @@ function crearCarritoVisitante(cliente, idVisita) {
             return null;
         }
 
-        carrito.seguirObjetivo(
-            grupoCliente,
-            CONFIG.distanciaCarrito
-        );
-
+        carrito.seguirObjetivo(grupoCliente, CONFIG.distanciaCarrito);
         carritosClientes.push(carrito);
 
         console.info(`[CARRITO] Creado para ${idVisita}.`);
-
         return carrito;
-
     } catch (error) {
         console.error(`[CARRITO] Error creando ${idVisita}:`, error);
         return null;
@@ -833,7 +780,7 @@ function crearCarritoVisitante(cliente, idVisita) {
 }
 
 // ============================================================
-// RETIRAR CLIENTE Y CARRITO AL LLEGAR AL VEHÍCULO
+// RETIRAR CLIENTE Y CARRITO
 // ============================================================
 
 function retirarClienteYCarritoDeVisita(visita) {
@@ -855,63 +802,41 @@ function retirarClienteYCarritoDeVisita(visita) {
     }
 
     const indiceCliente = clientesSupermercado.indexOf(cliente);
-
-    if (indiceCliente !== -1) {
-        clientesSupermercado.splice(indiceCliente, 1);
-    }
+    if (indiceCliente !== -1) clientesSupermercado.splice(indiceCliente, 1);
 
     const indiceCarrito = carritosClientes.indexOf(carrito);
-
-    if (indiceCarrito !== -1) {
-        carritosClientes.splice(indiceCarrito, 1);
-    }
+    if (indiceCarrito !== -1) carritosClientes.splice(indiceCarrito, 1);
 
     visita.cliente = null;
     visita.carrito = null;
 
-    console.info(
-        `[VISITANTE] ${visita.nombreCliente ?? visita.idVehiculo}: cliente y carrito retirados.`
-    );
+    console.info(`[VISITANTE] ${visita.nombreCliente}: cliente y carrito retirados.`);
 }
 
 // ============================================================
-// LIMPIAR VISITA CUANDO EL VEHÍCULO TERMINA DE SALIR
+// LIMPIAR VISITA
 // ============================================================
 
 function limpiarVisitaVehiculo(idVehiculo) {
     const visita = visitantesPorVehiculo.get(idVehiculo);
-
     if (!visita) return;
 
-    // Liberar cualquier caja que haya quedado reservada.
     liberarCajaVisitante(visita);
 
     try {
         visita.carrito?.eliminar?.();
-    } catch (error) {
-        console.warn('No se pudo eliminar el carrito:', error);
-    }
-
-    try {
         visita.cliente?.eliminar?.();
     } catch (error) {
-        console.warn('No se pudo eliminar el cliente:', error);
+        console.warn('Error retirando visitante:', error);
     }
 
     const indiceCliente = clientesSupermercado.indexOf(visita.cliente);
-
-    if (indiceCliente !== -1) {
-        clientesSupermercado.splice(indiceCliente, 1);
-    }
+    if (indiceCliente !== -1) clientesSupermercado.splice(indiceCliente, 1);
 
     const indiceCarrito = carritosClientes.indexOf(visita.carrito);
-
-    if (indiceCarrito !== -1) {
-        carritosClientes.splice(indiceCarrito, 1);
-    }
+    if (indiceCarrito !== -1) carritosClientes.splice(indiceCarrito, 1);
 
     visitantesPorVehiculo.delete(idVehiculo);
-
     console.info(`[VISITANTE] Visita ${idVehiculo} eliminada.`);
 }
 
@@ -966,7 +891,7 @@ function actualizarLista(lista, delta) {
 }
 
 // ============================================================
-// ESTADO DE LOS CLIENTES
+// ESTADO DE CLIENTES
 // ============================================================
 
 function obtenerEstadoCliente(cliente) {
@@ -1021,10 +946,8 @@ function obtenerComprasCliente(cliente) {
 function actualizarFasesVisitantes(delta) {
     for (const visita of visitantesPorVehiculo.values()) {
         const cliente = visita.cliente;
-
         if (!cliente || cliente.eliminado) continue;
 
-        // Si espera una caja, intentar reservar una disponible.
         if (visita.fase === 'esperandoCaja') {
             iniciarPagoVisitante(visita);
             continue;
@@ -1048,11 +971,9 @@ function actualizarFasesVisitantes(delta) {
         if (!maximoComprado && !tiempoAgotado) continue;
 
         visita.pagoSolicitado = true;
-
         iniciarPagoVisitante(visita);
     }
 
-    // Reintentar salida si el vehículo todavía no pudo salir.
     for (const visita of visitantesPorVehiculo.values()) {
         if (visita.fase !== 'esperandoSalida') continue;
         if (visita.salidaSolicitada) continue;
@@ -1077,39 +998,27 @@ function iniciarPagoVisitante(visita) {
     if (!cliente || typeof cliente.iniciarPago !== 'function') {
         visita.fase = 'errorPago';
         visita.pagoSolicitado = false;
-
         console.error('El cliente no tiene iniciarPago().');
         return;
     }
 
-    // Reservar una caja libre.
     const caja = reservarCaja(visita);
 
-    // Si no hay cajas, esperar.
     if (!caja) {
         visita.fase = 'esperandoCaja';
         visita.pagoSolicitado = false;
-
-        mostrarMensaje(
-            `${visita.nombreCliente} está esperando una caja libre.`
-        );
-
+        mostrarMensaje(`${visita.nombreCliente} está esperando una caja libre.`);
         return;
     }
 
     visita.fase = 'caja';
     visita.pagoSolicitado = true;
 
-    mostrarMensaje(
-        `${visita.nombreCliente} se dirige a la caja ${caja.id}.`
-    );
+    mostrarMensaje(`${visita.nombreCliente} se dirige a la caja ${caja.id}.`);
 
     try {
         const iniciado = cliente.iniciarPago(
-            {
-                x: caja.x,
-                z: caja.z
-            },
+            { x: caja.x, z: caja.z },
             ticket => {
                 liberarCajaVisitante(visita);
                 finalizarPagoVisitante(visita, ticket);
@@ -1118,19 +1027,14 @@ function iniciarPagoVisitante(visita) {
 
         if (iniciado === false) {
             liberarCajaVisitante(visita);
-
             visita.fase = 'errorPago';
             visita.pagoSolicitado = false;
-
             mostrarMensaje('No se pudo iniciar el recorrido a caja.');
         }
-
     } catch (error) {
         liberarCajaVisitante(visita);
-
         visita.fase = 'errorPago';
         visita.pagoSolicitado = false;
-
         console.error('Error al iniciar pago:', error);
     }
 }
@@ -1142,9 +1046,7 @@ function iniciarPagoVisitante(visita) {
 function finalizarPagoVisitante(visita, ticket) {
     if (!visita || visita.fase !== 'caja') return;
 
-    // La caja queda libre al terminar el pago.
     liberarCajaVisitante(visita);
-
     visita.fase = 'regresando';
 
     if (ticket) {
@@ -1157,7 +1059,7 @@ function finalizarPagoVisitante(visita, ticket) {
 
         mostrarTicket(
             ticketGuardado,
-            visita.nombreCliente ?? visita.cliente?.nombre ?? 'Cliente'
+            visita.nombreCliente ?? 'Cliente'
         );
     }
 
@@ -1177,12 +1079,9 @@ function finalizarPagoVisitante(visita, ticket) {
 
                 visita.fase = 'esperandoSalida';
 
-                mostrarMensaje(
-                    `${visita.nombreCliente} regresó a su vehículo.`
-                );
+                mostrarMensaje(`${visita.nombreCliente} regresó a su vehículo.`);
 
                 retirarClienteYCarritoDeVisita(visita);
-
                 solicitarSalidaVisitante(visita);
             }
         );
@@ -1191,7 +1090,6 @@ function finalizarPagoVisitante(visita, ticket) {
             visita.fase = 'errorRegreso';
             console.error('No se pudo iniciar el regreso al vehículo.');
         }
-
     } catch (error) {
         visita.fase = 'errorRegreso';
         console.error('Error en el regreso:', error);
@@ -1210,9 +1108,7 @@ function solicitarSalidaVisitante(visita) {
         return false;
     }
 
-    const resultado = sistemaVehiculos.solicitarSalida(
-        visita.idVehiculo
-    );
+    const resultado = sistemaVehiculos.solicitarSalida(visita.idVehiculo);
 
     if (resultado === true) {
         visita.salidaSolicitada = true;
@@ -1234,55 +1130,29 @@ function solicitarSalidaVisitante(visita) {
 // ============================================================
 
 function actualizarJugador(delta) {
-    if (
-        !juegoIniciado ||
-        !controles.isLocked ||
-        vistaSeguridad !== null
-    ) return;
+    if (!juegoIniciado || !controles.isLocked || vistaSeguridad !== null) return;
 
     movimientoJugador.set(0, 0, 0);
 
     controles.getDirection(vectorAdelante);
     vectorAdelante.y = 0;
 
-    if (vectorAdelante.lengthSq() > 0) {
-        vectorAdelante.normalize();
-    }
+    if (vectorAdelante.lengthSq() > 0) vectorAdelante.normalize();
 
-    vectorDerecha.crossVectors(
-        vectorAdelante,
-        ejeVertical
-    ).normalize();
+    vectorDerecha.crossVectors(vectorAdelante, ejeVertical).normalize();
 
     const velocidad = (
         teclas.ShiftLeft || teclas.ShiftRight
-    )
-        ? CONFIG.velocidadCorrer
-        : CONFIG.velocidadCaminar;
+    ) ? CONFIG.velocidadCorrer : CONFIG.velocidadCaminar;
 
-    if (teclas.KeyW || teclas.ArrowUp) {
-        movimientoJugador.add(vectorAdelante);
-    }
-
-    if (teclas.KeyS || teclas.ArrowDown) {
-        movimientoJugador.sub(vectorAdelante);
-    }
-
-    if (teclas.KeyD || teclas.ArrowRight) {
-        movimientoJugador.add(vectorDerecha);
-    }
-
-    if (teclas.KeyA || teclas.ArrowLeft) {
-        movimientoJugador.sub(vectorDerecha);
-    }
+    if (teclas.KeyW || teclas.ArrowUp) movimientoJugador.add(vectorAdelante);
+    if (teclas.KeyS || teclas.ArrowDown) movimientoJugador.sub(vectorAdelante);
+    if (teclas.KeyD || teclas.ArrowRight) movimientoJugador.add(vectorDerecha);
+    if (teclas.KeyA || teclas.ArrowLeft) movimientoJugador.sub(vectorDerecha);
 
     if (movimientoJugador.lengthSq() > 0) {
         movimientoJugador.normalize();
-
-        camara.position.addScaledVector(
-            movimientoJugador,
-            velocidad * delta
-        );
+        camara.position.addScaledVector(movimientoJugador, velocidad * delta);
     }
 
     velocidadVertical -= CONFIG.gravedad * delta;
@@ -1352,11 +1222,7 @@ function exportarTrayectoria() {
         )
     ];
 
-    descargarCSV(
-        filas.join('\n'),
-        'recorrido_supermercado.csv'
-    );
-
+    descargarCSV(filas.join('\n'), 'recorrido_supermercado.csv');
     mostrarMensaje('Recorrido exportado.');
 }
 
@@ -1368,31 +1234,22 @@ function obtenerArticulosTicket(ticket) {
     if (Array.isArray(ticket?.articulos)) return ticket.articulos;
     if (Array.isArray(ticket?.productos)) return ticket.productos;
     if (Array.isArray(ticket?.items)) return ticket.items;
-
     return [];
 }
 
 function obtenerSubtotalArticulo(articulo) {
     const cantidad = Number(articulo.cantidad ?? 1);
 
-    if (
-        articulo.subtotal !== undefined &&
-        Number.isFinite(Number(articulo.subtotal))
-    ) {
+    if (articulo.subtotal !== undefined && Number.isFinite(Number(articulo.subtotal))) {
         return Number(articulo.subtotal);
     }
 
-    if (
-        articulo.total !== undefined &&
-        Number.isFinite(Number(articulo.total))
-    ) {
+    if (articulo.total !== undefined && Number.isFinite(Number(articulo.total))) {
         return Number(articulo.total);
     }
 
     const precio = Number(
-        articulo.precioUnitario ??
-        articulo.precio ??
-        0
+        articulo.precioUnitario ?? articulo.precio ?? 0
     );
 
     return precio * cantidad;
@@ -1432,11 +1289,7 @@ function exportarTickets() {
         }
     }
 
-    descargarCSV(
-        filas.join('\n'),
-        'tickets_supermercado.csv'
-    );
-
+    descargarCSV(filas.join('\n'), 'tickets_supermercado.csv');
     mostrarMensaje('Tickets exportados.');
 }
 
@@ -1557,22 +1410,18 @@ function crearInterfazCamaras() {
     });
 
     const botonJugador = document.createElement('button');
-
     botonJugador.textContent = 'JUGADOR';
     botonJugador.className = 'boton-supermercado';
     botonJugador.addEventListener('click', volverAlJugador);
 
     panel.appendChild(botonJugador);
-
     document.body.appendChild(panel);
 }
 
 function cambiarVistaSeguridad(numero) {
-    if (
-        !Number.isInteger(numero) ||
-        numero < 1 ||
-        numero > CONFIG_CAMARAS.length
-    ) return;
+    if (!Number.isInteger(numero) || numero < 1 || numero > CONFIG_CAMARAS.length) {
+        return;
+    }
 
     const config = CONFIG_CAMARAS[numero - 1];
 
@@ -1649,9 +1498,7 @@ function crearInterfaz() {
             cursor:pointer;
         }
 
-        .boton-supermercado:hover {
-            background:#217a59;
-        }
+        .boton-supermercado:hover { background:#217a59; }
 
         #hud-supermercado {
             position:fixed;
@@ -1735,9 +1582,7 @@ function crearInterfaz() {
             border-radius:8px;
         }
 
-        #ticket-contenido h2 {
-            text-align:center;
-        }
+        #ticket-contenido h2 { text-align:center; }
 
         #ticket-contenido table {
             width:100%;
@@ -1766,9 +1611,7 @@ function crearInterfaz() {
             margin-top:15px;
         }
 
-        #ticket-contenido .ticket-botones button {
-            flex:1;
-        }
+        #ticket-contenido .ticket-botones button { flex:1; }
 
         @media(max-width:650px) {
             #hud-supermercado {
@@ -1809,9 +1652,7 @@ function crearInterfaz() {
                 box-shadow:none;
             }
 
-            #ticket-contenido .ticket-botones {
-                display:none;
-            }
+            #ticket-contenido .ticket-botones { display:none; }
         }
     `;
 
@@ -1910,9 +1751,7 @@ function crearInterfaz() {
         actualizarIluminacion();
 
         mostrarMensaje(
-            modoNoche
-                ? 'Modo nocturno activado.'
-                : 'Modo diurno activado.'
+            modoNoche ? 'Modo nocturno activado.' : 'Modo diurno activado.'
         );
     };
 
@@ -1925,9 +1764,7 @@ function crearInterfaz() {
         const resultado = sistemaVehiculos.solicitarLlegada();
 
         if (resultado === false || resultado === 0) {
-            mostrarMensaje(
-                'No hay plazas disponibles o no se pudo solicitar el vehículo.'
-            );
+            mostrarMensaje('No hay plazas disponibles o no se pudo solicitar el vehículo.');
             return;
         }
 
@@ -1937,17 +1774,8 @@ function crearInterfaz() {
     document.getElementById('btn-entrada').onclick = () => {
         volverAlJugador();
 
-        camara.position.set(
-            0,
-            CONFIG.alturaJugador,
-            25
-        );
-
-        camara.lookAt(
-            0,
-            CONFIG.alturaJugador,
-            15
-        );
+        camara.position.set(0, CONFIG.alturaJugador, 25);
+        camara.lookAt(0, CONFIG.alturaJugador, 15);
 
         velocidadVertical = 0;
         jugadorEnSuelo = true;
@@ -1955,11 +1783,8 @@ function crearInterfaz() {
         registrarTrayectoria(camara.position);
     };
 
-    document.getElementById('btn-recorrido').onclick =
-        exportarTrayectoria;
-
-    document.getElementById('btn-tickets').onclick =
-        exportarTickets;
+    document.getElementById('btn-recorrido').onclick = exportarTrayectoria;
+    document.getElementById('btn-tickets').onclick = exportarTickets;
 
     document.getElementById('ticket-cerrar').onclick = () => {
         ticket.style.display = 'none';
@@ -1981,9 +1806,7 @@ function mostrarMensaje(texto) {
     elemento.textContent = texto;
     elemento.style.display = 'block';
 
-    if (temporizadorMensaje) {
-        clearTimeout(temporizadorMensaje);
-    }
+    if (temporizadorMensaje) clearTimeout(temporizadorMensaje);
 
     temporizadorMensaje = setTimeout(() => {
         elemento.style.display = 'none';
@@ -2006,13 +1829,11 @@ function actualizarHUD() {
     }
 
     if (recorrido) {
-        recorrido.textContent =
-            `Recorrido: ${trayectoriaJugador.length} puntos`;
+        recorrido.textContent = `Recorrido: ${trayectoriaJugador.length} puntos`;
     }
 
     if (compras) {
-        compras.textContent =
-            `Tickets: ${ticketsGenerados.length}`;
+        compras.textContent = `Tickets: ${ticketsGenerados.length}`;
     }
 
     actualizarEstadoVista();
@@ -2024,10 +1845,7 @@ function actualizarHUD() {
 
 function configurarEventos() {
     window.addEventListener('keydown', evento => {
-        if (
-            evento.code === 'Space' ||
-            evento.code.startsWith('Arrow')
-        ) {
+        if (evento.code === 'Space' || evento.code.startsWith('Arrow')) {
             evento.preventDefault();
         }
 
@@ -2052,10 +1870,7 @@ function configurarEventos() {
             cambiarVistaSeguridad(Number(evento.code.slice(-1)));
         }
 
-        if (
-            evento.code === 'Digit0' ||
-            evento.code === 'Numpad0'
-        ) {
+        if (evento.code === 'Digit0' || evento.code === 'Numpad0') {
             volverAlJugador();
         }
     });
@@ -2074,16 +1889,10 @@ function configurarEventos() {
         camara.aspect = window.innerWidth / window.innerHeight;
         camara.updateProjectionMatrix();
 
-        renderizador.setSize(
-            window.innerWidth,
-            window.innerHeight
-        );
+        renderizador.setSize(window.innerWidth, window.innerHeight);
 
         renderizador.setPixelRatio(
-            Math.min(
-                window.devicePixelRatio || 1,
-                CONFIG.pixelRatioMaximo
-            )
+            Math.min(window.devicePixelRatio || 1, CONFIG.pixelRatioMaximo)
         );
     });
 }
