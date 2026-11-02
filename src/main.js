@@ -514,6 +514,7 @@ function crearLadrones() {
         }
     }
 }
+
 // ============================================================
 // VEHÍCULOS
 // ============================================================
@@ -643,7 +644,7 @@ function crearClienteParaVehiculo(datos) {
                 }
 
                 mostrarMensaje(
-                    `${visita.cliente.nombre} entró al supermercado.`
+                    `${visita.nombreCliente} entró al supermercado.`
                 );
             }
         });
@@ -661,6 +662,7 @@ function crearClienteParaVehiculo(datos) {
             idVehiculo,
             cliente,
             carrito: null,
+            nombreCliente: config.nombre,
 
             plaza: {
                 id: datos.plaza.id,
@@ -765,7 +767,54 @@ function crearCarritoVisitante(cliente, idVisita) {
 }
 
 // ============================================================
-// LIMPIAR VISITA
+// RETIRAR CLIENTE Y CARRITO AL LLEGAR AL VEHÍCULO
+// ============================================================
+
+function retirarClienteYCarritoDeVisita(visita) {
+    if (!visita) return;
+
+    const cliente = visita.cliente;
+    const carrito = visita.carrito;
+
+    // Retirar el carrito de la escena.
+    try {
+        carrito?.eliminar?.();
+    } catch (error) {
+        console.warn('No se pudo retirar el carrito:', error);
+    }
+
+    // Retirar el personaje de la escena.
+    try {
+        cliente?.eliminar?.();
+    } catch (error) {
+        console.warn('No se pudo retirar el cliente:', error);
+    }
+
+    // Quitar referencias de las listas de actualización.
+    const indiceCliente = clientesSupermercado.indexOf(cliente);
+
+    if (indiceCliente !== -1) {
+        clientesSupermercado.splice(indiceCliente, 1);
+    }
+
+    const indiceCarrito = carritosClientes.indexOf(carrito);
+
+    if (indiceCarrito !== -1) {
+        carritosClientes.splice(indiceCarrito, 1);
+    }
+
+    // Mantener el nombre y el registro de la visita.
+    // El registro se elimina cuando el vehículo termina de salir.
+    visita.cliente = null;
+    visita.carrito = null;
+
+    console.info(
+        `[VISITANTE] ${visita.nombreCliente ?? visita.idVehiculo}: cliente y carrito retirados.`
+    );
+}
+
+// ============================================================
+// LIMPIAR VISITA CUANDO EL VEHÍCULO TERMINA DE SALIR
 // ============================================================
 
 function limpiarVisitaVehiculo(idVehiculo) {
@@ -997,13 +1046,13 @@ function finalizarPagoVisitante(visita, ticket) {
 
         mostrarTicket(
             ticketGuardado,
-            visita.cliente.nombre
+            visita.nombreCliente ?? visita.cliente?.nombre ?? 'Cliente'
         );
     }
 
     const cliente = visita.cliente;
 
-    if (typeof cliente.iniciarRegresoVehiculo !== 'function') {
+    if (!cliente || typeof cliente.iniciarRegresoVehiculo !== 'function') {
         console.error('El cliente no tiene iniciarRegresoVehiculo().');
         visita.fase = 'errorRegreso';
         return;
@@ -1015,12 +1064,18 @@ function finalizarPagoVisitante(visita, ticket) {
             () => {
                 if (visita.fase !== 'regresando') return;
 
+                // El cliente ya llegó a su vehículo.
                 visita.fase = 'esperandoSalida';
 
                 mostrarMensaje(
-                    `${cliente.nombre} regresó a su vehículo.`
+                    `${visita.nombreCliente} regresó a su vehículo.`
                 );
 
+                // CORRECCIÓN:
+                // Retirar personaje y carrito ANTES de que salga el auto.
+                retirarClienteYCarritoDeVisita(visita);
+
+                // El vehículo sigue existiendo y realiza su salida normal.
                 solicitarSalidaVisitante(visita);
             }
         );
@@ -1057,7 +1112,7 @@ function solicitarSalidaVisitante(visita) {
         visita.fase = 'saliendo';
 
         mostrarMensaje(
-            `El vehículo de ${visita.cliente.nombre} está saliendo.`
+            `El vehículo de ${visita.nombreCliente ?? 'el cliente'} está saliendo.`
         );
 
         return true;
