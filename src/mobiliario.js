@@ -3,8 +3,6 @@ import * as THREE from 'three';
 
 // ============================================================
 // MOBILIARIO DEL SUPERMERCADO
-// Optimizado y depurado.
-// Conserva API pública, coordenadas y departamentos.
 // ============================================================
 
 export function crearMobiliario(scene, mercado = null) {
@@ -435,7 +433,7 @@ export function crearMobiliario(scene, mercado = null) {
 
     // ============================================================
     // 11. CAJAS REGISTRADORAS
-    // CUATRO CAJAS CON PUNTOS DE ATENCIÓN.
+    // CUATRO CAJAS
     // ============================================================
 
     function crearCajaRegistradora(padre, nombre, x, z, numero) {
@@ -470,14 +468,7 @@ export function crearMobiliario(scene, mercado = null) {
 
         g.userData.numeroCaja = numero;
 
-        registrarColision(
-            nombre,
-            x,
-            z,
-            3.05,
-            1.45,
-            { tipo: 'caja' }
-        );
+        registrarColision(nombre, x, z, 3.05, 1.45, { tipo: 'caja' });
 
         g.userData.posicionAtencion = {
             x,
@@ -502,9 +493,7 @@ export function crearMobiliario(scene, mercado = null) {
             crearCajaRegistradora(
                 dep,
                 `Caja_registradora_${String(i + 1).padStart(2, '0')}`,
-                x,
-                z,
-                i + 1
+                x, z, i + 1
             );
         });
     }
@@ -921,7 +910,7 @@ export function crearMobiliario(scene, mercado = null) {
         );
     });
 
-    // Iluminación de las cuatro cajas.
+    // Cuatro luminarias alineadas con las cuatro cajas.
     [
         [-17, 3, 22.5],
         [-12, 3, 22.5],
@@ -930,13 +919,7 @@ export function crearMobiliario(scene, mercado = null) {
     ].forEach(([x, y, z], i) => {
         crearLuminaria(
             `Luminaria_cajas_${i + 1}`,
-            x, y, z,
-            0xfff4e5,
-            6,
-            8,
-            1.8,
-            0.35,
-            false
+            x, y, z, 0xfff4e5, 6, 8, 1.8, 0.35, false
         );
     });
 
@@ -962,7 +945,7 @@ export function crearMobiliario(scene, mercado = null) {
     ].forEach(([x, y, z], i) => {
         crearLuminaria(
             `Luz_apoyo_${i + 1}`,
-            x, y, z, color, 7, 10, 2, 0.4, true
+            x, y, z, 0xfff1dc, 7, 10, 2, 0.4, true
         );
     });
 
@@ -1057,31 +1040,48 @@ export function crearMobiliario(scene, mercado = null) {
         almacenZ: -29
     };
 
-    // Información para localizar las cuatro cajas.
+    // Obtener las cuatro cajas y sus posiciones globales.
     mobiliario.userData.obtenerCajas = () => {
         const dep = departamentos['11_CAJAS_REGISTRADORAS'];
         if (!dep) return [];
 
-        return dep.children.map(cajaGrupo => ({
-            numero: cajaGrupo.userData.numeroCaja,
-            posicion: cajaGrupo.position.clone(),
-            posicionAtencion: cajaGrupo.userData.posicionAtencion
-                ? { ...cajaGrupo.userData.posicionAtencion }
-                : null
-        }));
+        return dep.children.map(cajaGrupo => {
+            const posicion = new THREE.Vector3();
+            cajaGrupo.getWorldPosition(posicion);
+
+            const atencionLocal = cajaGrupo.userData.posicionAtencion;
+
+            let posicionAtencion = null;
+
+            if (atencionLocal) {
+                posicionAtencion = new THREE.Vector3(
+                    atencionLocal.x,
+                    atencionLocal.y,
+                    atencionLocal.z
+                );
+
+                cajaGrupo.localToWorld(posicionAtencion);
+            }
+
+            return {
+                numero: cajaGrupo.userData.numeroCaja,
+                posicion,
+                posicionAtencion
+            };
+        });
     };
 
     scene.add(mobiliario);
 
     console.info(
-        'Mobiliario optimizado creado.',
+        'Mobiliario del supermercado creado.',
         '\nDepartamentos:',
         mobiliario.userData.listarDepartamentos()
     );
 
     console.info(`Luces locales reales: ${luminarias.length}.`);
     console.info(`Obstáculos registrados: ${colisiones.length}.`);
-    console.info('Cajas registradoras disponibles: 4.');
+    console.info(`Cajas registradoras: ${mobiliario.userData.obtenerCajas().length}`);
 
     return mobiliario;
 }
