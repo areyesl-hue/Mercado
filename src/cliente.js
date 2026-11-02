@@ -46,7 +46,6 @@ const CONFIG_BASE = {
     margenObstaculos: 0.22,
     tamanoCelda: 0.75,
 
-    // PUERTA FRONTAL
     puertaCentroX: 0,
     puertaAncho: 8.5,
     puertaZInterior: 27.5,
@@ -258,7 +257,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     const EJE_X = new THREE.Vector3(1, 0, 0);
 
     // ========================================================
-    // PUERTA: COMPROBACIÓN DEL CORREDOR
+    // PUERTA
     // ========================================================
 
     function estaEnCorredorPuerta(x, z) {
@@ -802,7 +801,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         for (const obstaculo of obstaculosCache) {
 
-            // La fachada no debe bloquear el hueco de la puerta.
             if (dentroPuerta && esObstaculoDeFachada(obstaculo)) {
                 continue;
             }
@@ -1394,13 +1392,10 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         if (!candidatos.length) return null;
 
-        // Primero intenta visitar racks que todavía no ha recorrido.
         let sinVisitar = candidatos.filter(
             candidato => !racksVisitados.has(candidato.claveRack)
         );
 
-        // Si ya recorrió todos los racks disponibles, reinicia
-        // el historial de racks, pero no el de productos examinados.
         if (!sinVisitar.length) {
 
             racksVisitados.clear();
@@ -1651,7 +1646,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         compras.push(compra);
 
-        // Soltar de la mano antes de llamar al carrito.
         producto.parent?.remove(producto);
 
         let agregado = false;
@@ -1902,10 +1896,10 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     }
 
     // ========================================================
-    // ENTRADA Y REGRESO POR LA PUERTA
+    // RUTAS DE PUERTA CORREGIDAS
     // ========================================================
 
-    function crearRutaPorPuerta(destinoFinal) {
+    function crearRutaPorPuerta(destinoFinal, tipo = 'salida') {
 
         const puertaInterior = {
             x: config.puertaCentroX,
@@ -1922,15 +1916,27 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             z: config.puertaZExterior
         };
 
-        const puntos = [
-            puertaInterior,
-            puertaUmbral,
-            puertaExterior,
-            {
-                x: numero(destinoFinal.x),
-                z: numero(destinoFinal.z)
-            }
-        ];
+        // ENTRADA: exterior -> umbral -> interior.
+        // SALIDA: interior -> umbral -> exterior.
+        const puntos = tipo === 'entrada'
+            ? [
+                puertaExterior,
+                puertaUmbral,
+                puertaInterior,
+                {
+                    x: numero(destinoFinal.x),
+                    z: numero(destinoFinal.z)
+                }
+            ]
+            : [
+                puertaInterior,
+                puertaUmbral,
+                puertaExterior,
+                {
+                    x: numero(destinoFinal.x),
+                    z: numero(destinoFinal.z)
+                }
+            ];
 
         const caminoCompleto = [];
 
@@ -1954,12 +1960,38 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         return caminoCompleto;
     }
 
+    // ========================================================
+    // INICIAR ENTRADA DESDE VEHÍCULO
+    // ========================================================
+
     function iniciarDesdeVehiculo(posicionEntrada, plaza) {
 
         if (!posicionEntrada || !plaza) {
 
             console.warn(
                 `[CLIENTE ${id}] Faltan datos del vehículo.`
+            );
+
+            return false;
+        }
+
+        // Evita iniciar dos veces la entrada del mismo cliente.
+        if (
+            estado === ESTADOS.ENTRANDO ||
+            estado === ESTADOS.BUSCANDO ||
+            estado === ESTADOS.ACERCANDO ||
+            estado === ESTADOS.RECOGIENDO ||
+            estado === ESTADOS.INSPECCIONANDO ||
+            estado === ESTADOS.DECIDIENDO ||
+            estado === ESTADOS.GUARDANDO ||
+            estado === ESTADOS.DEVOLVIENDO ||
+            estado === ESTADOS.RUTA ||
+            estado === ESTADOS.CAJA ||
+            estado === ESTADOS.PAGANDO ||
+            estado === ESTADOS.REGRESANDO
+        ) {
+            console.warn(
+                `[CLIENTE ${id}] Ya está realizando una actividad.`
             );
 
             return false;
@@ -1977,6 +2009,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         callbackPagoPendiente = null;
         ticketPendiente = null;
+        callbackRegreso = null;
         entradaNotificada = false;
 
         grupo.position.set(
@@ -1987,11 +2020,14 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         actualizarColisiones();
 
-        // Entra desde fuera por el centro de la puerta.
-        const camino = crearRutaPorPuerta({
-            x: 0,
-            z: config.puertaZInterior
-        });
+        // Comienza fuera del supermercado y entra por la puerta.
+        const camino = crearRutaPorPuerta(
+            {
+                x: 0,
+                z: config.puertaZInterior
+            },
+            'entrada'
+        );
 
         if (!camino.length) {
 
@@ -2011,9 +2047,20 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         return true;
     }
 
+    // ========================================================
+    // REGRESAR AL VEHÍCULO
+    // ========================================================
+
     function iniciarRegresoVehiculo(plaza, callback) {
 
         if (!plaza) return false;
+
+        if (
+            estado === ESTADOS.REGRESANDO ||
+            estado === ESTADOS.FINALIZADO
+        ) {
+            return false;
+        }
 
         liberarReserva();
 
@@ -2028,9 +2075,8 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             z: numero(plaza.z)
         };
 
-        // OBLIGATORIO: primero cruzar el hueco de la puerta.
-        // Después se calcula el tramo desde fuera hasta el vehículo.
-        const camino = crearRutaPorPuerta(destino);
+        // Sale del supermercado antes de llegar al automóvil.
+        const camino = crearRutaPorPuerta(destino, 'salida');
 
         if (!camino.length) {
 
