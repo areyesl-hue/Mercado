@@ -182,7 +182,7 @@ export function crearVehiculos(scene, opciones = {}) {
     }
 
     // =====================================================
-    // CARGAR LOS SIETE MODELOS GLB
+    // CARGAR MODELOS GLB
     // =====================================================
 
     function cargarModelo(vehiculo) {
@@ -208,7 +208,6 @@ export function crearVehiculos(scene, opciones = {}) {
 
                 modelo.name = `MODELO_GLTF_${indice + 1}`;
 
-                // Conservar materiales y colores originales de Blender.
                 modelo.traverse(objeto => {
                     if (!objeto.isMesh) return;
 
@@ -236,7 +235,6 @@ export function crearVehiculos(scene, opciones = {}) {
                 caja.getCenter(centro);
                 caja.getSize(tamano);
 
-                // Centrar y colocar el vehículo sobre el suelo.
                 modelo.position.x -= centro.x;
                 modelo.position.z -= centro.z;
                 modelo.position.y -= caja.min.y;
@@ -248,6 +246,7 @@ export function crearVehiculos(scene, opciones = {}) {
                 vehiculo.modelo = modelo;
                 vehiculo.modeloCargado = true;
                 vehiculo.estado = ESTADOS.ESPERANDO;
+
                 vehiculo.dimensiones = tamano.multiplyScalar(
                     config.escala
                 );
@@ -257,7 +256,6 @@ export function crearVehiculos(scene, opciones = {}) {
                     'color: green; font-weight: bold;'
                 );
 
-                // Si ya existen solicitudes de llegada, procesarlas.
                 procesarCola();
             },
 
@@ -443,13 +441,13 @@ export function crearVehiculos(scene, opciones = {}) {
     function finalizarLlegada(vehiculo) {
         vehiculo.estado = ESTADOS.ESTACIONADO;
         vehiculo.velocidadActual = 0;
+        vehiculo.ruta = [];
+        vehiculo.indiceRuta = 0;
 
         console.log(
-            `[VEHICULOS] Vehículo ${vehiculo.id} estacionado.`
+            `[VEHICULOS] Vehículo ${vehiculo.id} estacionado en plaza ${vehiculo.plaza?.id}.`
         );
 
-        // CONEXIÓN CON LOS CLIENTES DE MAIN.JS.
-        // Este callback debe crear el cliente correspondiente.
         if (typeof config.alEstacionar === 'function') {
             config.alEstacionar({
                 vehiculo,
@@ -505,7 +503,7 @@ export function crearVehiculos(scene, opciones = {}) {
         );
 
         console.log(
-            `[VEHICULOS] Vehículo ${vehiculo.id} saliendo.`
+            `[VEHICULOS] Vehículo ${vehiculo.id} saliendo de plaza ${plaza.id}.`
         );
 
         return true;
@@ -526,6 +524,10 @@ export function crearVehiculos(scene, opciones = {}) {
         vehiculo.indiceRuta = 0;
         vehiculo.grupo.visible = false;
 
+        console.log(
+            `[VEHICULOS] Vehículo ${vehiculo.id} salió del estacionamiento.`
+        );
+
         if (typeof config.alSalir === 'function') {
             config.alSalir({
                 vehiculo,
@@ -533,10 +535,6 @@ export function crearVehiculos(scene, opciones = {}) {
                 tanda: tandaActual
             });
         }
-
-        console.log(
-            `[VEHICULOS] Vehículo ${vehiculo.id} salió del estacionamiento.`
-        );
 
         procesarCola();
     }
@@ -570,13 +568,11 @@ export function crearVehiculos(scene, opciones = {}) {
 
             const vehiculo = disponibles.shift();
 
-            colaLlegadas.shift();
+            if (!iniciarLlegada(vehiculo, plaza, solicitud.id)) {
+                return;
+            }
 
-            iniciarLlegada(
-                vehiculo,
-                plaza,
-                solicitud.id
-            );
+            colaLlegadas.shift();
         }
     }
 
@@ -593,12 +589,11 @@ export function crearVehiculos(scene, opciones = {}) {
         let solicitadas = 0;
 
         for (let i = 0; i < cantidadValida; i++) {
-            if (
-                !obtenerPlazaLibre() &&
-                colaLlegadas.length === 0
-            ) {
-                break;
-            }
+            const plazasDisponibles = plazas.some(
+                plaza => !plaza.ocupada
+            );
+
+            if (!plazasDisponibles) break;
 
             const solicitud = {
                 id: ++siguienteSolicitud,
@@ -655,7 +650,7 @@ export function crearVehiculos(scene, opciones = {}) {
     }
 
     // =====================================================
-    // INICIAR VEHÍCULOS INICIALES
+    // VEHÍCULOS INICIALES
     // =====================================================
 
     function procesarIniciales() {
@@ -673,8 +668,6 @@ export function crearVehiculos(scene, opciones = {}) {
     function actualizar(delta) {
         if (eliminado) return;
 
-        // CORRECCIÓN PRINCIPAL:
-        // Iniciar las llegadas aunque main.js llame a actualizar().
         procesarIniciales();
 
         const dt = Math.min(
@@ -701,9 +694,7 @@ export function crearVehiculos(scene, opciones = {}) {
 
             if (estadoAnterior === ESTADOS.ENTRANDO) {
                 finalizarLlegada(vehiculo);
-            }
-
-            if (estadoAnterior === ESTADOS.SALIENDO) {
+            } else if (estadoAnterior === ESTADOS.SALIENDO) {
                 finalizarSalida(vehiculo);
             }
         }
@@ -712,7 +703,6 @@ export function crearVehiculos(scene, opciones = {}) {
     }
 
     function actualizarCompleto(delta) {
-        procesarIniciales();
         actualizar(delta);
     }
 
@@ -763,19 +753,17 @@ export function crearVehiculos(scene, opciones = {}) {
     // =====================================================
 
     function eliminar() {
+        if (eliminado) return;
+
         eliminado = true;
 
         for (const vehiculo of vehiculos) {
-            if (vehiculo.grupo.parent) {
-                vehiculo.grupo.parent.remove(
-                    vehiculo.grupo
-                );
-            }
+            vehiculo.grupo.parent?.remove(
+                vehiculo.grupo
+            );
         }
 
-        if (grupo.parent) {
-            grupo.parent.remove(grupo);
-        }
+        grupo.parent?.remove(grupo);
 
         vehiculos.length = 0;
         plazas.length = 0;
