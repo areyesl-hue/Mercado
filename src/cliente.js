@@ -1896,7 +1896,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     }
 
     // ========================================================
-    // RUTAS DE PUERTA CORREGIDAS
+    // RUTAS DE PUERTA
     // ========================================================
 
     function crearRutaPorPuerta(destinoFinal, tipo = 'salida') {
@@ -1916,8 +1916,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             z: config.puertaZExterior
         };
 
-        // ENTRADA: exterior -> umbral -> interior.
-        // SALIDA: interior -> umbral -> exterior.
         const puntos = tipo === 'entrada'
             ? [
                 puertaExterior,
@@ -1975,7 +1973,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             return false;
         }
 
-        // Evita iniciar dos veces la entrada del mismo cliente.
         if (
             estado === ESTADOS.ENTRANDO ||
             estado === ESTADOS.BUSCANDO ||
@@ -2020,7 +2017,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         actualizarColisiones();
 
-        // Comienza fuera del supermercado y entra por la puerta.
         const camino = crearRutaPorPuerta(
             {
                 x: 0,
@@ -2075,7 +2071,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             z: numero(plaza.z)
         };
 
-        // Sale del supermercado antes de llegar al automóvil.
         const camino = crearRutaPorPuerta(destino, 'salida');
 
         if (!camino.length) {
@@ -2120,11 +2115,21 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             try {
                 callback(api);
             } catch (error) {
-                console.error(error);
+                console.error(
+                    `[CLIENTE ${id}] Error al finalizar el regreso:`,
+                    error
+                );
             }
         }
 
-        config.alFinalizar?.(api);
+        try {
+            config.alFinalizar?.(api);
+        } catch (error) {
+            console.error(
+                `[CLIENTE ${id}] Error en alFinalizar:`,
+                error
+            );
+        }
     }
 
     // ========================================================
@@ -2326,6 +2331,10 @@ export function crearClienteSupermercado(scene, opciones = {}) {
                 break;
             }
 
+            // =================================================
+            // CORRECCIÓN PRINCIPAL: FINALIZAR PAGO
+            // =================================================
+
             case ESTADOS.PAGANDO: {
 
                 animarPagarProcedural();
@@ -2345,23 +2354,33 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
                     } else {
 
-                        cambiarEstado(ESTADOS.FINALIZADO);
+                        // Primero recuperamos el callback.
+                        const callback = callbackPagoPendiente;
+                        callbackPagoPendiente = null;
 
-                        if (
-                            typeof callbackPagoPendiente === 'function'
-                        ) {
-
-                            const callback = callbackPagoPendiente;
-                            callbackPagoPendiente = null;
+                        // Ejecutamos el callback mientras el cliente
+                        // todavía está en estado PAGANDO.
+                        if (typeof callback === 'function') {
 
                             try {
+
                                 callback(ticket);
+
                             } catch (error) {
-                                console.error(error);
+
+                                console.error(
+                                    `[CLIENTE ${id}] Error en callback de pago:`,
+                                    error
+                                );
                             }
                         }
 
-                        config.alFinalizar?.(api);
+                        // IMPORTANTE:
+                        // El callback puede haber iniciado el regreso.
+                        // Si el estado cambió a REGRESANDO, no lo tocamos.
+                        if (estado === ESTADOS.PAGANDO) {
+                            cambiarEstado(ESTADOS.FINALIZADO);
+                        }
                     }
                 }
 
