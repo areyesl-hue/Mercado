@@ -41,13 +41,17 @@ export function crearMobiliario(scene, mercado = null) {
         maderaClara: crearMaterial('maderaClara', { color: 0xd8bd95, roughness: 0.8 }),
         goma: crearMaterial('goma', { color: 0x202428, roughness: 0.9 }),
         luz: crearMaterial('luz', {
-            color: 0xffffff, emissive: 0xd7f1ff,
-            emissiveIntensity: 0.45, roughness: 0.8
+            color: 0xffffff,
+            emissive: 0xd7f1ff,
+            emissiveIntensity: 0.45,
+            roughness: 0.8
         }),
         cristal: crearMaterial('cristal', { color: 0x9bc8d9, roughness: 0.45, metalness: 0.05 }),
         pantalla: crearMaterial('pantalla', {
-            color: 0x132d43, emissive: 0x071a29,
-            emissiveIntensity: 0.2, roughness: 0.8
+            color: 0x132d43,
+            emissive: 0x071a29,
+            emissiveIntensity: 0.2,
+            roughness: 0.8
         })
     };
 
@@ -139,7 +143,6 @@ export function crearMobiliario(scene, mercado = null) {
 
     // ============================================================
     // 01. GÓNDOLAS CENTRALES
-    // Se elimina únicamente la góndola vacía (17,13).
     // ============================================================
 
     function crearGondola(padre, nombre, x, z) {
@@ -210,14 +213,12 @@ export function crearMobiliario(scene, mercado = null) {
 
     // ============================================================
     // 02. ISLAS PROMOCIONALES
-    // Se conserva el departamento vacío para compatibilidad.
     // ============================================================
 
     departamento('02_ISLAS_PROMOCIONALES');
 
     // ============================================================
     // 03. ESTANTERÍAS PERIMETRALES
-    // Se retiran porque no contienen productos.
     // ============================================================
 
     departamento('03_ESTANTERIAS_PERIMETRALES');
@@ -262,14 +263,12 @@ export function crearMobiliario(scene, mercado = null) {
 
     // ============================================================
     // 05. PANADERÍA
-    // Sin vitrinas vacías.
     // ============================================================
 
     departamento('05_PANADERIA');
 
     // ============================================================
     // 06. REFRIGERADORES
-    // Se elimina el refrigerador vacío de x=23.5.
     // ============================================================
 
     function crearRefrigerador(padre, nombre, x, z) {
@@ -325,14 +324,12 @@ export function crearMobiliario(scene, mercado = null) {
 
     // ============================================================
     // 07. CONGELADORES
-    // Se eliminan porque no tienen productos.
     // ============================================================
 
     departamento('07_CONGELADORES');
 
     // ============================================================
     // 08. CARNICERÍA Y PESCADERÍA
-    // Se conserva únicamente el mostrador de carnicería.
     // ============================================================
 
     function crearMostradorFrio(padre, nombre, x, z, color) {
@@ -361,7 +358,6 @@ export function crearMobiliario(scene, mercado = null) {
 
     // ============================================================
     // 09. HIGIENE Y LIMPIEZA
-    // Se conserva el módulo de limpieza.
     // ============================================================
 
     function crearModuloHigiene(padre, nombre, x, z, color) {
@@ -405,7 +401,6 @@ export function crearMobiliario(scene, mercado = null) {
 
     // ============================================================
     // 10. DEPARTAMENTO DE ROPA
-    // Se conservan los percheros y se eliminan mesas vacías.
     // ============================================================
 
     function crearPerchero(padre, nombre, x, z) {
@@ -440,7 +435,7 @@ export function crearMobiliario(scene, mercado = null) {
 
     // ============================================================
     // 11. CAJAS REGISTRADORAS
-    // Las seis cajas se conservan.
+    // CUATRO CAJAS CON PUNTOS DE ATENCIÓN.
     // ============================================================
 
     function crearCajaRegistradora(padre, nombre, x, z, numero) {
@@ -475,10 +470,15 @@ export function crearMobiliario(scene, mercado = null) {
 
         g.userData.numeroCaja = numero;
 
-        registrarColision(nombre, x, z, 3.05, 1.45, { tipo: 'caja' });
+        registrarColision(
+            nombre,
+            x,
+            z,
+            3.05,
+            1.45,
+            { tipo: 'caja' }
+        );
 
-        // Punto libre delante de la caja para que el cliente pueda
-        // aproximarse desde el pasillo frontal.
         g.userData.posicionAtencion = {
             x,
             y: 0,
@@ -492,22 +492,25 @@ export function crearMobiliario(scene, mercado = null) {
         const dep = departamento('11_CAJAS_REGISTRADORAS');
 
         const posiciones = [
-            [-22, 22.5], [-17, 22.5], [-12, 22.5],
-            [12, 22.5], [17, 22.5], [22, 22.5]
+            [-17, 22.5],
+            [-12, 22.5],
+            [12, 22.5],
+            [17, 22.5]
         ];
 
         posiciones.forEach(([x, z], i) => {
             crearCajaRegistradora(
                 dep,
                 `Caja_registradora_${String(i + 1).padStart(2, '0')}`,
-                x, z, i + 1
+                x,
+                z,
+                i + 1
             );
         });
     }
 
     // ============================================================
     // 12. MESAS AUXILIARES
-    // Se retiran porque están vacías.
     // ============================================================
 
     departamento('12_MESAS_AUXILIARES');
@@ -812,8 +815,6 @@ export function crearMobiliario(scene, mercado = null) {
 
     // ============================================================
     // 19. FILAS DE CAJAS
-    // Se desplazan los postes hacia los extremos para no bloquear
-    // el acceso frontal a las registradoras.
     // ============================================================
 
     {
@@ -920,13 +921,22 @@ export function crearMobiliario(scene, mercado = null) {
         );
     });
 
+    // Iluminación de las cuatro cajas.
     [
-        [-22, 3, 22.5], [-12, 3, 22.5],
-        [12, 3, 22.5], [22, 3, 22.5]
+        [-17, 3, 22.5],
+        [-12, 3, 22.5],
+        [12, 3, 22.5],
+        [17, 3, 22.5]
     ].forEach(([x, y, z], i) => {
         crearLuminaria(
             `Luminaria_cajas_${i + 1}`,
-            x, y, z, 0xfff4e5, 6, 8, 1.8, 0.35, false
+            x, y, z,
+            0xfff4e5,
+            6,
+            8,
+            1.8,
+            0.35,
+            false
         );
     });
 
@@ -949,7 +959,7 @@ export function crearMobiliario(scene, mercado = null) {
         [-20, 2.7, 12, 0xfff1d6],
         [20, 2.7, 12, 0xffe4bd],
         [0, 3.7, 21, 0xfff4e5]
-    ].forEach(([x, y, z, color], i) => {
+    ].forEach(([x, y, z], i) => {
         crearLuminaria(
             `Luz_apoyo_${i + 1}`,
             x, y, z, color, 7, 10, 2, 0.4, true
@@ -1047,8 +1057,7 @@ export function crearMobiliario(scene, mercado = null) {
         almacenZ: -29
     };
 
-    // Información para que el sistema de clientes pueda localizar
-    // las seis cajas sin tener que adivinar su ubicación.
+    // Información para localizar las cuatro cajas.
     mobiliario.userData.obtenerCajas = () => {
         const dep = departamentos['11_CAJAS_REGISTRADORAS'];
         if (!dep) return [];
@@ -1072,6 +1081,7 @@ export function crearMobiliario(scene, mercado = null) {
 
     console.info(`Luces locales reales: ${luminarias.length}.`);
     console.info(`Obstáculos registrados: ${colisiones.length}.`);
+    console.info('Cajas registradoras disponibles: 4.');
 
     return mobiliario;
 }
