@@ -500,10 +500,10 @@ export function crearMobiliario(scene, mercado = null) {
         // Centro de cada mueble: z = 22.5
         // Atención de cada cliente: z = 23.95
         const posiciones = [
-            [-17, 22.5],
-            [-12, 22.5],
-            [12, 22.5],
-            [17, 22.5]
+            [-17, 20.5],
+            [-12, 20.5],
+            [12, 20.5],
+            [17, 20.5]
         ];
 
         posiciones.forEach(([x, z], i) => {
