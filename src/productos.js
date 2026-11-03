@@ -87,31 +87,33 @@ export function crearProductosLacteos(scene) {
     };
 
     // ========================================================
-    // ALTURAS AJUSTADAS DE LOS ESTANTES
+    // ALTURAS REALES SEGÚN MOBILIARIO.JS
+    // Las alturas indican dónde comienza la base del producto.
     // ========================================================
 
     const nivelesGondola = [
-        0.20,
-        0.60,
-        1.00,
-        1.40
+        0.43,
+        0.86,
+        1.29,
+        1.72
     ];
 
     const nivelesRefrigerador = [
-        0.25,
-        0.65,
-        1.05,
-        1.45
+        0.50,
+        0.93,
+        1.36,
+        1.79
     ];
 
     const nivelesLimpieza = [
-        0.20,
-        0.55,
-        0.90,
-        1.25,
-        1.60
+        0.43,
+        0.78,
+        1.13,
+        1.48,
+        1.83
     ];
 
+    // Cuatro posiciones distribuidas a lo largo de la repisa.
     const posicionesGondola = [
         -1.95,
         -0.65,
@@ -119,6 +121,7 @@ export function crearProductosLacteos(scene) {
         1.95
     ];
 
+    // Dos columnas por nivel dentro del refrigerador.
     const posicionesRefrigerador = [
         -0.48,
         0.48
@@ -391,6 +394,8 @@ export function crearProductosLacteos(scene) {
 
     // ========================================================
     // CREAR UNA UNIDAD DE PRODUCTO
+    // x, y, z indican el punto inferior del producto.
+    // Así cada producto descansa sobre su repisa.
     // ========================================================
 
     function crearCopia(
@@ -556,8 +561,6 @@ export function crearProductosLacteos(scene) {
 
                 if (!fuentes.length) return;
 
-                const posiciones = [];
-
                 const espaciosPorNivel =
                     config.cantidadPorNivel ?? 4;
 
@@ -568,46 +571,40 @@ export function crearProductosLacteos(scene) {
 
                 nivelesGondola.forEach((nivel, nivelIndex) => {
                     desplazamientos.forEach((desplazamiento, indice) => {
-                        posiciones.push({
+                        const fuente =
+                            fuentes[indice % fuentes.length];
+
+                        const x =
+                            config.rackX + config.lado * 0.30;
+
+                        const z =
+                            config.rackZ + desplazamiento;
+
+                        const rotacion =
+                            obtenerRotacionGondola(
+                                config.lado,
+                                config.rotacionY ?? 0
+                            );
+
+                        crearCopia(
+                            fuente,
+                            `${config.codigo}_N${nivelIndex + 1}_${indice + 1}`,
+                            x,
                             nivel,
-                            nivelIndex,
-                            indice,
-                            x: config.rackX + config.lado * 0.30,
-                            z: config.rackZ + desplazamiento
-                        });
+                            z,
+                            config.altura,
+                            rotacion,
+                            config.categoria,
+                            {
+                                ancho: 0.44,
+                                profundidad: 0.90
+                            }
+                        );
                     });
                 });
 
-                posiciones.forEach((posicion) => {
-                    const fuente =
-                        fuentes[
-                            posicion.indice % fuentes.length
-                        ];
-
-                    const rotacion =
-                        obtenerRotacionGondola(
-                            config.lado,
-                            config.rotacionY ?? 0
-                        );
-
-                    crearCopia(
-                        fuente,
-                        `${config.codigo}_N${posicion.nivelIndex + 1}_${posicion.indice + 1}`,
-                        posicion.x,
-                        posicion.nivel,
-                        posicion.z,
-                        config.altura,
-                        rotacion,
-                        config.categoria,
-                        {
-                            ancho: 0.44,
-                            profundidad: 0.90
-                        }
-                    );
-                });
-
                 console.info(
-                    `${config.nombre}: ${posiciones.length} unidades colocadas.`
+                    `${config.nombre}: ${nivelesGondola.length * espaciosPorNivel} unidades colocadas.`
                 );
             }
         );
@@ -927,6 +924,7 @@ export function crearProductosLacteos(scene) {
 
     // ========================================================
     // 3. FRUTAS Y VERDURAS
+    // Superficie de las mesas: Y = 1.00
     // ========================================================
 
     const mesasFrescos = {
@@ -960,7 +958,7 @@ export function crearProductosLacteos(scene) {
                         fuente,
                         `${config.codigo}_${String(indice + 1).padStart(2, '0')}`,
                         mesa.x + dx,
-                        0.70,
+                        1.00,
                         mesa.z + dz,
                         config.altura,
                         config.rotacionY ?? 0,
@@ -1072,6 +1070,7 @@ export function crearProductosLacteos(scene) {
 
     // ========================================================
     // 4. CARNICERÍA
+    // Superficie del mostrador: Y = 1.24
     // ========================================================
 
     function colocarEnMostrador(config) {
@@ -1091,7 +1090,7 @@ export function crearProductosLacteos(scene) {
                         fuente,
                         `${config.codigo}_${indice + 1}`,
                         25.1 + dx,
-                        0.90,
+                        1.24,
                         -7.3 + dz,
                         config.altura,
                         config.rotacionY ?? 0,
@@ -1130,6 +1129,7 @@ export function crearProductosLacteos(scene) {
 
     // ========================================================
     // 5. HIGIENE Y LIMPIEZA
+    // Módulo centrado en X=28.3, Z=8
     // ========================================================
 
     const productosLimpieza = [
@@ -1196,6 +1196,9 @@ export function crearProductosLacteos(scene) {
 
     // ========================================================
     // 6. DEPARTAMENTO DE ROPA
+    // Percheros centrados en:
+    // (-25.7,-4), (-25.7,2), (-25.7,8)
+    // Barra superior: Y = 1.75
     // ========================================================
 
     const prendas = [
@@ -1205,9 +1208,9 @@ export function crearProductosLacteos(scene) {
             codigo: 'BLUSA',
             x: -26.35,
             z: -4,
-            altura: 1.75,
-            ancho: 1.45,
-            profundidad: 0.70
+            altura: 1.40,
+            ancho: 0.95,
+            profundidad: 0.45
         },
         {
             nombre: 'Sudadera negra',
@@ -1215,9 +1218,9 @@ export function crearProductosLacteos(scene) {
             codigo: 'SUDADERA_NEGRA',
             x: -25.05,
             z: -4,
-            altura: 1.90,
-            ancho: 1.50,
-            profundidad: 0.75
+            altura: 1.40,
+            ancho: 0.95,
+            profundidad: 0.45
         },
         {
             nombre: 'Sudadera roja',
@@ -1225,9 +1228,9 @@ export function crearProductosLacteos(scene) {
             codigo: 'SUDADERA_ROJA',
             x: -26.35,
             z: 2,
-            altura: 1.90,
-            ancho: 1.50,
-            profundidad: 0.75
+            altura: 1.40,
+            ancho: 0.95,
+            profundidad: 0.45
         },
         {
             nombre: 'Chamarra negra',
@@ -1235,9 +1238,9 @@ export function crearProductosLacteos(scene) {
             codigo: 'CHAMARRA_NEGRA',
             x: -25.05,
             z: 2,
-            altura: 2.00,
-            ancho: 1.55,
-            profundidad: 0.75
+            altura: 1.40,
+            ancho: 0.95,
+            profundidad: 0.45
         },
         {
             nombre: 'Pantalón de mezclilla',
@@ -1245,9 +1248,9 @@ export function crearProductosLacteos(scene) {
             codigo: 'PANTALON_MEZCLILLA',
             x: -26.35,
             z: 8,
-            altura: 1.65,
-            ancho: 1.30,
-            profundidad: 0.65
+            altura: 1.40,
+            ancho: 0.85,
+            profundidad: 0.40
         },
         {
             nombre: 'Vestido',
@@ -1255,9 +1258,9 @@ export function crearProductosLacteos(scene) {
             codigo: 'VESTIDO',
             x: -25.05,
             z: 8,
-            altura: 1.85,
-            ancho: 1.35,
-            profundidad: 0.70
+            altura: 1.40,
+            ancho: 0.90,
+            profundidad: 0.40
         }
     ];
 
