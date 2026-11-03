@@ -91,10 +91,6 @@ export function crearProductosLacteos(scene) {
     // MEDIDAS REALES DE LAS REPISAS
     // ========================================================
 
-    // Góndolas: niveles de mobiliario.js:
-    // [0.43, 0.86, 1.29, 1.72]
-    // Superficie superior = centro + 0.0325
-
     const nivelesGondola = [
         0.4625,
         0.8925,
@@ -102,20 +98,12 @@ export function crearProductosLacteos(scene) {
         1.7525
     ];
 
-    // Refrigeradores:
-    // [0.50, 0.93, 1.36, 1.79]
-    // Superficie superior = centro + 0.0225
-
     const nivelesRefrigerador = [
         0.5225,
         0.9525,
         1.3825,
         1.8125
     ];
-
-    // Limpieza:
-    // [0.43, 0.78, 1.13, 1.48, 1.83]
-    // Superficie superior = centro + 0.0275
 
     const nivelesLimpieza = [
         0.4575,
@@ -125,7 +113,6 @@ export function crearProductosLacteos(scene) {
         1.8575
     ];
 
-    // Cuatro posiciones a lo largo de cada góndola.
     const posicionesGondola = [
         -1.95,
         -0.65,
@@ -138,7 +125,6 @@ export function crearProductosLacteos(scene) {
         0.48
     ];
 
-    // Orientación base de los modelos GLB.
     const GIRO_FRENTE = Math.PI / 2;
 
     let modelosCargados = 0;
@@ -207,7 +193,6 @@ export function crearProductosLacteos(scene) {
             undefined,
             (error) => {
                 modelosFallidos++;
-
                 cacheModelos.delete(archivo);
 
                 console.error(
@@ -420,7 +405,6 @@ export function crearProductosLacteos(scene) {
         const anchoMaximo = limites.ancho ?? 0.44;
         const profundidadMaxima = limites.profundidad ?? 0.42;
 
-        // Escala uniforme para conservar proporciones.
         const escalaAltura = altura / dimensiones.y;
         const escalaAncho = anchoMaximo / dimensiones.x;
         const escalaProfundidad =
@@ -438,7 +422,6 @@ export function crearProductosLacteos(scene) {
         const cajaFinal = new THREE.Box3()
             .setFromObject(modelo);
 
-        // Centrar el producto y apoyar su base en la repisa.
         const centroX =
             (cajaFinal.min.x + cajaFinal.max.x) / 2;
 
@@ -452,10 +435,6 @@ export function crearProductosLacteos(scene) {
         );
 
         modelo.updateMatrixWorld(true);
-
-        // ----------------------------------------------------
-        // METADATOS INDIVIDUALES
-        // ----------------------------------------------------
 
         const idUnidad = `UNIDAD_${String(
             siguienteIdUnidad++
@@ -613,9 +592,6 @@ export function crearProductosLacteos(scene) {
     // ========================================================
 
     const catalogoGondolas = [
-
-        // CEREALES
-
         {
             nombre: 'Nesquik',
             archivo: '/modelos/nesquik.glb',
@@ -646,9 +622,6 @@ export function crearProductosLacteos(scene) {
             lado: -1,
             altura: 0.30
         },
-
-        // DORITOS
-
         {
             nombre: 'Dorito',
             archivo: '/modelos/Dorito.glb',
@@ -689,9 +662,6 @@ export function crearProductosLacteos(scene) {
             lado: 1,
             altura: 0.40
         },
-
-        // SABRITAS
-
         {
             nombre: 'Sabritas',
             archivo: '/modelos/Sabritas.glb',
@@ -722,9 +692,6 @@ export function crearProductosLacteos(scene) {
             lado: -1,
             altura: 0.35
         },
-
-        // ENLATADOS
-
         {
             nombre: 'Frijoles',
             archivo: '/modelos/Frijoles.glb',
@@ -765,9 +732,6 @@ export function crearProductosLacteos(scene) {
             lado: 1,
             altura: 0.30
         },
-
-        // ACEITES
-
         {
             nombre: 'Aceite',
             archivo: '/modelos/Aceite.glb',
@@ -778,9 +742,6 @@ export function crearProductosLacteos(scene) {
             lado: -1,
             altura: 0.42
         },
-
-        // PAPEL E HIGIENE
-
         {
             nombre: 'Papel higiénico',
             archivo: '/modelos/papel.glb',
@@ -1162,8 +1123,6 @@ export function crearProductosLacteos(scene) {
         }
     ];
 
-    // El módulo mide 2.8 de ancho.
-    // Cada tipo ocupa una columna independiente.
     const columnasLimpieza = [
         -0.90,
         -0.30,
@@ -1203,6 +1162,7 @@ export function crearProductosLacteos(scene) {
 
     // ========================================================
     // 6. DEPARTAMENTO DE ROPA
+    // CUATRO PRENDAS AGRANDADAS
     // ========================================================
 
     const prendas = [
@@ -1212,7 +1172,9 @@ export function crearProductosLacteos(scene) {
             codigo: 'BLUSA',
             x: -26.35,
             z: -4,
-            altura: 0.95
+            altura: 1.15,
+            ancho: 1.15,
+            profundidad: 0.55
         },
         {
             nombre: 'Sudadera negra',
@@ -1220,7 +1182,9 @@ export function crearProductosLacteos(scene) {
             codigo: 'SUDADERA_NEGRA',
             x: -25.05,
             z: -4,
-            altura: 1.05
+            altura: 1.35,
+            ancho: 1.15,
+            profundidad: 0.55
         },
         {
             nombre: 'Sudadera roja',
@@ -1228,7 +1192,9 @@ export function crearProductosLacteos(scene) {
             codigo: 'SUDADERA_ROJA',
             x: -26.35,
             z: 2,
-            altura: 1.05
+            altura: 1.35,
+            ancho: 1.15,
+            profundidad: 0.55
         },
         {
             nombre: 'Chamarra negra',
@@ -1236,7 +1202,9 @@ export function crearProductosLacteos(scene) {
             codigo: 'CHAMARRA_NEGRA',
             x: -25.05,
             z: 2,
-            altura: 1.10
+            altura: 1.40,
+            ancho: 1.15,
+            profundidad: 0.55
         },
         {
             nombre: 'Pantalón de mezclilla',
@@ -1244,7 +1212,9 @@ export function crearProductosLacteos(scene) {
             codigo: 'PANTALON_MEZCLILLA',
             x: -26.35,
             z: 8,
-            altura: 1.00
+            altura: 1.00,
+            ancho: 0.95,
+            profundidad: 0.45
         },
         {
             nombre: 'Vestido',
@@ -1252,7 +1222,9 @@ export function crearProductosLacteos(scene) {
             codigo: 'VESTIDO',
             x: -25.05,
             z: 8,
-            altura: 1.15
+            altura: 1.15,
+            ancho: 0.95,
+            profundidad: 0.45
         }
     ];
 
@@ -1274,8 +1246,8 @@ export function crearProductosLacteos(scene) {
                     GIRO_FRENTE,
                     'Ropa',
                     {
-                        ancho: 0.95,
-                        profundidad: 0.45
+                        ancho: prenda.ancho,
+                        profundidad: prenda.profundidad
                     }
                 );
             }
