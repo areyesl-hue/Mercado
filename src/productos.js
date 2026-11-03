@@ -1122,109 +1122,105 @@ export function crearProductosLacteos(scene) {
             });
         });
     });
+// ========================================================
+// 6. DEPARTAMENTO DE ROPA
+// Prendas levantadas hasta el tubo del perchero.
+// ========================================================
 
-    // ========================================================
-    // 6. DEPARTAMENTO DE ROPA
-    //
-    // Tubo del perchero: Y = 1.75
-    // Altura de las prendas: 1.60
-    // Base de las prendas: Y = 0.15
-    //
-    // Aumentamos el ancho y la profundidad permitidos
-    // para evitar que las prendas se vean diminutas.
-    // ========================================================
+const ALTURA_TUBO_ROPA = 1.75;
 
-    const ALTURA_TUBO_ROPA = 1.75;
-    const ALTURA_PRENDA = 1.60;
-    const BASE_PRENDA = ALTURA_TUBO_ROPA - ALTURA_PRENDA;
+// Levantamos las prendas desde su posición anterior.
+// Antes: Y = 0.35
+// Ahora: Y = 0.75
+const BASE_PRENDA = 0.75;
+const ALTURA_PRENDA = 1.60;
 
-    const prendas = [
-        {
-            nombre: 'Blusa',
-            archivo: '/modelos/Blusa.glb',
-            codigo: 'BLUSA',
-            x: -26.35,
-            z: -4,
-            ancho: 1.20,
-            profundidad: 0.70
-        },
-        {
-            nombre: 'Sudadera negra',
-            archivo: '/modelos/SudaderaNegra.glb',
-            codigo: 'SUDADERA_NEGRA',
-            x: -25.05,
-            z: -4,
-            ancho: 1.20,
-            profundidad: 0.70
-        },
-        {
-            nombre: 'Sudadera roja',
-            archivo: '/modelos/sudaderaroja.glb',
-            codigo: 'SUDADERA_ROJA',
-            x: -26.35,
-            z: 2,
-            ancho: 1.20,
-            profundidad: 0.70
-        },
-        {
-            nombre: 'Chamarra negra',
-            archivo: '/modelos/chamarranegra.glb',
-            codigo: 'CHAMARRA_NEGRA',
-            x: -25.05,
-            z: 2,
-            ancho: 1.20,
-            profundidad: 0.70
-        },
-        {
-            nombre: 'Pantalón de mezclilla',
-            archivo: '/modelos/pantalomezclilla.glb',
-            codigo: 'PANTALON_MEZCLILLA',
-            x: -26.35,
-            z: 8,
-            ancho: 1.15,
-            profundidad: 0.65
-        },
-        {
-            nombre: 'Vestido',
-            archivo: '/modelos/vesitdo.glb',
-            codigo: 'VESTIDO',
-            x: -25.05,
-            z: 8,
-            ancho: 1.20,
-            profundidad: 0.70
-        }
-    ];
+const prendas = [
+    {
+        nombre: 'Blusa',
+        archivo: '/modelos/Blusa.glb',
+        codigo: 'BLUSA',
+        x: -26.35,
+        z: -4,
+        ancho: 1.20,
+        profundidad: 0.70
+    },
+    {
+        nombre: 'Sudadera negra',
+        archivo: '/modelos/SudaderaNegra.glb',
+        codigo: 'SUDADERA_NEGRA',
+        x: -25.05,
+        z: -4,
+        ancho: 1.20,
+        profundidad: 0.70
+    },
+    {
+        nombre: 'Sudadera roja',
+        archivo: '/modelos/sudaderaroja.glb',
+        codigo: 'SUDADERA_ROJA',
+        x: -26.35,
+        z: 2,
+        ancho: 1.20,
+        profundidad: 0.70
+    },
+    {
+        nombre: 'Chamarra negra',
+        archivo: '/modelos/chamarranegra.glb',
+        codigo: 'CHAMARRA_NEGRA',
+        x: -25.05,
+        z: 2,
+        ancho: 1.20,
+        profundidad: 0.70
+    },
+    {
+        nombre: 'Pantalón de mezclilla',
+        archivo: '/modelos/pantalomezclilla.glb',
+        codigo: 'PANTALON_MEZCLILLA',
+        x: -26.35,
+        z: 8,
+        ancho: 1.15,
+        profundidad: 0.65
+    },
+    {
+        nombre: 'Vestido',
+        archivo: '/modelos/vesitdo.glb',
+        codigo: 'VESTIDO',
+        x: -25.05,
+        z: 8,
+        ancho: 1.20,
+        profundidad: 0.70
+    }
+];
 
-    prendas.forEach((prenda) => {
-        cargarModelo(prenda.archivo, prenda.nombre, (original) => {
-            const fuentes = crearFuentesIndependientes(original);
-            const fuente = fuentes[0];
+prendas.forEach((prenda) => {
+    cargarModelo(prenda.archivo, prenda.nombre, (original) => {
+        const fuentes = crearFuentesIndependientes(original);
+        const fuente = fuentes[0];
 
-            if (!fuente) return;
+        if (!fuente) return;
 
-            const modeloPrenda = crearCopia(
-                fuente,
-                prenda.codigo,
-                prenda.x,
-                BASE_PRENDA,
-                prenda.z,
-                ALTURA_PRENDA,
-                GIRO_FRENTE,
-                'Ropa',
-                {
-                    ancho: prenda.ancho,
-                    profundidad: prenda.profundidad
-                }
-            );
-
-            if (modeloPrenda) {
-                modeloPrenda.userData.esPrenda = true;
-                modeloPrenda.userData.alturaTubo = ALTURA_TUBO_ROPA;
-                modeloPrenda.userData.basePrenda = BASE_PRENDA;
+        const modeloPrenda = crearCopia(
+            fuente,
+            prenda.codigo,
+            prenda.x,
+            BASE_PRENDA,
+            prenda.z,
+            ALTURA_PRENDA,
+            GIRO_FRENTE,
+            'Ropa',
+            {
+                ancho: prenda.ancho,
+                profundidad: prenda.profundidad
             }
-        });
-    });
+        );
 
+        if (modeloPrenda) {
+            modeloPrenda.userData.esPrenda = true;
+            modeloPrenda.userData.alturaTubo = ALTURA_TUBO_ROPA;
+            modeloPrenda.userData.basePrenda = BASE_PRENDA;
+        }
+    });
+});
     // ========================================================
     // 7. CONSULTAS PARA CLIENTES Y VENTAS
     // ========================================================
