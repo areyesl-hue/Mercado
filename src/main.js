@@ -54,8 +54,9 @@ const CONFIG = {
     maximoRegistros: 20000
 };
 
-// El HUD no necesita actualizarse 60 veces por segundo.
 const INTERVALO_HUD = 0.25;
+const INTERVALO_REINTENTO_CAJA = 1;
+
 let acumuladorHUD = 0;
 
 // ============================================================
@@ -299,6 +300,9 @@ function iniciar() {
     crearInterfaz();
     crearEstructuraSupermercado();
 
+    // Refuerza la desactivación de sombras en los objetos existentes.
+    optimizarSombrasEscena();
+
     crearLadrones();
     crearSistemaVehiculos();
 
@@ -321,6 +325,8 @@ function crearEscena() {
     escena = new THREE.Scene();
     escena.name = 'ESCENA_SUPERMERCADO';
     escena.background = new THREE.Color(CONFIG.colorCieloDia);
+
+    // La niebla ayuda a reducir el detalle visual a larga distancia.
     escena.fog = new THREE.Fog(0xc7d9e9, 65, 150);
 }
 
@@ -352,7 +358,10 @@ function crearRenderizador() {
     renderizador.setSize(window.innerWidth, window.innerHeight);
     renderizador.outputColorSpace = THREE.SRGBColorSpace;
     renderizador.toneMapping = THREE.NoToneMapping;
-    renderizador.shadowMap.enabled = CONFIG.sombras;
+
+    // Sombras completamente desactivadas.
+    renderizador.shadowMap.enabled = false;
+    renderizador.shadowMap.autoUpdate = false;
 
     document.body.style.margin = '0';
     document.body.style.overflow = 'hidden';
@@ -360,24 +369,37 @@ function crearRenderizador() {
 }
 
 // ============================================================
-// ILUMINACIÓN
+// ILUMINACIÓN OPTIMIZADA
 // ============================================================
 
 function crearIluminacion() {
+    // Luz ambiental: ilumina uniformemente todo el supermercado.
     luzAmbiente = new THREE.HemisphereLight(
         0xe8f3ff,
-        0x6d6250,
-        1.8
+        0x777064,
+        1.45
     );
+
     escena.add(luzAmbiente);
 
-    luzSol = new THREE.DirectionalLight(0xffedcf, 2);
+    // Una sola luz direccional principal.
+    luzSol = new THREE.DirectionalLight(
+        0xffedcf,
+        1.15
+    );
+
     luzSol.position.set(-35, 55, 35);
     luzSol.castShadow = false;
     escena.add(luzSol);
 
-    luzLuna = new THREE.DirectionalLight(0x829bc9, 0.15);
+    // Luz nocturna desactivada durante el día.
+    luzLuna = new THREE.DirectionalLight(
+        0x829bc9,
+        0.35
+    );
+
     luzLuna.position.set(20, 35, -25);
+    luzLuna.castShadow = false;
     luzLuna.visible = false;
     escena.add(luzLuna);
 }
@@ -387,18 +409,41 @@ function actualizarIluminacion() {
         escena.background.setHex(CONFIG.colorCieloNoche);
         escena.fog.color.setHex(CONFIG.colorCieloNoche);
 
-        luzAmbiente.intensity = 0.65;
-        luzSol.intensity = 0.15;
+        luzAmbiente.intensity = 0.85;
+        luzSol.intensity = 0.08;
+
         luzLuna.visible = true;
-        luzLuna.intensity = 0.8;
+        luzLuna.intensity = 0.45;
     } else {
         escena.background.setHex(CONFIG.colorCieloDia);
         escena.fog.color.setHex(0xc7d9e9);
 
-        luzAmbiente.intensity = 1.8;
-        luzSol.intensity = 2;
+        luzAmbiente.intensity = 1.45;
+        luzSol.intensity = 1.15;
+
         luzLuna.visible = false;
     }
+}
+
+// ============================================================
+// OPTIMIZAR SOMBRAS DE LOS OBJETOS
+// ============================================================
+
+function optimizarSombrasEscena() {
+    if (!escena) return;
+
+    escena.traverse(objeto => {
+        if (objeto.isLight) {
+            objeto.castShadow = false;
+        }
+
+        if (objeto.isMesh) {
+            objeto.castShadow = false;
+            objeto.receiveShadow = false;
+        }
+    });
+
+    console.info('[RENDIMIENTO] Sombras desactivadas en la escena.');
 }
 
 // ============================================================
@@ -440,6 +485,9 @@ function crearEstructuraSupermercado() {
     } catch (error) {
         console.error('Error al crear estacionamiento:', error);
     }
+
+    // Revisa también los objetos creados por los módulos.
+    optimizarSombrasEscena();
 }
 
 // ============================================================
@@ -713,6 +761,7 @@ function crearClienteParaVehiculo(datos) {
             },
             fase: 'entrando',
             tiempo: 0,
+            tiempoEsperaCaja: 0,
             pagoSolicitado: false,
             salidaSolicitada: false,
             intentosSalida: 0,
@@ -943,8 +992,6 @@ function actualizarEntidades(delta) {
     }
 
     actualizarFasesVisitantes(delta);
-
-    // El HUD se actualiza por separado, no en cada fotograma.
 }
 
 function actualizarLista(lista, delta) {
@@ -1020,10 +1067,19 @@ function obtenerComprasCliente(cliente) {
 function actualizarFasesVisitantes(delta) {
     for (const visita of visitantesPorVehiculo.values()) {
         const cliente = visita.cliente;
+
         if (!cliente || cliente.eliminado) continue;
 
+        // Espera controlada cuando todas las cajas están ocupadas.
         if (visita.fase === 'esperandoCaja') {
-            iniciarPagoVisitante(visita);
+            visita.tiempoEsperaCaja =
+                (visita.tiempoEsperaCaja ?? 0) + delta;
+
+            if (visita.tiempoEsperaCaja >= INTERVALO_REINTENTO_CAJA) {
+                visita.tiempoEsperaCaja = 0;
+                iniciarPagoVisitante(visita);
+            }
+
             continue;
         }
 
@@ -1081,6 +1137,7 @@ function iniciarPagoVisitante(visita) {
     if (!caja) {
         visita.fase = 'esperandoCaja';
         visita.pagoSolicitado = false;
+        visita.tiempoEsperaCaja = 0;
 
         mostrarMensaje(
             `${visita.nombreCliente} está esperando una caja libre.`
@@ -2073,7 +2130,7 @@ function configurarEventos() {
 }
 
 // ============================================================
-// BUCLE PRINCIPAL OPTIMIZADO
+// BUCLE PRINCIPAL
 // ============================================================
 
 function iniciarAnimacion() {
@@ -2085,11 +2142,11 @@ function iniciarAnimacion() {
 
         actualizarJugador(delta);
 
-        // Los clientes, ladrones, carritos y vehículos conservan
-        // su actualización normal para no provocar tirones.
+        // Se mantiene la actualización de las animaciones
+        // en cada fotograma para evitar movimientos entrecortados.
         actualizarEntidades(delta);
 
-        // Actualizar el HUD cuatro veces por segundo.
+        // El HUD solo se actualiza cuatro veces por segundo.
         acumuladorHUD += delta;
 
         if (acumuladorHUD >= INTERVALO_HUD) {
