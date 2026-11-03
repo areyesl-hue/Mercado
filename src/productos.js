@@ -1126,13 +1126,16 @@ export function crearProductosLacteos(scene) {
 // 6. DEPARTAMENTO DE ROPA
 // Prendas levantadas hasta el tubo del perchero.
 // ========================================================
+// ========================================================
+// 6. DEPARTAMENTO DE ROPA
+// ========================================================
 
 const ALTURA_TUBO_ROPA = 1.75;
 
-// Levantamos las prendas desde su posición anterior.
-// Antes: Y = 0.35
-// Ahora: Y = 0.75
-const BASE_PRENDA = 0.75;
+// Altura de colocación de las prendas
+const BASE_PRENDA = 0.90;
+
+// Tamaño de los modelos
 const ALTURA_PRENDA = 1.60;
 
 const prendas = [
@@ -1193,33 +1196,31 @@ const prendas = [
 ];
 
 prendas.forEach((prenda) => {
-    cargarModelo(prenda.archivo, prenda.nombre, (original) => {
-        const fuentes = crearFuentesIndependientes(original);
-        const fuente = fuentes[0];
+    cargarModelo(
+        prenda.archivo,
+        prenda.nombre,
+        (original) => {
+            const fuentes = crearFuentesIndependientes(original);
+            const fuente = fuentes[0];
 
-        if (!fuente) return;
+            if (!fuente) return;
 
-        const modeloPrenda = crearCopia(
-            fuente,
-            prenda.codigo,
-            prenda.x,
-            BASE_PRENDA,
-            prenda.z,
-            ALTURA_PRENDA,
-            GIRO_FRENTE,
-            'Ropa',
-            {
-                ancho: prenda.ancho,
-                profundidad: prenda.profundidad
-            }
-        );
-
-        if (modeloPrenda) {
-            modeloPrenda.userData.esPrenda = true;
-            modeloPrenda.userData.alturaTubo = ALTURA_TUBO_ROPA;
-            modeloPrenda.userData.basePrenda = BASE_PRENDA;
+            crearCopia(
+                fuente,
+                prenda.codigo,
+                prenda.x,
+                BASE_PRENDA,
+                prenda.z,
+                ALTURA_PRENDA,
+                GIRO_FRENTE,
+                'Ropa',
+                {
+                    ancho: prenda.ancho,
+                    profundidad: prenda.profundidad
+                }
+            );
         }
-    });
+    );
 });
     // ========================================================
     // 7. CONSULTAS PARA CLIENTES Y VENTAS
