@@ -1651,9 +1651,9 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
             if (config.carrito?.agregarProducto) {
 
-                // No retirar el producto de su padre antes de
-                // llamar a agregarProducto(). El carrito necesita
-                // conocer el padre original para conservarlo.
+                // IMPORTANTE:
+                // No retirar el producto de su padre.
+                // agregarProducto necesita el parent original.
                 agregado = config.carrito.agregarProducto(producto, {
                     nombre: compra.nombre,
                     precio: compra.precio,
@@ -1673,7 +1673,8 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             );
         }
 
-        // Si el carrito rechaza el producto, devolverlo al estante.
+        // Si el carrito no acepta el producto,
+        // se devuelve a su estante original.
         if (!agregado) {
 
             console.error(
@@ -1693,7 +1694,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             return;
         }
 
-        // Registrar la compra solamente si el carrito la aceptó.
+        // Registrar la compra únicamente si fue aceptada.
         compras.push(compra);
 
         producto.userData.enCarrito = true;
@@ -1723,7 +1724,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         console.log(
             `[CLIENTE ${id}] Producto agregado al carrito: ${compra.nombre}`,
-            `| Total: ${config.carrito.cantidadProductos ?? 'N/D'}`
+            `| Total: ${config.carrito?.cantidadProductos ?? 'N/D'}`
         );
 
         cambiarEstado(ESTADOS.BUSCANDO);
