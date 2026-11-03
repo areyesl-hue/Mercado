@@ -1142,7 +1142,7 @@ const prendas = [
         x: -26.35,
         z: -4,
         ancho: 1.40,
-        profundidad: 0.90
+        profundidad: 1.15
     },
     {
         nombre: 'Sudadera negra',
@@ -1151,7 +1151,7 @@ const prendas = [
         x: -25.05,
         z: -4,
         ancho: 1.40,
-        profundidad: 0.90
+        profundidad: 1.00
     },
     {
         nombre: 'Sudadera roja',
@@ -1160,7 +1160,7 @@ const prendas = [
         x: -26.35,
         z: 2,
         ancho: 1.20,
-        profundidad: 0.90
+        profundidad: 1.00
     },
     {
         nombre: 'Chamarra negra',
@@ -1169,7 +1169,7 @@ const prendas = [
         x: -25.05,
         z: 2,
         ancho: 1.20,
-        profundidad: 0.90
+        profundidad: 1.00
     },
     {
         nombre: 'Pantalón de mezclilla',
