@@ -1,9 +1,10 @@
+
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 // ============================================================
 // PRODUCTOS DEL SUPERMERCADO
-// Cada grupo independiente de un GLB representa un producto.
+// Cada grupo independiente del GLB representa una unidad.
 // Cada unidad tiene ID, precio, categoría y estado propio.
 // ============================================================
 
@@ -123,7 +124,6 @@ export function crearProductosLacteos(scene) {
             archivo,
             (gltf) => {
                 const original = gltf.scene;
-
                 original.name = nombre;
 
                 original.traverse((objeto) => {
@@ -167,12 +167,7 @@ export function crearProductosLacteos(scene) {
     }
 
     // ========================================================
-    // DETECTAR GRUPOS DE PRODUCTOS DENTRO DEL GLB
-    //
-    // Busca primero un contenedor que tenga varios grupos
-    // independientes con mallas.
-    //
-    // Evita dividir las piezas internas de cada producto.
+    // DETECTAR MALLAS
     // ========================================================
 
     function contieneMallas(objeto) {
@@ -185,6 +180,13 @@ export function crearProductosLacteos(scene) {
         return encontrado;
     }
 
+    // ========================================================
+    // DETECTAR GRUPOS INDEPENDIENTES
+    //
+    // Cada grupo seleccionado debe representar un producto
+    // completo. No se separan las piezas internas de la bolsa.
+    // ========================================================
+
     function obtenerGruposProducto(original) {
         original.updateMatrixWorld(true);
 
@@ -196,14 +198,10 @@ export function crearProductosLacteos(scene) {
                 );
             });
 
-            // Si encontramos varios grupos hermanos con
-            // geometría, son candidatos a productos separados.
             if (gruposHijos.length >= 2) {
                 return gruposHijos;
             }
 
-            // Si existe un solo grupo, seguir buscando
-            // dentro de él por si contiene varios productos.
             for (const hijo of padre.children) {
                 const resultado = buscarContenedor(hijo);
 
@@ -217,7 +215,7 @@ export function crearProductosLacteos(scene) {
 
         const grupos = buscarContenedor(original);
 
-        if (!grupos || grupos.length === 0) {
+        if (!grupos) {
             console.warn(
                 `No se detectaron grupos independientes en "${original.name}". ` +
                 'Se utilizará el modelo completo como una unidad.'
@@ -230,14 +228,20 @@ export function crearProductosLacteos(scene) {
     }
 
     // ========================================================
-    // CREAR FUENTES INDEPENDIENTES
+    // EXTRAER Y NORMALIZAR CADA PRODUCTO
     //
-    // Importante:
-    // Conserva las transformaciones relativas del GLB.
-    // No reinicia las transformaciones internas de las piezas.
+    // CORRECCIÓN PRINCIPAL:
+    // 1. Se calcula la transformación mundial del grupo.
+    // 2. Se clona el grupo completo.
+    // 3. Se convierte su transformación a coordenadas locales
+    //    del GLB.
+    // 4. Se centra cada producto individualmente.
+    // 5. Se conservan las transformaciones de sus piezas.
     // ========================================================
 
     function crearFuentesIndependientes(original) {
+        original.updateMatrixWorld(true);
+
         const grupos = obtenerGruposProducto(original);
 
         original.updateMatrixWorld(true);
@@ -245,28 +249,64 @@ export function crearProductosLacteos(scene) {
         const inversaRaiz = original.matrixWorld.clone().invert();
 
         return grupos.map((grupo, indice) => {
+            grupo.updateWorldMatrix(true, true);
+
+            // Transformación del grupo relativa a la raíz GLB.
             const matrizRelativa = new THREE.Matrix4()
                 .multiplyMatrices(
                     inversaRaiz,
                     grupo.matrixWorld
                 );
 
-            const fuente = new THREE.Group();
-
-            fuente.name = `FUENTE_PRODUCTO_${indice + 1}`;
-
-            fuente.matrixAutoUpdate = false;
-            fuente.matrix.copy(matrizRelativa);
-
+            // Clonar todas las piezas del producto.
             const copia = grupo.clone(true);
 
+            // Eliminar solamente el desplazamiento de la raíz
+            // del grupo. Las piezas internas conservan sus
+            // transformaciones locales.
+            copia.position.set(0, 0, 0);
+            copia.quaternion.identity();
+            copia.scale.set(1, 1, 1);
+            copia.matrix.identity();
             copia.matrixAutoUpdate = true;
 
-            // Se conserva la transformación local del grupo.
-            // La transformación del padre se conserva en fuente.
+            // Aplicar la transformación original del grupo
+            // a un contenedor independiente.
+            const fuente = new THREE.Group();
+            fuente.name = `FUENTE_PRODUCTO_${indice + 1}`;
+
+            matrizRelativa.decompose(
+                fuente.position,
+                fuente.quaternion,
+                fuente.scale
+            );
+
             fuente.add(copia);
+            fuente.updateMatrixWorld(true);
+
+            // Obtener dimensiones del producto individual.
+            const caja = new THREE.Box3()
+                .setFromObject(fuente);
+
+            if (caja.isEmpty()) {
+                console.warn(
+                    `Grupo vacío: ${grupo.name}`
+                );
+
+                return fuente;
+            }
+
+            // Centrar la unidad en sus propias coordenadas.
+            const centro = new THREE.Vector3();
+            caja.getCenter(centro);
+
+            fuente.position.sub(centro);
 
             fuente.updateMatrixWorld(true);
+
+            fuente.userData.esFuenteProducto = true;
+            fuente.userData.grupoOriginal = grupo.name;
+            fuente.userData.indiceGrupo = indice;
 
             return fuente;
         });
@@ -316,16 +356,25 @@ export function crearProductosLacteos(scene) {
 
         modelo.name = nombre;
 
-        // Aplicar el giro a todo el producto.
-        modelo.rotation.y += rotacionY + GIRO_FRENTE;
+        // Cada unidad comienza con la misma transformación
+        // normalizada de su fuente.
+        modelo.position.set(0, 0, 0);
+        modelo.rotation.set(0, 0, 0);
+        modelo.scale.set(1, 1, 1);
+
+        modelo.rotation.y = GIRO_FRENTE + rotacionY;
 
         modelo.updateMatrixWorld(true);
 
         const cajaInicial = new THREE.Box3()
             .setFromObject(modelo);
 
-        const dimensiones = new THREE.Vector3();
+        if (cajaInicial.isEmpty()) {
+            console.warn(`Modelo sin geometría: ${nombre}`);
+            return null;
+        }
 
+        const dimensiones = new THREE.Vector3();
         cajaInicial.getSize(dimensiones);
 
         if (
@@ -335,26 +384,26 @@ export function crearProductosLacteos(scene) {
             altura <= 0
         ) {
             console.warn(
-                `Dimensiones inválidas para ${nombre}.`
+                `Dimensiones inválidas para ${nombre}.`,
+                dimensiones
             );
 
             return null;
         }
 
-        // Ajustar altura sin alterar proporciones.
+        // Escala individual según la altura solicitada.
         const escala = altura / dimensiones.y;
 
-        modelo.scale.multiplyScalar(escala);
-
+        modelo.scale.setScalar(escala);
         modelo.updateMatrixWorld(true);
 
         const cajaFinal = new THREE.Box3()
             .setFromObject(modelo);
 
         const centro = new THREE.Vector3();
-
         cajaFinal.getCenter(centro);
 
+        // Colocar el centro X/Z y apoyar la base en Y.
         modelo.position.set(
             x - centro.x,
             y - cajaFinal.min.y,
@@ -416,14 +465,13 @@ export function crearProductosLacteos(scene) {
         };
 
         productos.add(modelo);
-
         unidadesColocadas++;
 
         return modelo;
     }
 
     // ========================================================
-    // COLOCAR GRUPOS INDEPENDIENTES EN UNA GÓNDOLA
+    // COLOCAR GRUPOS EN GÓNDOLAS
     // ========================================================
 
     function colocarEnGondola(config) {
