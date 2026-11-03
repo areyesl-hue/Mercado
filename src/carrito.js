@@ -8,7 +8,7 @@ const CONFIG_DEFAULT = {
     modelo: '/modelos/carrito.glb',
     posicion: { x: 0, y: 0, z: 0 },
     escala: 1,
-    distancia: 1.15,
+    distancia: 1.09,
     suavizado: 6,
     velocidadMaxima: 5,
     correccionModelo: Math.PI,
