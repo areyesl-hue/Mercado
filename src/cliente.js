@@ -63,9 +63,9 @@ const CONFIG_BASE = {
     distanciaFrenteProducto: 1.25,
 
     tiempoRecoger: 1.1,
-    tiempoInspeccionar: 3.2,
+    tiempoInspeccionar: 2.2,
     tiempoGuardar: 1.4,
-    tiempoDevolver: 1.8,
+    tiempoDevolver: 1.4,
     tiempoEntreProductos: 0.8,
     tiempoReintento: 1.5,
 
@@ -88,7 +88,7 @@ const CONFIG_BASE = {
 
     alturaEstanteInferior: 0.90,
 
-    maximoProductos: 3,
+    maximoProductos: 4,
     distanciaMaximaBusqueda: 40,
 
     separacionProductoRack: 0.06,
