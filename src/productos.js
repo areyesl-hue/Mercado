@@ -1141,43 +1141,43 @@ const prendas = [
         archivo: '/modelos/Blusa.glb',
         codigo: 'BLUSA',
         x: -26.35,
-        z: -4,
-        ancho: 1.20,
-        profundidad: 0.70
+        z: -2,
+        ancho: 1.40,
+        profundidad: 0.90
     },
     {
         nombre: 'Sudadera negra',
         archivo: '/modelos/SudaderaNegra.glb',
         codigo: 'SUDADERA_NEGRA',
         x: -25.05,
-        z: -4,
-        ancho: 1.20,
-        profundidad: 0.70
+        z: -2,
+        ancho: 1.40,
+        profundidad: 0.90
     },
     {
         nombre: 'Sudadera roja',
         archivo: '/modelos/sudaderaroja.glb',
         codigo: 'SUDADERA_ROJA',
         x: -26.35,
-        z: 2,
+        z: 4,
         ancho: 1.20,
-        profundidad: 0.70
+        profundidad: 0.90
     },
     {
         nombre: 'Chamarra negra',
         archivo: '/modelos/chamarranegra.glb',
         codigo: 'CHAMARRA_NEGRA',
         x: -25.05,
-        z: 2,
+        z: 4,
         ancho: 1.20,
-        profundidad: 0.70
+        profundidad: 0.90
     },
     {
         nombre: 'Pantalón de mezclilla',
         archivo: '/modelos/pantalomezclilla.glb',
         codigo: 'PANTALON_MEZCLILLA',
         x: -26.35,
-        z: 8,
+        z: 7,
         ancho: 1.15,
         profundidad: 0.65
     },
@@ -1186,7 +1186,7 @@ const prendas = [
         archivo: '/modelos/vesitdo.glb',
         codigo: 'VESTIDO',
         x: -25.05,
-        z: 8,
+        z: 7,
         ancho: 1.20,
         profundidad: 0.70
     }
