@@ -1143,7 +1143,7 @@ const prendas = [
         nombre: 'Blusa',
         archivo: '/modelos/Blusa.glb',
         codigo: 'BLUSA',
-        x: -24.35,
+        x: -28.35,
         z: -2,
         ancho: 1.40,
         profundidad: 0.90
