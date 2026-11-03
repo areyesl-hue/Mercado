@@ -1,4 +1,3 @@
-
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
@@ -33,15 +32,22 @@ export function crearProductosLacteos(scene) {
         CEREAL_2: 58,
         NESQUIK: 55,
         NESQUIK_EXTRA: 55,
-        ABARROTES: 30,
-        ABARROTES_SURTIDOS: 30,
-        DESPENSA: 30,
-        ENLATADOS: 25,
-        ENLATADOS_SURTIDOS: 25,
-        DORITOS: 22,
-        DORITOS_SURTIDOS: 22,
+
+        DORITO: 22,
+        DORITO_DINAMITA: 22,
+        DORITO_ICONIG: 22,
+        DORITO_PIZZEROLA: 22,
+
         SABRITAS: 18,
-        SABRITAS_SURTIDAS: 18,
+        SABRITAS_ADOBADAS: 18,
+        SABRITAS_LIMON: 18,
+
+        FRIJOLES: 24,
+        ELOTE: 22,
+        JALAPENO: 23,
+        ACEITE: 42,
+        ATUN: 28,
+
         PAPEL: 35,
         PAPEL_HOGAR: 35,
         HIGIENE_PERSONAL: 45,
@@ -182,9 +188,6 @@ export function crearProductosLacteos(scene) {
 
     // ========================================================
     // DETECTAR GRUPOS INDEPENDIENTES
-    //
-    // Cada grupo seleccionado debe representar un producto
-    // completo. No se separan las piezas internas de la bolsa.
     // ========================================================
 
     function obtenerGruposProducto(original) {
@@ -229,14 +232,6 @@ export function crearProductosLacteos(scene) {
 
     // ========================================================
     // EXTRAER Y NORMALIZAR CADA PRODUCTO
-    //
-    // CORRECCIÓN PRINCIPAL:
-    // 1. Se calcula la transformación mundial del grupo.
-    // 2. Se clona el grupo completo.
-    // 3. Se convierte su transformación a coordenadas locales
-    //    del GLB.
-    // 4. Se centra cada producto individualmente.
-    // 5. Se conservan las transformaciones de sus piezas.
     // ========================================================
 
     function crearFuentesIndependientes(original) {
@@ -251,27 +246,20 @@ export function crearProductosLacteos(scene) {
         return grupos.map((grupo, indice) => {
             grupo.updateWorldMatrix(true, true);
 
-            // Transformación del grupo relativa a la raíz GLB.
             const matrizRelativa = new THREE.Matrix4()
                 .multiplyMatrices(
                     inversaRaiz,
                     grupo.matrixWorld
                 );
 
-            // Clonar todas las piezas del producto.
             const copia = grupo.clone(true);
 
-            // Eliminar solamente el desplazamiento de la raíz
-            // del grupo. Las piezas internas conservan sus
-            // transformaciones locales.
             copia.position.set(0, 0, 0);
             copia.quaternion.identity();
             copia.scale.set(1, 1, 1);
             copia.matrix.identity();
             copia.matrixAutoUpdate = true;
 
-            // Aplicar la transformación original del grupo
-            // a un contenedor independiente.
             const fuente = new THREE.Group();
             fuente.name = `FUENTE_PRODUCTO_${indice + 1}`;
 
@@ -284,24 +272,18 @@ export function crearProductosLacteos(scene) {
             fuente.add(copia);
             fuente.updateMatrixWorld(true);
 
-            // Obtener dimensiones del producto individual.
             const caja = new THREE.Box3()
                 .setFromObject(fuente);
 
             if (caja.isEmpty()) {
-                console.warn(
-                    `Grupo vacío: ${grupo.name}`
-                );
-
+                console.warn(`Grupo vacío: ${grupo.name}`);
                 return fuente;
             }
 
-            // Centrar la unidad en sus propias coordenadas.
             const centro = new THREE.Vector3();
             caja.getCenter(centro);
 
             fuente.position.sub(centro);
-
             fuente.updateMatrixWorld(true);
 
             fuente.userData.esFuenteProducto = true;
@@ -356,8 +338,6 @@ export function crearProductosLacteos(scene) {
 
         modelo.name = nombre;
 
-        // Cada unidad comienza con la misma transformación
-        // normalizada de su fuente.
         modelo.position.set(0, 0, 0);
         modelo.rotation.set(0, 0, 0);
         modelo.scale.set(1, 1, 1);
@@ -391,7 +371,6 @@ export function crearProductosLacteos(scene) {
             return null;
         }
 
-        // Escala individual según la altura solicitada.
         const escala = altura / dimensiones.y;
 
         modelo.scale.setScalar(escala);
@@ -403,7 +382,6 @@ export function crearProductosLacteos(scene) {
         const centro = new THREE.Vector3();
         cajaFinal.getCenter(centro);
 
-        // Colocar el centro X/Z y apoyar la base en Y.
         modelo.position.set(
             x - centro.x,
             y - cajaFinal.min.y,
@@ -471,7 +449,7 @@ export function crearProductosLacteos(scene) {
     }
 
     // ========================================================
-    // COLOCAR GRUPOS EN GÓNDOLAS
+    // COLOCAR GRUPOS EN GÓNDOLA
     // ========================================================
 
     function colocarEnGondola(config) {
@@ -480,6 +458,8 @@ export function crearProductosLacteos(scene) {
             config.nombre,
             (original) => {
                 const fuentes = crearFuentesIndependientes(original);
+
+                if (!fuentes.length) return;
 
                 const posiciones = [];
 
@@ -525,11 +505,16 @@ export function crearProductosLacteos(scene) {
     // ========================================================
 
     const catalogoGondolas = [
+
+        // ----------------------------------------------------
+        // CEREALES
+        // ----------------------------------------------------
+
         {
             nombre: 'Cereal',
             archivo: '/modelos/cereal.glb',
             codigo: 'CEREAL',
-            categoria: 'Abarrotes',
+            categoria: 'Cereales',
             rackX: -17,
             rackZ: -13,
             lado: 1,
@@ -539,7 +524,7 @@ export function crearProductosLacteos(scene) {
             nombre: 'Cereal 2',
             archivo: '/modelos/cereal2.glb',
             codigo: 'CEREAL_2',
-            categoria: 'Abarrotes',
+            categoria: 'Cereales',
             rackX: -17,
             rackZ: 0,
             lado: -1,
@@ -549,52 +534,157 @@ export function crearProductosLacteos(scene) {
             nombre: 'Nesquik',
             archivo: '/modelos/nesquik.glb',
             codigo: 'NESQUIK',
-            categoria: 'Abarrotes',
+            categoria: 'Cereales',
             rackX: -17,
             rackZ: 0,
             lado: 1,
             altura: 0.30
         },
+
+        // ----------------------------------------------------
+        // DORITOS
+        // ----------------------------------------------------
+
         {
-            nombre: 'Abarrotes',
-            archivo: '/modelos/Abarrotes.glb',
-            codigo: 'ABARROTES',
-            categoria: 'Abarrotes',
-            rackX: -9,
+            nombre: 'Dorito',
+            archivo: '/modelos/Dorito.glb',
+            codigo: 'DORITO',
+            categoria: 'Botanas',
+            rackX: 9,
             rackZ: -13,
             lado: -1,
             altura: 0.40
         },
         {
-            nombre: 'Enlatados',
-            archivo: '/modelos/enlatados.glb',
-            codigo: 'ENLATADOS',
-            categoria: 'Abarrotes',
-            rackX: -9,
+            nombre: 'Dorito Dinamita',
+            archivo: '/modelos/DoritoDinamita.glb',
+            codigo: 'DORITO_DINAMITA',
+            categoria: 'Botanas',
+            rackX: 9,
             rackZ: -13,
             lado: 1,
-            altura: 0.38
+            altura: 0.40
         },
         {
-            nombre: 'Doritos',
-            archivo: '/modelos/Doritos.glb',
-            codigo: 'DORITOS',
+            nombre: 'Dorito Iconig',
+            archivo: '/modelos/DoritoIconig.glb',
+            codigo: 'DORITO_ICONIG',
             categoria: 'Botanas',
-            rackX: 9,
-            rackZ: -13,
+            rackX: -9,
+            rackZ: 13,
             lado: -1,
             altura: 0.40
         },
         {
+            nombre: 'Dorito Pizzerola',
+            archivo: '/modelos/DoritoPizeerola.glb',
+            codigo: 'DORITO_PIZZEROLA',
+            categoria: 'Botanas',
+            rackX: -9,
+            rackZ: 13,
+            lado: 1,
+            altura: 0.40
+        },
+
+        // ----------------------------------------------------
+        // SABRITAS
+        // ----------------------------------------------------
+
+        {
             nombre: 'Sabritas',
-            archivo: '/modelos/Sabrita.glb',
+            archivo: '/modelos/Sabritas.glb',
             codigo: 'SABRITAS',
             categoria: 'Botanas',
+            rackX: 17,
+            rackZ: -13,
+            lado: -1,
+            altura: 0.35
+        },
+        {
+            nombre: 'Sabritas Adobadas',
+            archivo: '/modelos/SabritasAdobadas.glb',
+            codigo: 'SABRITAS_ADOBADAS',
+            categoria: 'Botanas',
+            rackX: 17,
+            rackZ: -13,
+            lado: 1,
+            altura: 0.35
+        },
+        {
+            nombre: 'Sabritas Limón',
+            archivo: '/modelos/SabritasLimon.glb',
+            codigo: 'SABRITAS_LIMON',
+            categoria: 'Botanas',
             rackX: 9,
+            rackZ: 13,
+            lado: -1,
+            altura: 0.35
+        },
+
+        // ----------------------------------------------------
+        // PRODUCTOS ENLATADOS
+        // ----------------------------------------------------
+
+        {
+            nombre: 'Frijoles',
+            archivo: '/modelos/Frijoles.glb',
+            codigo: 'FRIJOLES',
+            categoria: 'Enlatados',
+            rackX: -9,
+            rackZ: -13,
+            lado: -1,
+            altura: 0.30
+        },
+        {
+            nombre: 'Elote',
+            archivo: '/modelos/Elote.glb',
+            codigo: 'ELOTE',
+            categoria: 'Enlatados',
+            rackX: -9,
             rackZ: -13,
             lado: 1,
             altura: 0.30
         },
+        {
+            nombre: 'Jalapeño',
+            archivo: '/modelos/Jalapeño.glb',
+            codigo: 'JALAPENO',
+            categoria: 'Enlatados',
+            rackX: -17,
+            rackZ: 13,
+            lado: -1,
+            altura: 0.30
+        },
+        {
+            nombre: 'Atún',
+            archivo: '/modelos/Atun.glb',
+            codigo: 'ATUN',
+            categoria: 'Enlatados',
+            rackX: -17,
+            rackZ: 13,
+            lado: 1,
+            altura: 0.30
+        },
+
+        // ----------------------------------------------------
+        // ACEITE
+        // ----------------------------------------------------
+
+        {
+            nombre: 'Aceite',
+            archivo: '/modelos/Aceite.glb',
+            codigo: 'ACEITE',
+            categoria: 'Aceites y abarrotes',
+            rackX: 17,
+            rackZ: 0,
+            lado: -1,
+            altura: 0.42
+        },
+
+        // ----------------------------------------------------
+        // PAPEL E HIGIENE
+        // ----------------------------------------------------
+
         {
             nombre: 'Papel higiénico',
             archivo: '/modelos/papel.glb',
@@ -619,49 +709,9 @@ export function crearProductosLacteos(scene) {
             nombre: 'Cereal Nesquik',
             archivo: '/modelos/nesquik.glb',
             codigo: 'NESQUIK_EXTRA',
-            categoria: 'Abarrotes',
+            categoria: 'Cereales',
             rackX: 17,
             rackZ: -13,
-            lado: -1,
-            altura: 0.30
-        },
-        {
-            nombre: 'Abarrotes surtidos',
-            archivo: '/modelos/Abarrotes.glb',
-            codigo: 'ABARROTES_SURTIDOS',
-            categoria: 'Abarrotes',
-            rackX: -17,
-            rackZ: 13,
-            lado: -1,
-            altura: 0.40
-        },
-        {
-            nombre: 'Enlatados surtidos',
-            archivo: '/modelos/enlatados.glb',
-            codigo: 'ENLATADOS_SURTIDOS',
-            categoria: 'Abarrotes',
-            rackX: -17,
-            rackZ: 13,
-            lado: 1,
-            altura: 0.38
-        },
-        {
-            nombre: 'Botanas Doritos',
-            archivo: '/modelos/Doritos.glb',
-            codigo: 'DORITOS_SURTIDOS',
-            categoria: 'Botanas',
-            rackX: -9,
-            rackZ: 13,
-            lado: -1,
-            altura: 0.40
-        },
-        {
-            nombre: 'Botanas Sabritas',
-            archivo: '/modelos/Sabrita.glb',
-            codigo: 'SABRITAS_SURTIDAS',
-            categoria: 'Botanas',
-            rackX: -9,
-            rackZ: 13,
             lado: 1,
             altura: 0.30
         },
@@ -672,7 +722,7 @@ export function crearProductosLacteos(scene) {
             categoria: 'Hogar',
             rackX: 9,
             rackZ: 13,
-            lado: -1,
+            lado: 1,
             altura: 0.30
         },
         {
@@ -682,18 +732,8 @@ export function crearProductosLacteos(scene) {
             categoria: 'Bebé',
             rackX: 17,
             rackZ: 0,
-            lado: -1,
-            altura: 0.38
-        },
-        {
-            nombre: 'Abarrotes de despensa',
-            archivo: '/modelos/Abarrotes.glb',
-            codigo: 'DESPENSA',
-            categoria: 'Abarrotes',
-            rackX: 17,
-            rackZ: 0,
             lado: 1,
-            altura: 0.40
+            altura: 0.38
         }
     ];
 
