@@ -4255,4 +4255,4 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     actualizarColisiones();
 
     return api;
-}
+}}
