@@ -1,4 +1,3 @@
-
 import * as THREE from 'three';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 
@@ -26,7 +25,8 @@ const CONFIG = {
     colorCieloDia: 0xa9c9e8,
     colorCieloNoche: 0x101827,
 
-    pixelRatioMaximo: 0.85,
+    // RENDIMIENTO
+    pixelRatioMaximo: 0.75,
     antialias: false,
     sombras: false,
     limiteDelta: 0.033,
@@ -53,6 +53,10 @@ const CONFIG = {
     distanciaRegistro: 0.7,
     maximoRegistros: 20000
 };
+
+// El HUD no necesita actualizarse 60 veces por segundo.
+const INTERVALO_HUD = 0.25;
+let acumuladorHUD = 0;
 
 // ============================================================
 // CONFIGURACIÓN DE CLIENTES
@@ -190,7 +194,6 @@ const CONFIG_LADRONES = [
     }
 ];
 
-// APARICIÓN AUTOMÁTICA
 const INTERVALO_LADRONES = 25;
 
 let temporizadorLadrones = INTERVALO_LADRONES;
@@ -301,6 +304,7 @@ function iniciar() {
 
     configurarEventos();
     actualizarIluminacion();
+    actualizarHUD();
 
     iniciarAnimacion();
 
@@ -360,7 +364,11 @@ function crearRenderizador() {
 // ============================================================
 
 function crearIluminacion() {
-    luzAmbiente = new THREE.HemisphereLight(0xe8f3ff, 0x6d6250, 1.8);
+    luzAmbiente = new THREE.HemisphereLight(
+        0xe8f3ff,
+        0x6d6250,
+        1.8
+    );
     escena.add(luzAmbiente);
 
     luzSol = new THREE.DirectionalLight(0xffedcf, 2);
@@ -450,7 +458,11 @@ function crearControles() {
     controles.addEventListener('unlock', limpiarTeclas);
 
     renderizador.domElement.addEventListener('click', () => {
-        if (juegoIniciado && vistaSeguridad === null && !controles.isLocked) {
+        if (
+            juegoIniciado &&
+            vistaSeguridad === null &&
+            !controles.isLocked
+        ) {
             controles.lock();
         }
     });
@@ -468,10 +480,7 @@ function crearLadrones() {
         return;
     }
 
-    // Primer ladrón inmediatamente.
     generarSiguienteLadron();
-
-    // El próximo aparecerá 25 segundos después.
     temporizadorLadrones = INTERVALO_LADRONES;
 
     console.info(
@@ -497,13 +506,10 @@ function generarSiguienteLadron() {
             productosLacteos,
             {
                 ...config,
-
                 altura: 1.75,
                 escala: 1,
-
                 distanciaProducto: 1.5,
                 tiempoRobo: 1.3,
-
                 margenColision: 0.35,
                 tamanoCelda: 0.5,
 
@@ -535,11 +541,7 @@ function generarSiguienteLadron() {
         ladronesSupermercado.push(ladron);
 
         console.info(`[LADRONES] ${config.id} apareció.`);
-
-        mostrarMensaje(
-            `¡Alerta! ${config.id} entró al supermercado.`
-        );
-
+        mostrarMensaje(`¡Alerta! ${config.id} entró al supermercado.`);
     } catch (error) {
         console.error(
             `[LADRONES] Error creando ${config.id}:`,
@@ -555,8 +557,6 @@ function actualizarGeneradorLadrones(delta) {
 
     if (temporizadorLadrones <= 0) {
         generarSiguienteLadron();
-
-        // Reiniciar el temporizador.
         temporizadorLadrones = INTERVALO_LADRONES;
     }
 }
@@ -594,6 +594,7 @@ function crearSistemaVehiculos() {
 
             alSalir: datos => {
                 console.info('[VEHÍCULO] Auto saliendo:', datos);
+
                 const id = datos?.vehiculo?.id;
 
                 if (id !== undefined && id !== null) {
@@ -620,7 +621,11 @@ function crearSistemaVehiculos() {
 function crearClienteParaVehiculo(datos) {
     const idVehiculo = datos?.vehiculo?.id;
 
-    if (!datos?.plaza || idVehiculo === undefined || idVehiculo === null) {
+    if (
+        !datos?.plaza ||
+        idVehiculo === undefined ||
+        idVehiculo === null
+    ) {
         console.warn('[VISITANTE] Datos incompletos del vehículo.', datos);
         return;
     }
@@ -912,11 +917,8 @@ function liberarCajaVisitante(visita) {
 
 function actualizarEntidades(delta) {
     actualizarLista(clientesSupermercado, delta);
-
-    // Actualizar ladrones existentes.
     actualizarLista(ladronesSupermercado, delta);
 
-    // Generar nuevos ladrones cada 25 segundos.
     actualizarGeneradorLadrones(delta);
 
     for (let i = carritosClientes.length - 1; i >= 0; i--) {
@@ -941,7 +943,8 @@ function actualizarEntidades(delta) {
     }
 
     actualizarFasesVisitantes(delta);
-    actualizarHUD();
+
+    // El HUD se actualiza por separado, no en cada fotograma.
 }
 
 function actualizarLista(lista, delta) {
@@ -1078,9 +1081,11 @@ function iniciarPagoVisitante(visita) {
     if (!caja) {
         visita.fase = 'esperandoCaja';
         visita.pagoSolicitado = false;
+
         mostrarMensaje(
             `${visita.nombreCliente} está esperando una caja libre.`
         );
+
         return;
     }
 
@@ -1209,7 +1214,11 @@ function solicitarSalidaVisitante(visita) {
 // ============================================================
 
 function actualizarJugador(delta) {
-    if (!juegoIniciado || !controles.isLocked || vistaSeguridad !== null) {
+    if (
+        !juegoIniciado ||
+        !controles.isLocked ||
+        vistaSeguridad !== null
+    ) {
         return;
     }
 
@@ -1229,7 +1238,9 @@ function actualizarJugador(delta) {
 
     const velocidad = (
         teclas.ShiftLeft || teclas.ShiftRight
-    ) ? CONFIG.velocidadCorrer : CONFIG.velocidadCaminar;
+    )
+        ? CONFIG.velocidadCorrer
+        : CONFIG.velocidadCaminar;
 
     if (teclas.KeyW || teclas.ArrowUp) {
         movimientoJugador.add(vectorAdelante);
@@ -1249,6 +1260,7 @@ function actualizarJugador(delta) {
 
     if (movimientoJugador.lengthSq() > 0) {
         movimientoJugador.normalize();
+
         camara.position.addScaledVector(
             movimientoJugador,
             velocidad * delta
@@ -2036,7 +2048,10 @@ function configurarEventos() {
     window.addEventListener('blur', limpiarTeclas);
 
     document.addEventListener('visibilitychange', () => {
-        if (document.hidden) limpiarTeclas();
+        if (document.hidden) {
+            limpiarTeclas();
+            reloj.getDelta();
+        }
     });
 
     window.addEventListener('resize', () => {
@@ -2058,7 +2073,7 @@ function configurarEventos() {
 }
 
 // ============================================================
-// BUCLE PRINCIPAL
+// BUCLE PRINCIPAL OPTIMIZADO
 // ============================================================
 
 function iniciarAnimacion() {
@@ -2069,7 +2084,18 @@ function iniciarAnimacion() {
         );
 
         actualizarJugador(delta);
+
+        // Los clientes, ladrones, carritos y vehículos conservan
+        // su actualización normal para no provocar tirones.
         actualizarEntidades(delta);
+
+        // Actualizar el HUD cuatro veces por segundo.
+        acumuladorHUD += delta;
+
+        if (acumuladorHUD >= INTERVALO_HUD) {
+            acumuladorHUD = 0;
+            actualizarHUD();
+        }
 
         renderizador.render(escena, camara);
     });
