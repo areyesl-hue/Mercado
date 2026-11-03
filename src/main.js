@@ -1,3 +1,4 @@
+
 import * as THREE from 'three';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 
@@ -9,8 +10,6 @@ import { crearClienteSupermercado } from './cliente.js';
 import { crearCarrito } from './carrito.js';
 import { crearVehiculos } from './vehiculos.js';
 import { crearEstacionamiento } from './estacionamiento.js';
-
-// SISTEMA INDEPENDIENTE DE LADRONES
 import { crearLadron } from './ladron.js';
 
 // ============================================================
@@ -169,7 +168,7 @@ const CONFIG_CLIENTES = [
 ];
 
 // ============================================================
-// CONFIGURACIÓN INDEPENDIENTE DE LADRONES
+// CONFIGURACIÓN DE LADRONES
 // ============================================================
 
 const CONFIG_LADRONES = [
@@ -190,6 +189,12 @@ const CONFIG_LADRONES = [
         productosRobados: 3
     }
 ];
+
+// APARICIÓN AUTOMÁTICA
+const INTERVALO_LADRONES = 25;
+
+let temporizadorLadrones = INTERVALO_LADRONES;
+let indiceSiguienteLadron = 0;
 
 // ============================================================
 // 21 CÁMARAS DE SEGURIDAD
@@ -291,9 +296,7 @@ function iniciar() {
     crearInterfaz();
     crearEstructuraSupermercado();
 
-    // Los ladrones se crean después de cargar los productos.
     crearLadrones();
-
     crearSistemaVehiculos();
 
     configurarEventos();
@@ -454,62 +457,107 @@ function crearControles() {
 }
 
 // ============================================================
-// LADRONES: SISTEMA INDEPENDIENTE
+// SISTEMA DE LADRONES
 // ============================================================
 
 function crearLadrones() {
     if (!productosLacteos) {
         console.error(
-            '[LADRONES] No se recibieron los productos del supermercado. ' +
-            'Revisa qué devuelve crearProductosLacteos().'
+            '[LADRONES] No se recibieron los productos del supermercado.'
         );
         return;
     }
 
-    for (const config of CONFIG_LADRONES) {
-        try {
-            const ladron = crearLadron(
-                escena,
-                productosLacteos,
-                {
-                    ...config,
+    // Primer ladrón inmediatamente.
+    generarSiguienteLadron();
 
-                    altura: 1.75,
-                    escala: 1,
+    // El próximo aparecerá 25 segundos después.
+    temporizadorLadrones = INTERVALO_LADRONES;
 
-                    distanciaProducto: 1.5,
-                    tiempoRobo: 1.3,
+    console.info(
+        `[LADRONES] Generador activado. Intervalo: ${INTERVALO_LADRONES}s`
+    );
+}
 
-                    margenColision: 0.35,
-                    tamanoCelda: 0.5,
+function generarSiguienteLadron() {
+    if (!productosLacteos) {
+        console.warn('[LADRONES] Los productos todavía no están disponibles.');
+        return;
+    }
 
-                    alEscapar: datos => {
-                        console.info(
-                            `[LADRÓN] ${datos.id} escapó.`,
-                            datos
-                        );
+    const config = CONFIG_LADRONES[
+        indiceSiguienteLadron % CONFIG_LADRONES.length
+    ];
 
-                        mostrarMensaje(
-                            `${datos.id} escapó con ${datos.cantidadRobada} productos.`
-                        );
-                    }
+    indiceSiguienteLadron++;
+
+    try {
+        const ladron = crearLadron(
+            escena,
+            productosLacteos,
+            {
+                ...config,
+
+                altura: 1.75,
+                escala: 1,
+
+                distanciaProducto: 1.5,
+                tiempoRobo: 1.3,
+
+                margenColision: 0.35,
+                tamanoCelda: 0.5,
+
+                alRobar: datos => {
+                    console.info(
+                        `[LADRÓN] ${datos.id} robó un producto.`,
+                        datos
+                    );
+                },
+
+                alEscapar: datos => {
+                    console.info(
+                        `[LADRÓN] ${datos.id} escapó.`,
+                        datos
+                    );
+
+                    mostrarMensaje(
+                        `${datos.id} escapó con ${datos.cantidadRobada} productos.`
+                    );
                 }
-            );
-
-            if (!ladron) {
-                console.error(`[LADRONES] No se pudo crear ${config.id}.`);
-                continue;
             }
+        );
 
-            ladronesSupermercado.push(ladron);
-
-            console.info(`[LADRONES] ${config.id} creado correctamente.`);
-        } catch (error) {
-            console.error(
-                `[LADRONES] Error creando ${config.id}:`,
-                error
-            );
+        if (!ladron) {
+            console.error(`[LADRONES] No se pudo crear ${config.id}.`);
+            return;
         }
+
+        ladronesSupermercado.push(ladron);
+
+        console.info(`[LADRONES] ${config.id} apareció.`);
+
+        mostrarMensaje(
+            `¡Alerta! ${config.id} entró al supermercado.`
+        );
+
+    } catch (error) {
+        console.error(
+            `[LADRONES] Error creando ${config.id}:`,
+            error
+        );
+    }
+}
+
+function actualizarGeneradorLadrones(delta) {
+    if (!productosLacteos) return;
+
+    temporizadorLadrones -= delta;
+
+    if (temporizadorLadrones <= 0) {
+        generarSiguienteLadron();
+
+        // Reiniciar el temporizador.
+        temporizadorLadrones = INTERVALO_LADRONES;
     }
 }
 
@@ -863,11 +911,13 @@ function liberarCajaVisitante(visita) {
 // ============================================================
 
 function actualizarEntidades(delta) {
-    // Los clientes se actualizan desde cliente.js.
     actualizarLista(clientesSupermercado, delta);
 
-    // Los ladrones se actualizan exclusivamente desde ladron.js.
+    // Actualizar ladrones existentes.
     actualizarLista(ladronesSupermercado, delta);
+
+    // Generar nuevos ladrones cada 25 segundos.
+    actualizarGeneradorLadrones(delta);
 
     for (let i = carritosClientes.length - 1; i >= 0; i--) {
         const carrito = carritosClientes[i];
