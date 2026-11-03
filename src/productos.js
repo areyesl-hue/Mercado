@@ -5,6 +5,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 // ============================================================
 // PRODUCTOS DEL SUPERMERCADO
 // Three.js | GLB | Unidades independientes
+// Colocación corregida según MOBILIARIO.JS
 // ============================================================
 
 export function crearProductosLacteos(scene) {
@@ -87,33 +88,32 @@ export function crearProductosLacteos(scene) {
     };
 
     // ========================================================
-    // ALTURAS REALES SEGÚN MOBILIARIO.JS
-    // Las alturas indican dónde comienza la base del producto.
+    // ALTURAS DE SUPERFICIES
+    // Se utiliza la cara superior de cada repisa.
     // ========================================================
 
     const nivelesGondola = [
-        0.43,
-        0.86,
-        1.29,
-        1.72
+        0.4625,
+        0.8925,
+        1.3225,
+        1.7525
     ];
 
     const nivelesRefrigerador = [
-        0.50,
-        0.93,
-        1.36,
-        1.79
+        0.5225,
+        0.9525,
+        1.3825,
+        1.8125
     ];
 
     const nivelesLimpieza = [
-        0.43,
-        0.78,
-        1.13,
-        1.48,
-        1.83
+        0.4575,
+        0.8075,
+        1.1575,
+        1.5075,
+        1.8575
     ];
 
-    // Cuatro posiciones distribuidas a lo largo de la repisa.
     const posicionesGondola = [
         -1.95,
         -0.65,
@@ -121,7 +121,6 @@ export function crearProductosLacteos(scene) {
         1.95
     ];
 
-    // Dos columnas por nivel dentro del refrigerador.
     const posicionesRefrigerador = [
         -0.48,
         0.48
@@ -130,7 +129,7 @@ export function crearProductosLacteos(scene) {
     const GIRO_FRENTE = Math.PI / 2;
 
     // ========================================================
-    // REGISTROS Y CACHÉS
+    // REGISTROS
     // ========================================================
 
     let modelosCargados = 0;
@@ -145,7 +144,7 @@ export function crearProductosLacteos(scene) {
     const unidadesPorId = new Map();
 
     // ========================================================
-    // CARGAR MODELOS GLB CON CACHÉ
+    // CARGAR MODELOS GLB
     // ========================================================
 
     function cargarModelo(archivo, nombre, callback) {
@@ -231,7 +230,7 @@ export function crearProductosLacteos(scene) {
     }
 
     // ========================================================
-    // DETECTAR GRUPOS INDEPENDIENTES DEL GLB
+    // DETECTAR GRUPOS INDEPENDIENTES
     // ========================================================
 
     function obtenerGruposProducto(original) {
@@ -361,7 +360,7 @@ export function crearProductosLacteos(scene) {
     }
 
     // ========================================================
-    // OBTENER DIMENSIONES DE UNA FUENTE
+    // OBTENER DIMENSIONES
     // ========================================================
 
     function obtenerDimensionesFuente(fuente) {
@@ -393,9 +392,14 @@ export function crearProductosLacteos(scene) {
     }
 
     // ========================================================
-    // CREAR UNA UNIDAD DE PRODUCTO
-    // x, y, z indican el punto inferior del producto.
-    // Así cada producto descansa sobre su repisa.
+    // CREAR UNIDAD DE PRODUCTO
+    //
+    // CORRECCIÓN PRINCIPAL:
+    // 1. Aplica la rotación antes de medir.
+    // 2. Calcula las dimensiones ya rotadas.
+    // 3. Ajusta la escala para respetar ancho y profundidad.
+    // 4. Centra el producto en X y Z.
+    // 5. Coloca la parte inferior exactamente sobre la repisa.
     // ========================================================
 
     function crearCopia(
@@ -418,18 +422,42 @@ export function crearProductosLacteos(scene) {
             return null;
         }
 
-        const dimensiones = datosFuente.tamano;
+        const modelo = fuente.clone(true);
+
+        modelo.name = nombre;
+
+        // Primero se aplica la rotación.
+        modelo.position.set(0, 0, 0);
+        modelo.scale.setScalar(1);
+        modelo.rotation.set(0, rotacionY, 0);
+
+        modelo.updateMatrixWorld(true);
+
+        // Medir el modelo después de rotarlo.
+        const cajaRotada = new THREE.Box3()
+            .setFromObject(modelo);
+
+        if (cajaRotada.isEmpty()) {
+            console.warn(`Modelo vacío: ${nombre}`);
+            return null;
+        }
+
+        const dimensionesRotadas = new THREE.Vector3();
+        const centroRotado = new THREE.Vector3();
+
+        cajaRotada.getSize(dimensionesRotadas);
+        cajaRotada.getCenter(centroRotado);
 
         if (
-            dimensiones.x <= 0.0001 ||
-            dimensiones.y <= 0.0001 ||
-            dimensiones.z <= 0.0001 ||
+            dimensionesRotadas.x <= 0.0001 ||
+            dimensionesRotadas.y <= 0.0001 ||
+            dimensionesRotadas.z <= 0.0001 ||
             !Number.isFinite(altura) ||
             altura <= 0
         ) {
             console.warn(
                 `Dimensiones inválidas para ${nombre}.`,
-                dimensiones
+                dimensionesRotadas
             );
 
             return null;
@@ -438,10 +466,15 @@ export function crearProductosLacteos(scene) {
         const anchoMaximo = limites.ancho ?? 0.44;
         const profundidadMaxima = limites.profundidad ?? 0.42;
 
-        const escalaAltura = altura / dimensiones.y;
-        const escalaAncho = anchoMaximo / dimensiones.x;
+        // La escala se calcula con las dimensiones rotadas.
+        const escalaAltura =
+            altura / dimensionesRotadas.y;
+
+        const escalaAncho =
+            anchoMaximo / dimensionesRotadas.x;
+
         const escalaProfundidad =
-            profundidadMaxima / dimensiones.z;
+            profundidadMaxima / dimensionesRotadas.z;
 
         const escala = Math.min(
             escalaAltura,
@@ -449,18 +482,30 @@ export function crearProductosLacteos(scene) {
             escalaProfundidad
         );
 
-        const modelo = fuente.clone(true);
-
-        modelo.name = nombre;
-
-        modelo.position.set(
-            x - datosFuente.centro.x * escala,
-            y - (datosFuente.centro.y - dimensiones.y / 2) * escala,
-            z - datosFuente.centro.z * escala
-        );
-
-        modelo.rotation.set(0, rotacionY, 0);
         modelo.scale.setScalar(escala);
+
+        modelo.updateMatrixWorld(true);
+
+        // Obtener la caja final ya escalada.
+        const cajaFinal = new THREE.Box3()
+            .setFromObject(modelo);
+
+        if (cajaFinal.isEmpty()) return null;
+
+        const centroFinal = new THREE.Vector3();
+        const dimensionesFinales = new THREE.Vector3();
+
+        cajaFinal.getCenter(centroFinal);
+        cajaFinal.getSize(dimensionesFinales);
+
+        // Posición correcta:
+        // X y Z centrados.
+        // Y apoyado sobre la superficie.
+        modelo.position.set(
+            x - centroFinal.x,
+            y - cajaFinal.min.y,
+            z - centroFinal.z
+        );
 
         modelo.updateMatrixWorld(true);
 
@@ -495,9 +540,9 @@ export function crearProductosLacteos(scene) {
         modelo.userData.disponible = true;
 
         modelo.userData.posicionEstante = {
-            x: modelo.position.x,
-            y: modelo.position.y,
-            z: modelo.position.z
+            x,
+            y,
+            z
         };
 
         modelo.userData.rotacionEstante = {
@@ -512,17 +557,24 @@ export function crearProductosLacteos(scene) {
             z: modelo.scale.z
         };
 
-        const dimensionesFinales = new THREE.Box3()
+        // Actualizar las dimensiones finales.
+        modelo.updateMatrixWorld(true);
+
+        const cajaMedicion = new THREE.Box3()
             .setFromObject(modelo);
 
         const tamanoFinal = new THREE.Vector3();
-        dimensionesFinales.getSize(tamanoFinal);
+        cajaMedicion.getSize(tamanoFinal);
 
         modelo.userData.dimensionesFinales = {
             ancho: tamanoFinal.x,
             alto: tamanoFinal.y,
             profundidad: tamanoFinal.z
         };
+
+        // Información útil para verificar el apoyo.
+        modelo.userData.superficieApoyo = y;
+        modelo.userData.baseReal = cajaMedicion.min.y;
 
         productos.add(modelo);
 
@@ -535,7 +587,7 @@ export function crearProductosLacteos(scene) {
     }
 
     // ========================================================
-    // ROTACIÓN SEGÚN EL LADO DE LA GÓNDOLA
+    // ROTACIÓN DE GÓNDOLAS
     // ========================================================
 
     function obtenerRotacionGondola(
@@ -924,7 +976,7 @@ export function crearProductosLacteos(scene) {
 
     // ========================================================
     // 3. FRUTAS Y VERDURAS
-    // Superficie de las mesas: Y = 1.00
+    // Mesas: superficie superior Y = 1.00
     // ========================================================
 
     const mesasFrescos = {
@@ -1070,7 +1122,7 @@ export function crearProductosLacteos(scene) {
 
     // ========================================================
     // 4. CARNICERÍA
-    // Superficie del mostrador: Y = 1.24
+    // Bandeja superior: Y = 1.22
     // ========================================================
 
     function colocarEnMostrador(config) {
@@ -1090,7 +1142,7 @@ export function crearProductosLacteos(scene) {
                         fuente,
                         `${config.codigo}_${indice + 1}`,
                         25.1 + dx,
-                        1.24,
+                        1.22,
                         -7.3 + dz,
                         config.altura,
                         config.rotacionY ?? 0,
@@ -1129,7 +1181,7 @@ export function crearProductosLacteos(scene) {
 
     // ========================================================
     // 5. HIGIENE Y LIMPIEZA
-    // Módulo centrado en X=28.3, Z=8
+    // Superficies según MOBILIARIO.JS
     // ========================================================
 
     const productosLimpieza = [
@@ -1196,9 +1248,8 @@ export function crearProductosLacteos(scene) {
 
     // ========================================================
     // 6. DEPARTAMENTO DE ROPA
-    // Percheros centrados en:
-    // (-25.7,-4), (-25.7,2), (-25.7,8)
     // Barra superior: Y = 1.75
+    // La parte superior de cada prenda llega a la barra.
     // ========================================================
 
     const prendas = [
@@ -1379,7 +1430,7 @@ export function crearProductosLacteos(scene) {
 
     console.info(
         'Catálogo de productos iniciado. ' +
-        'Unidades independientes, consultas optimizadas ' +
+        'Modelos independientes, colocación corregida ' +
         'y precios provisionales MXN.'
     );
 
