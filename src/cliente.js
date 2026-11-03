@@ -1,3 +1,4 @@
+
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
@@ -1621,7 +1622,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     }
 
     // ========================================================
-    // GUARDAR PRODUCTO
+    // GUARDAR PRODUCTO EN EL CARRITO
     // ========================================================
 
     function guardarProducto() {
@@ -1644,23 +1645,24 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             precio: numero(datos.precio, 0)
         };
 
-        compras.push(compra);
-
-        producto.parent?.remove(producto);
-
         let agregado = false;
 
         try {
 
             if (config.carrito?.agregarProducto) {
 
-                config.carrito.agregarProducto(producto);
-                agregado = true;
+                // No retirar el producto de su padre antes de
+                // llamar a agregarProducto(). El carrito necesita
+                // conocer el padre original para conservarlo.
+                agregado = config.carrito.agregarProducto(producto, {
+                    nombre: compra.nombre,
+                    precio: compra.precio,
+                    cantidad: 1
+                }) === true;
 
             } else if (config.carrito?.agregar) {
 
-                config.carrito.agregar(producto);
-                agregado = true;
+                agregado = config.carrito.agregar(producto) === true;
             }
 
         } catch (error) {
@@ -1671,7 +1673,32 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             );
         }
 
+        // Si el carrito rechaza el producto, devolverlo al estante.
+        if (!agregado) {
+
+            console.error(
+                `[CLIENTE ${id}] No se pudo agregar ${compra.nombre} al carrito.`
+            );
+
+            if (productoOriginal) {
+                devolverProductoAlEstante();
+            } else {
+                productoEnMano = null;
+                productoOriginal = null;
+                liberarReserva();
+            }
+
+            cambiarEstado(ESTADOS.BUSCANDO);
+
+            return;
+        }
+
+        // Registrar la compra solamente si el carrito la aceptó.
+        compras.push(compra);
+
         producto.userData.enCarrito = true;
+        producto.userData.reservado = false;
+        delete producto.userData.reservadoPor;
 
         productoEnMano = null;
         productoOriginal = null;
@@ -1688,12 +1715,15 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         } catch (error) {
 
-            console.error(error);
+            console.error(
+                `[CLIENTE ${id}] Error en alComprar:`,
+                error
+            );
         }
 
         console.log(
-            `[CLIENTE ${id}] Compra registrada: ${compra.nombre}`,
-            agregado ? '(carrito actualizado)' : ''
+            `[CLIENTE ${id}] Producto agregado al carrito: ${compra.nombre}`,
+            `| Total: ${config.carrito.cantidadProductos ?? 'N/D'}`
         );
 
         cambiarEstado(ESTADOS.BUSCANDO);
