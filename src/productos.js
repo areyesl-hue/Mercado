@@ -1142,7 +1142,7 @@ const prendas = [
         x: -26.35,
         z: -4,
         ancho: 1.40,
-        profundidad: 1.25
+        profundidad: 1.55
     },
     {
         nombre: 'Sudadera negra',
