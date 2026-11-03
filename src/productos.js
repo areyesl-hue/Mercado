@@ -1178,7 +1178,7 @@ const prendas = [
         x: -26.35,
         z: 8,
         ancho: 1.15,
-        profundidad: 0.95
+        profundidad: 0.40
     },
     {
         nombre: 'Vestido',
@@ -1187,7 +1187,7 @@ const prendas = [
         x: -25.05,
         z: 8,
         ancho: 1.20,
-        profundidad: 0.90
+        profundidad: 0.40
     }
 ];
 
