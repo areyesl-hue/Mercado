@@ -4081,14 +4081,53 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
     function detenerAnimacion() {
 
+        if (detenido || eliminado) return;
+
         detenido = true;
 
-        accionCaminar?.fadeOut(0.2);
+        mixer?.stopAllAction();
+        accionCaminar?.stop();
+        accionReposo?.stop();
+
+        restaurarPoseCompleta();
     }
 
     function reproducirAnimacion() {
 
+        if (eliminado || !detenido) return;
+
         detenido = false;
+
+        const caminando = [
+            ESTADOS.ENTRANDO,
+            ESTADOS.ACERCANDO,
+            ESTADOS.RUTA,
+            ESTADOS.CAJA,
+            ESTADOS.REGRESANDO
+        ].includes(estado);
+
+        if (caminando && accionCaminar) {
+
+            accionReposo?.fadeOut(0.2);
+            accionCaminar.reset();
+            accionCaminar.fadeIn(0.2);
+            accionCaminar.paused = false;
+            accionCaminar.play();
+
+        } else if (accionReposo) {
+
+            accionCaminar?.fadeOut(0.2);
+            accionReposo.reset();
+            accionReposo.fadeIn(0.2);
+            accionReposo.play();
+
+        } else if (accionCaminar) {
+
+            accionCaminar.reset();
+            accionCaminar.fadeIn(0.2);
+            accionCaminar.paused = false;
+            accionCaminar.play();
+        }
     }
 
     // ========================================================
@@ -4216,5 +4255,4 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     actualizarColisiones();
 
     return api;
-}
 }
