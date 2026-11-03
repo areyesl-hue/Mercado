@@ -38,6 +38,11 @@ const CONFIG_BASE = {
     velocidadEntrada: 1.8,
     velocidadRegreso: 1.8,
 
+    velocidadGiro: 8,
+    velocidadAnimacion: 8.5,
+    intensidadBalanceo: 1,
+    intensidadRespiracion: 0.035,
+
     limiteX: 29,
     limiteZMin: -27,
     limiteZMax: 55,
@@ -255,6 +260,10 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     let decisionCompra = true;
     let faseAnimacion = Math.random() * Math.PI * 2;
 
+    let deltaAnimacionActual = 1 / 60;
+    let faseRespiracion = Math.random() * Math.PI * 2;
+    let faseCabeza = Math.random() * Math.PI * 2;
+
     const huesos = {};
     const huesosBase = new Map();
 
@@ -281,6 +290,12 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     };
 
     const EJE_X = new THREE.Vector3(1, 0, 0);
+    const EJE_Y = new THREE.Vector3(0, 1, 0);
+    const EJE_Z = new THREE.Vector3(0, 0, 1);
+
+    // ========================================================
+    // ANIMACIÓN DE PRODUCTO
+    // ========================================================
 
     const animacionProducto = {
         activa: false,
@@ -476,6 +491,17 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         );
     }
 
+    // ========================================================
+    // ROTACIONES SUAVES
+    // ========================================================
+
+    function factorSuavizado(velocidad) {
+
+        return 1 - Math.exp(
+            -velocidad * Math.max(deltaAnimacionActual, 0.001)
+        );
+    }
+
     function aplicarRotacion(hueso, eje, angulo) {
 
         if (!hueso) return;
@@ -483,21 +509,33 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         const base = huesosBase.get(hueso);
         if (!base) return;
 
-        hueso.quaternion.copy(base.quaternion);
+        const rotacion = new THREE.Quaternion()
+            .setFromAxisAngle(eje, angulo);
 
-        hueso.quaternion.multiply(
-            new THREE.Quaternion().setFromAxisAngle(eje, angulo)
+        const objetivoRotacion = base.quaternion.clone()
+            .multiply(rotacion);
+
+        hueso.quaternion.slerp(
+            objetivoRotacion,
+            factorSuavizado(config.velocidadAnimacion)
         );
     }
 
-    function restaurarHueso(hueso, intensidad = 0.15) {
+    function restaurarHueso(hueso, intensidad = 1) {
 
         if (!hueso) return;
 
         const base = huesosBase.get(hueso);
         if (!base) return;
 
-        hueso.quaternion.slerp(base.quaternion, intensidad);
+        const factor = factorSuavizado(
+            config.velocidadAnimacion
+        );
+
+        hueso.quaternion.slerp(
+            base.quaternion,
+            limitar(factor * intensidad, 0, 1)
+        );
     }
 
     function restaurarPoseCompleta() {
@@ -508,6 +546,60 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         }
 
         grupo.position.y = 0;
+    }
+
+    function restaurarPoseProgresiva() {
+
+        for (const [hueso, base] of huesosBase) {
+
+            hueso.quaternion.slerp(
+                base.quaternion,
+                factorSuavizado(config.velocidadAnimacion)
+            );
+
+            hueso.position.lerp(
+                base.posicion,
+                factorSuavizado(config.velocidadAnimacion)
+            );
+        }
+    }
+
+    // ========================================================
+    // ANIMACIÓN DE REPOSO
+    // ========================================================
+
+    function animarReposo(delta) {
+
+        faseRespiracion += delta * 1.7;
+        faseCabeza += delta * 0.8;
+
+        restaurarPoseProgresiva();
+
+        const respiracion =
+            Math.sin(faseRespiracion) *
+            config.intensidadRespiracion;
+
+        const movimientoCabeza =
+            Math.sin(faseCabeza) * 0.018;
+
+        aplicarRotacion(
+            rig.torso,
+            EJE_X,
+            respiracion
+        );
+
+        aplicarRotacion(
+            rig.cabeza,
+            EJE_Z,
+            movimientoCabeza
+        );
+
+        grupo.position.y = THREE.MathUtils.damp(
+            grupo.position.y,
+            0,
+            10,
+            delta
+        );
     }
 
     // ========================================================
@@ -534,46 +626,115 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
     function animarCaminarProcedural(delta) {
 
-        faseAnimacion += delta * 8.5;
+        const velocidadFase =
+            config.velocidadAnimacion *
+            (0.85 + Math.min(config.velocidad, 3) * 0.12);
 
-        const paso = Math.sin(faseAnimacion) * 0.32;
-        const rebote = Math.abs(Math.sin(faseAnimacion)) * 0.025;
+        faseAnimacion += delta * velocidadFase;
 
-        aplicarRotacion(rig.piernaIzquierda, EJE_X, paso);
-        aplicarRotacion(rig.piernaDerecha, EJE_X, -paso);
+        const intensidad = config.intensidadBalanceo;
 
+        const paso = Math.sin(faseAnimacion) * 0.38 * intensidad;
+
+        const flexionIzquierda =
+            Math.max(0, -Math.sin(faseAnimacion)) * 0.65;
+
+        const flexionDerecha =
+            Math.max(0, Math.sin(faseAnimacion)) * 0.65;
+
+        const rebote =
+            Math.abs(Math.sin(faseAnimacion * 2)) * 0.025;
+
+        const balanceoCadera =
+            Math.sin(faseAnimacion) * 0.035;
+
+        const balanceoTorso =
+            Math.sin(faseAnimacion) * 0.045;
+
+        // Piernas
+        aplicarRotacion(
+            rig.piernaIzquierda,
+            EJE_X,
+            paso
+        );
+
+        aplicarRotacion(
+            rig.piernaDerecha,
+            EJE_X,
+            -paso
+        );
+
+        // Rodillas
         aplicarRotacion(
             rig.pantorrillaIzquierda,
             EJE_X,
-            Math.max(0, -paso) * 0.65
+            flexionIzquierda
         );
 
         aplicarRotacion(
             rig.pantorrillaDerecha,
             EJE_X,
-            Math.max(0, paso) * 0.65
+            flexionDerecha
         );
 
-        aplicarRotacion(rig.brazoIzquierdo, EJE_X, -paso * 0.75);
-        aplicarRotacion(rig.brazoDerecho, EJE_X, paso * 0.75);
+        // Brazos contrarios a las piernas
+        aplicarRotacion(
+            rig.brazoIzquierdo,
+            EJE_X,
+            -paso * 0.75
+        );
 
+        aplicarRotacion(
+            rig.brazoDerecho,
+            EJE_X,
+            paso * 0.75
+        );
+
+        // Codos
         aplicarRotacion(
             rig.antebrazoIzquierdo,
             EJE_X,
-            Math.max(0, paso) * 0.25
+            flexionIzquierda * 0.20
         );
 
         aplicarRotacion(
             rig.antebrazoDerecho,
             EJE_X,
-            Math.max(0, -paso) * 0.25
+            flexionDerecha * 0.20
         );
 
-        restaurarHueso(rig.torso, 0.12);
-        restaurarHueso(rig.cadera, 0.12);
-        restaurarHueso(rig.cabeza, 0.12);
+        // Manos
+        restaurarHueso(rig.manoIzquierda, 1);
+        restaurarHueso(rig.manoDerecha, 1);
 
-        grupo.position.y = rebote;
+        // Torso y cadera
+        aplicarRotacion(
+            rig.cadera,
+            EJE_Z,
+            balanceoCadera
+        );
+
+        aplicarRotacion(
+            rig.torso,
+            EJE_Z,
+            -balanceoTorso
+        );
+
+        // Cabeza estable
+        aplicarRotacion(
+            rig.cabeza,
+            EJE_Z,
+            -balanceoTorso * 0.25
+        );
+
+        restaurarHueso(rig.cuello, 1);
+
+        grupo.position.y = THREE.MathUtils.damp(
+            grupo.position.y,
+            rebote,
+            15,
+            delta
+        );
     }
 
     // ========================================================
@@ -664,8 +825,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         const movimientoCabeza =
             Math.sin(tiempoEstado * 1.4) * 0.035;
 
-        // Transición progresiva desde el brazo extendido
-        // hasta la posición de inspección.
         aplicarRotacion(
             rig.brazoDerecho,
             EJE_X,
@@ -834,34 +993,30 @@ export function crearClienteSupermercado(scene, opciones = {}) {
                 detectarHuesos(modelo);
                 actualizarRig();
 
-                if (gltf.animations?.length) {
+                /*
+                 * Las animaciones del esqueleto se controlan
+                 * proceduralmente para evitar que un AnimationMixer
+                 * sobrescriba las rotaciones de los huesos.
+                 *
+                 * Se conservan los clips del GLB dentro del modelo,
+                 * pero no se reproducen simultáneamente.
+                 */
 
-                    mixer = new THREE.AnimationMixer(modelo);
+                mixer = null;
+                accionCaminar = null;
+                accionReposo = null;
 
-                    const caminar = gltf.animations.find(clip =>
-                        /walk|walking|caminar/i.test(clip.name)
-                    );
-
-                    const reposo = gltf.animations.find(clip =>
-                        /idle|stand|rest|reposo/i.test(clip.name)
-                    );
-
-                    if (caminar) {
-                        accionCaminar = mixer.clipAction(caminar);
-                        accionCaminar.play();
-                        accionCaminar.paused = true;
-                    }
-
-                    if (reposo) {
-                        accionReposo = mixer.clipAction(reposo);
-                        accionReposo.play();
-                    }
-                }
+                restaurarPoseCompleta();
 
                 cargado = true;
 
                 console.log(
                     `[CLIENTE ${id}] Modelo cargado: ${config.modelo}`
+                );
+
+                console.log(
+                    `[CLIENTE ${id}] Huesos detectados:`,
+                    Object.keys(huesos).length
                 );
             },
 
@@ -893,43 +1048,8 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         intentosMovimiento = 0;
         tiempoReintentoMovimiento = 0;
 
-        const caminando = [
-            ESTADOS.ENTRANDO,
-            ESTADOS.ACERCANDO,
-            ESTADOS.RUTA,
-            ESTADOS.CAJA,
-            ESTADOS.REGRESANDO
-        ].includes(estado);
-
-        if (accionCaminar) {
-            accionCaminar.paused = !caminando;
-
-            if (caminando) {
-                accionCaminar.reset().play();
-            }
-        }
-
-        if (accionReposo) {
-            if (caminando) {
-                accionReposo.fadeOut(0.15);
-            } else {
-                accionReposo.reset().fadeIn(0.15).play();
-            }
-        }
-
-        // No reiniciar la pose cuando el cliente está manipulando
-        // un producto. Así se evita que el brazo vuelva de golpe.
-        const conservarPose = [
-            ESTADOS.RECOGIENDO,
-            ESTADOS.INSPECCIONANDO,
-            ESTADOS.DECIDIENDO,
-            ESTADOS.GUARDANDO,
-            ESTADOS.DEVOLVIENDO
-        ].includes(nuevoEstado);
-
-        if (!caminando && !conservarPose) {
-            restaurarPoseCompleta();
-        }
+        // La pose se recupera gradualmente en la animación.
+        // No se fuerza una restauración brusca al cambiar de estado.
 
         try {
             config.alCambiarEstado?.({
@@ -1284,12 +1404,23 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     // MOVIMIENTO
     // ========================================================
 
-    function orientarHacia(dx, dz) {
+    function orientarHacia(dx, dz, delta = deltaAnimacionActual) {
 
         if (Math.abs(dx) + Math.abs(dz) < 0.0001) return;
 
-        grupo.rotation.y =
+        const rotacionObjetivo =
             Math.atan2(dx, dz) + config.correccionRotacion;
+
+        const diferencia = Math.atan2(
+            Math.sin(rotacionObjetivo - grupo.rotation.y),
+            Math.cos(rotacionObjetivo - grupo.rotation.y)
+        );
+
+        const factor = 1 - Math.exp(
+            -config.velocidadGiro * Math.max(delta, 0.001)
+        );
+
+        grupo.rotation.y += diferencia * factor;
     }
 
     function establecerObjetivo(
@@ -1358,7 +1489,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
             grupo.position.x = destino.x;
             grupo.position.z = destino.z;
-            grupo.position.y = 0;
 
             indiceRuta++;
 
@@ -1384,7 +1514,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         const direccionX = dx / distancia;
         const direccionZ = dz / distancia;
 
-        orientarHacia(direccionX, direccionZ);
+        orientarHacia(direccionX, direccionZ, delta);
 
         const avance = Math.min(distancia, velocidad * delta);
 
@@ -1724,8 +1854,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         const suave = suavizar(t);
 
-        // Interpolación mundial sin arco artificial.
-        // Esto evita que el producto flote sobre la mano.
         const posicion = new THREE.Vector3().lerpVectors(
             animacionProducto.posicionInicial,
             animacionProducto.posicionFinal,
@@ -1961,7 +2089,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         productoEnMano = producto;
         productosExaminados.add(producto);
 
-        // Es necesario tener una mano identificada en el esqueleto.
         if (!rig.manoDerecha) {
 
             console.warn(
@@ -2946,6 +3073,8 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         delta = limitar(numero(delta, 0), 0, 0.05);
 
+        deltaAnimacionActual = delta;
+
         tiempoEstado += delta;
         tiempoActualizarObstaculos += delta;
 
@@ -2953,25 +3082,13 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             actualizarColisiones();
         }
 
-        if (mixer) {
-            mixer.update(delta);
-        }
-
-        if (accionCaminar && accionCaminar.isRunning()) {
-
-            accionCaminar.paused = ![
-                ESTADOS.ENTRANDO,
-                ESTADOS.ACERCANDO,
-                ESTADOS.RUTA,
-                ESTADOS.CAJA,
-                ESTADOS.REGRESANDO
-            ].includes(estado);
-        }
-
         switch (estado) {
 
-            case ESTADOS.INACTIVO:
+            case ESTADOS.INACTIVO: {
+
+                animarReposo(delta);
                 break;
+            }
 
             // ------------------------------------------------
             // MOVIMIENTO
@@ -3021,6 +3138,8 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             // ------------------------------------------------
 
             case ESTADOS.BUSCANDO: {
+
+                animarReposo(delta);
 
                 if (tiempoEstado < config.tiempoEntreProductos) {
                     break;
@@ -3078,6 +3197,8 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             // ------------------------------------------------
 
             case ESTADOS.DECIDIENDO: {
+
+                animarReposo(delta);
 
                 if (tiempoEstado >= 0.5) {
 
@@ -3157,6 +3278,8 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
             case ESTADOS.ESPERANDO: {
 
+                animarReposo(delta);
+
                 if (tiempoEstado >= config.tiempoReintento) {
 
                     if (compras.length >= config.maximoProductos) {
@@ -3217,8 +3340,11 @@ export function crearClienteSupermercado(scene, opciones = {}) {
                 break;
             }
 
-            case ESTADOS.FINALIZADO:
+            case ESTADOS.FINALIZADO: {
+
+                animarReposo(delta);
                 break;
+            }
         }
     }
 
