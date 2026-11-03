@@ -28,6 +28,9 @@ export function crearLadron(scene, productos, opciones = {}) {
 
     const id = `LADRON_${Math.random().toString(36).slice(2, 9)}`;
 
+    const aleatorio = Math.random();
+    const variacionVelocidad = 0.90 + aleatorio * 0.20;
+
     const grupo = new THREE.Group();
     grupo.name = id;
     grupo.position.set(
@@ -51,9 +54,7 @@ export function crearLadron(scene, productos, opciones = {}) {
             colisiones = obtener();
         } else {
             colisiones = [];
-            console.warn(
-                'El ladrón no encontró las colisiones del mobiliario.'
-            );
+            console.warn('El ladrón no encontró las colisiones del mobiliario.');
         }
     }
 
@@ -91,7 +92,8 @@ export function crearLadron(scene, productos, opciones = {}) {
     }
 
     function dentro(cx, cz) {
-        return cx >= 0 && cx < ANCHO && cz >= 0 && cz < ALTO;
+        return cx >= 0 && cx < ANCHO &&
+               cz >= 0 && cz < ALTO;
     }
 
     function clave(cx, cz) {
@@ -130,6 +132,7 @@ export function crearLadron(scene, productos, opciones = {}) {
 
             while (i > 0) {
                 const padre = Math.floor((i - 1) / 2);
+
                 if (a[padre].f <= a[i].f) break;
 
                 [a[padre], a[i]] = [a[i], a[padre]];
@@ -297,6 +300,7 @@ export function crearLadron(scene, productos, opciones = {}) {
                 }
 
                 const nk = clave(nx, nz);
+
                 if (cerrados.has(nk)) continue;
 
                 const nuevoCosto = costos.get(actual.key) + peso;
@@ -365,7 +369,7 @@ export function crearLadron(scene, productos, opciones = {}) {
     }
 
     // =========================================================
-    // ANIMACIÓN PROCEDURAL DE BRAZOS Y PIERNAS
+    // ANIMACIONES
     // =========================================================
 
     let modeloCargado = null;
@@ -375,7 +379,12 @@ export function crearLadron(scene, productos, opciones = {}) {
     let accionActual = null;
 
     let huesosAnimados = [];
+    let mapaHuesos = {};
     let tiempoAnimacion = 0;
+    let tiempoAnimacionRobo = 0;
+
+    let soporteProducto = null;
+    const productosEnMano = [];
 
     function normalizarNombre(nombre) {
         return nombre
@@ -412,8 +421,7 @@ export function crearLadron(scene, productos, opciones = {}) {
                 /armleft/,
                 /arml$/,
                 /brazoizquierdo/,
-                /brazoizq/,
-                /izquierdo.*brazo/
+                /brazoizq/
             ]),
 
             brazoDerecho: buscarHueso(huesos, [
@@ -423,8 +431,7 @@ export function crearLadron(scene, productos, opciones = {}) {
                 /armright/,
                 /armr$/,
                 /brazoderecho/,
-                /brazoder/,
-                /derecho.*brazo/
+                /brazoder/
             ]),
 
             antebrazoIzquierdo: buscarHueso(huesos, [
@@ -461,8 +468,6 @@ export function crearLadron(scene, productos, opciones = {}) {
                 /rightupperleg/,
                 /thighright/,
                 /upperlegright/,
-                /piern derecha/,
-                /piernader/,
                 /piernader/
             ]),
 
@@ -499,8 +504,6 @@ export function crearLadron(scene, productos, opciones = {}) {
             ])
         };
 
-        // Guarda las poses originales para evitar que el movimiento
-        // procedural se acumule y deforme el esqueleto.
         const originales = new Map();
 
         for (const hueso of Object.values(mapa)) {
@@ -526,27 +529,12 @@ export function crearLadron(scene, productos, opciones = {}) {
         }
 
         console.info(
-            `Ladrón: encontrados ${huesosAnimados.length} huesos para animación corporal.`,
+            `Ladrón: encontrados ${huesosAnimados.length} huesos.`,
             huesosAnimados.map(item => `${item.nombre}: ${item.hueso.name}`)
         );
 
-        if (huesos.length === 0) {
-            console.warn(
-                'ladron.glb no tiene huesos. Para mover las extremidades, ' +
-                'necesita un rig o piezas del cuerpo separadas.'
-            );
-        } else if (
-            !mapa.brazoIzquierdo &&
-            !mapa.brazoDerecho &&
-            !mapa.piernaIzquierda &&
-            !mapa.piernaDerecha
-        ) {
-            console.warn(
-                'No se reconocieron los nombres de los huesos de las extremidades. ' +
-                'Revisa los nombres del esqueleto de ladron.glb en Blender.'
-            );
-
-            console.info('Huesos disponibles:', huesos.map(h => h.name));
+        if (!huesos.length) {
+            console.warn('El modelo GLB no contiene huesos.');
         }
 
         return mapa;
@@ -561,32 +549,56 @@ export function crearLadron(scene, productos, opciones = {}) {
         const intensidad = quieto ? 0 : corriendoAhora ? 1 : 0.62;
 
         const paso = Math.sin(tiempoAnimacion * frecuencia);
-        const pasoContrario = Math.sin(tiempoAnimacion * frecuencia + Math.PI);
+        const pasoContrario = Math.sin(
+            tiempoAnimacion * frecuencia + Math.PI
+        );
 
         const movimiento = {
             brazoIzquierdo: pasoContrario * 0.52,
             brazoDerecho: paso * 0.52,
+
             antebrazoIzquierdo: corriendoAhora
                 ? 0.22 + Math.max(0, paso) * 0.18
                 : 0.10,
+
             antebrazoDerecho: corriendoAhora
                 ? 0.22 + Math.max(0, pasoContrario) * 0.18
                 : 0.10,
+
             piernaIzquierda: paso * 0.48,
             piernaDerecha: pasoContrario * 0.48,
+
             pantorrillaIzquierda: Math.max(0, paso) *
                 (corriendoAhora ? 0.42 : 0.16),
+
             pantorrillaDerecha: Math.max(0, pasoContrario) *
                 (corriendoAhora ? 0.42 : 0.16),
+
             cadera: paso * 0.035,
             pecho: -paso * 0.025
         };
 
+        // Movimiento de brazo durante el robo.
+        if (estado === 'robando') {
+            const progreso = Math.min(
+                tiempoAnimacionRobo / CONFIG.tiempoRobo,
+                1
+            );
+
+            const movimientoBrazo = Math.sin(progreso * Math.PI);
+
+            movimiento.brazoDerecho += movimientoBrazo * 0.85;
+            movimiento.antebrazoDerecho += movimientoBrazo * 0.65;
+
+            movimiento.piernaIzquierda -= movimientoBrazo * 0.12;
+            movimiento.piernaDerecha -= movimientoBrazo * 0.12;
+
+            movimiento.pecho -= movimientoBrazo * 0.12;
+            movimiento.cadera -= movimientoBrazo * 0.08;
+        }
+
         for (const item of huesosAnimados) {
             const { hueso, base, nombre } = item;
-
-            // Rotación alrededor del eje local X.
-            // Los valores son relativos a la pose original del rig.
             const giro = movimiento[nombre] ?? 0;
 
             hueso.rotation.x = base.x + giro * intensidad;
@@ -596,7 +608,88 @@ export function crearLadron(scene, productos, opciones = {}) {
     }
 
     // =========================================================
-    // CARGA DEL MODELO Y ANIMACIONES GLB
+    // PRODUCTOS VISIBLES EN LA MANO
+    // =========================================================
+
+    function prepararSoporteProducto() {
+        if (!modeloCargado || soporteProducto) return;
+
+        soporteProducto = new THREE.Group();
+        soporteProducto.name = 'PRODUCTOS_ROBADOS_EN_MANO';
+
+        // Posición aproximada de la mano derecha.
+        // Se puede ajustar según el rig del modelo.
+        soporteProducto.position.set(0.30, 0.95, 0.22);
+
+        modeloCargado.add(soporteProducto);
+    }
+
+    function colocarProductoEnMano(producto) {
+        if (!producto || !modeloCargado) return;
+
+        prepararSoporteProducto();
+
+        const copia = producto.clone(true);
+
+        copia.name = `COPIA_ROBADA_${productosEnMano.length + 1}`;
+
+        copia.traverse(objeto => {
+            if (objeto.isMesh) {
+                objeto.castShadow = true;
+                objeto.receiveShadow = true;
+            }
+        });
+
+        // Calcula el tamaño real de la copia.
+        copia.updateMatrixWorld(true);
+
+        const caja = new THREE.Box3().setFromObject(copia);
+        const dimensiones = new THREE.Vector3();
+
+        caja.getSize(dimensiones);
+
+        const maximo = Math.max(
+            dimensiones.x,
+            dimensiones.y,
+            dimensiones.z
+        );
+
+        // Normaliza el tamaño para que no aparezcan productos gigantes.
+        if (maximo > 0) {
+            copia.scale.multiplyScalar(0.28 / maximo);
+        }
+
+        // Los productos se acomodan progresivamente en la mano.
+        const numero = productosEnMano.length;
+
+        copia.position.set(
+            numero * 0.11,
+            -numero * 0.07,
+            numero * -0.10
+        );
+
+        copia.rotation.set(
+            -0.15,
+            numero * 0.25,
+            0.10
+        );
+
+        soporteProducto.add(copia);
+        productosEnMano.push(copia);
+
+        producto.visible = false;
+    }
+
+    function limpiarProductosVisuales() {
+        for (const copia of productosEnMano) {
+            copia.parent?.remove(copia);
+        }
+
+        productosEnMano.length = 0;
+    }
+
+    // =========================================================
+    // ESTADOS Y DATOS
     // =========================================================
 
     let eliminado = false;
@@ -605,6 +698,7 @@ export function crearLadron(scene, productos, opciones = {}) {
     let productoObjetivo = null;
     let tiempoRobo = 0;
     let cantidadRobada = 0;
+
     let ruta = [];
     let indiceRuta = 0;
     let tiempoBusqueda = 0;
@@ -625,9 +719,14 @@ export function crearLadron(scene, productos, opciones = {}) {
         accionActual = accion;
     }
 
+    // =========================================================
+    // CARGA DEL MODELO
+    // =========================================================
+
     function cargarModelo() {
         new GLTFLoader().load(
             CONFIG.modelo,
+
             gltf => {
                 if (eliminado) return;
 
@@ -645,19 +744,20 @@ export function crearLadron(scene, productos, opciones = {}) {
 
                 grupo.add(modelo);
 
-                // Ajusta la altura del modelo al tamaño configurado.
                 const caja = new THREE.Box3().setFromObject(modelo);
                 const alto = caja.max.y - caja.min.y;
 
                 if (alto > 0) {
                     const factor = CONFIG.altura / alto;
+
                     modelo.scale.multiplyScalar(factor);
                     modelo.position.y -= caja.min.y * factor;
                 }
 
                 modeloCargado = modelo;
 
-                const mapaHuesos = prepararAnimacionCorporal(modelo);
+                mapaHuesos = prepararAnimacionCorporal(modelo);
+                prepararSoporteProducto();
 
                 if (gltf.animations?.length) {
                     mixer = new THREE.AnimationMixer(modelo);
@@ -681,18 +781,15 @@ export function crearLadron(scene, productos, opciones = {}) {
                     }
 
                     console.info(
-                        'Animaciones del GLB:',
+                        'Animaciones del ladrón:',
                         clips.map(clip => clip.name)
                     );
                 } else {
                     console.info(
-                        'El GLB no contiene clips de animación. ' +
-                        'Se usará la animación corporal procedural.'
+                        'El GLB no contiene clips. Se usará animación procedural.'
                     );
                 }
 
-                // Si el modelo tiene clips completos de caminar/correr,
-                // se usan. Si no, el sistema procedural mueve los huesos.
                 estado = 'entrando';
 
                 if (establecerDestino({ x: 0, z: 27 })) {
@@ -701,6 +798,7 @@ export function crearLadron(scene, productos, opciones = {}) {
                     estado = 'buscando';
                 }
             },
+
             evento => {
                 if (evento.total) {
                     console.info(
@@ -710,12 +808,13 @@ export function crearLadron(scene, productos, opciones = {}) {
                     );
                 }
             },
+
             error => {
                 estado = 'error';
 
                 console.error(
                     `Error al cargar ${CONFIG.modelo}. ` +
-                    'Verifica que el archivo exista en public/modelos/ladron.glb.',
+                    'Comprueba que exista en public/modelos/.',
                     error
                 );
             }
@@ -732,9 +831,10 @@ export function crearLadron(scene, productos, opciones = {}) {
 
         if (!ruta.length) {
             console.warn(
-                'El ladrón no encontró una ruta transitable hacia:',
+                'El ladrón no encontró una ruta hacia:',
                 destino
             );
+
             return false;
         }
 
@@ -747,11 +847,13 @@ export function crearLadron(scene, productos, opciones = {}) {
 
             const dx = punto.x - grupo.position.x;
             const dz = punto.z - grupo.position.z;
+
             const distancia = Math.hypot(dx, dz);
 
             if (distancia < 0.10) {
                 grupo.position.x = punto.x;
                 grupo.position.z = punto.z;
+
                 indiceRuta++;
                 continue;
             }
@@ -761,7 +863,6 @@ export function crearLadron(scene, productos, opciones = {}) {
             grupo.position.x += dx / distancia * paso;
             grupo.position.z += dz / distancia * paso;
 
-            // El modelo mira hacia la dirección de desplazamiento.
             grupo.rotation.y = Math.atan2(dx, dz);
 
             return false;
@@ -771,7 +872,7 @@ export function crearLadron(scene, productos, opciones = {}) {
     }
 
     // =========================================================
-    // PRODUCTOS
+    // BÚSQUEDA DE PRODUCTOS
     // =========================================================
 
     function obtenerProductosDisponibles() {
@@ -894,6 +995,7 @@ export function crearLadron(scene, productos, opciones = {}) {
                 ruta = rutaRobo;
                 indiceRuta = 0;
                 estado = 'acercandose';
+
                 return true;
             }
 
@@ -902,6 +1004,10 @@ export function crearLadron(scene, productos, opciones = {}) {
 
         return false;
     }
+
+    // =========================================================
+    // ROBO
+    // =========================================================
 
     function robarProducto() {
         const producto = productoObjetivo;
@@ -919,7 +1025,9 @@ export function crearLadron(scene, productos, opciones = {}) {
 
         producto.userData.recogido = true;
         producto.userData.robadoPor = id;
-        producto.visible = false;
+
+        // Copia visual del producto en la mano.
+        colocarProductoEnMano(producto);
 
         productosRobados.push({
             nombre: producto.userData.nombreProducto || 'Producto',
@@ -934,6 +1042,12 @@ export function crearLadron(scene, productos, opciones = {}) {
             `Ladrón ${id}: robó ${productosRobados.at(-1).nombre}. ` +
             `Total: ${cantidadRobada}`
         );
+
+        CONFIG.alRobar?.({
+            id,
+            producto: productosRobados.at(-1),
+            cantidadRobada
+        });
 
         if (cantidadRobada >= CONFIG.productosRobados) {
             iniciarHuida();
@@ -951,6 +1065,7 @@ export function crearLadron(scene, productos, opciones = {}) {
         liberarReserva();
 
         estado = 'huyendo';
+
         cambiarAnimacion(correr || caminar);
 
         if (!establecerDestino({ x: 0, z: 34 })) {
@@ -964,8 +1079,12 @@ export function crearLadron(scene, productos, opciones = {}) {
         if (eliminado) return;
 
         eliminado = true;
+
         liberarReserva();
+        limpiarProductosVisuales();
+
         mixer?.stopAllAction();
+
         scene.remove(grupo);
 
         CONFIG.alEscapar?.({
@@ -976,11 +1095,15 @@ export function crearLadron(scene, productos, opciones = {}) {
     }
 
     // =========================================================
-    // ACTUALIZACIÓN PRINCIPAL
+    // ACTUALIZACIÓN
     // =========================================================
 
     function actualizar(delta) {
-        if (eliminado || estado === 'cargando' || estado === 'error') {
+        if (
+            eliminado ||
+            estado === 'cargando' ||
+            estado === 'error'
+        ) {
             return;
         }
 
@@ -991,15 +1114,16 @@ export function crearLadron(scene, productos, opciones = {}) {
         const estaCorriendo = estado === 'huyendo';
         const estaQuieto = estado === 'robando';
 
-        // Los clips GLB se reproducen si existen.
-        // Los huesos también reciben movimiento procedural.
         animarCuerpo(delta, estaCorriendo, estaQuieto);
 
         switch (estado) {
             case 'entrando': {
                 cambiarAnimacion(caminar);
 
-                if (avanzar(delta, CONFIG.velocidadCaminar)) {
+                if (avanzar(
+                    delta,
+                    CONFIG.velocidadCaminar * variacionVelocidad
+                )) {
                     estado = 'buscando';
                     tiempoBusqueda = 0;
                 }
@@ -1015,11 +1139,11 @@ export function crearLadron(scene, productos, opciones = {}) {
                     break;
                 }
 
-                // Evita recalcular rutas en cada fotograma.
                 tiempoBusqueda -= delta;
 
                 if (tiempoBusqueda <= 0) {
                     const encontrado = buscarYReservarProducto();
+
                     tiempoBusqueda = encontrado ? 0 : 0.8;
                 }
 
@@ -1040,19 +1164,24 @@ export function crearLadron(scene, productos, opciones = {}) {
 
                 cambiarAnimacion(caminar);
 
-                if (avanzar(delta, CONFIG.velocidadCaminar)) {
+                if (avanzar(
+                    delta,
+                    CONFIG.velocidadCaminar * variacionVelocidad
+                )) {
                     estado = 'robando';
                     tiempoRobo = 0;
+                    tiempoAnimacionRobo = 0;
                 }
 
                 break;
             }
 
             case 'robando': {
-                // El ladrón permanece quieto mientras toma el producto.
                 tiempoRobo += delta;
+                tiempoAnimacionRobo += delta;
 
                 if (tiempoRobo >= CONFIG.tiempoRobo) {
+                    tiempoAnimacionRobo = 0;
                     robarProducto();
                 }
 
@@ -1062,7 +1191,10 @@ export function crearLadron(scene, productos, opciones = {}) {
             case 'huyendo': {
                 cambiarAnimacion(correr || caminar);
 
-                if (avanzar(delta, CONFIG.velocidadHuida)) {
+                if (avanzar(
+                    delta,
+                    CONFIG.velocidadHuida * variacionVelocidad
+                )) {
                     terminarHuida();
                 }
 
@@ -1072,7 +1204,7 @@ export function crearLadron(scene, productos, opciones = {}) {
     }
 
     // =========================================================
-    // INICIAR Y API PÚBLICA
+    // INICIAR
     // =========================================================
 
     cargarModelo();
@@ -1094,10 +1226,20 @@ export function crearLadron(scene, productos, opciones = {}) {
             return estado;
         },
 
+        get productosRobados() {
+            return [...productosRobados];
+        },
+
         destruir() {
+            if (eliminado) return;
+
             eliminado = true;
+
             liberarReserva();
+            limpiarProductosVisuales();
+
             mixer?.stopAllAction();
+
             scene.remove(grupo);
         }
     };
