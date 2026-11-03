@@ -1176,19 +1176,18 @@ const prendas = [
         archivo: '/modelos/pantalomezclilla.glb',
         codigo: 'PANTALON_MEZCLILLA',
         x: -26.35,
-        z: 7,
-        
+        z: 8,
         ancho: 1.15,
-        profundidad: 0.65
+        profundidad: 0.95
     },
     {
         nombre: 'Vestido',
         archivo: '/modelos/vesitdo.glb',
         codigo: 'VESTIDO',
         x: -25.05,
-        z: 7,
+        z: 8,
         ancho: 1.20,
-        profundidad: 0.70
+        profundidad: 0.90
     }
 ];
 
