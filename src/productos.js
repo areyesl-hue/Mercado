@@ -5,7 +5,6 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 // ============================================================
 // PRODUCTOS DEL SUPERMERCADO
 // Three.js | GLB | Unidades independientes
-// Optimizado para reducir cálculos y consultas repetidas
 // ============================================================
 
 export function crearProductosLacteos(scene) {
@@ -88,29 +87,29 @@ export function crearProductosLacteos(scene) {
     };
 
     // ========================================================
-    // ALTURAS DE LOS ESTANTES
+    // ALTURAS AJUSTADAS DE LOS ESTANTES
     // ========================================================
 
     const nivelesGondola = [
-        0.4625,
-        0.8925,
-        1.3225,
-        1.7525
+        0.20,
+        0.60,
+        1.00,
+        1.40
     ];
 
     const nivelesRefrigerador = [
-        0.5225,
-        0.9525,
-        1.3825,
-        1.8125
+        0.25,
+        0.65,
+        1.05,
+        1.45
     ];
 
     const nivelesLimpieza = [
-        0.4575,
-        0.8075,
-        1.1575,
-        1.5075,
-        1.8575
+        0.20,
+        0.55,
+        0.90,
+        1.25,
+        1.60
     ];
 
     const posicionesGondola = [
@@ -139,8 +138,6 @@ export function crearProductosLacteos(scene) {
     const cacheModelos = new Map();
     const cacheDimensiones = new WeakMap();
 
-    // Registro directo de unidades.
-    // Evita recorrer toda la escena cada vez que se consultan.
     const unidades = [];
     const unidadesPorId = new Map();
 
@@ -362,7 +359,6 @@ export function crearProductosLacteos(scene) {
 
     // ========================================================
     // OBTENER DIMENSIONES DE UNA FUENTE
-    // Se guardan para evitar repetir cálculos de la misma fuente
     // ========================================================
 
     function obtenerDimensionesFuente(fuente) {
@@ -964,7 +960,7 @@ export function crearProductosLacteos(scene) {
                         fuente,
                         `${config.codigo}_${String(indice + 1).padStart(2, '0')}`,
                         mesa.x + dx,
-                        1.00,
+                        0.70,
                         mesa.z + dz,
                         config.altura,
                         config.rotacionY ?? 0,
@@ -1095,7 +1091,7 @@ export function crearProductosLacteos(scene) {
                         fuente,
                         `${config.codigo}_${indice + 1}`,
                         25.1 + dx,
-                        1.22,
+                        0.90,
                         -7.3 + dz,
                         config.altura,
                         config.rotacionY ?? 0,
@@ -1200,7 +1196,6 @@ export function crearProductosLacteos(scene) {
 
     // ========================================================
     // 6. DEPARTAMENTO DE ROPA
-    // LAS SEIS PRENDAS AGRANDADAS
     // ========================================================
 
     const prendas = [
@@ -1282,7 +1277,7 @@ export function crearProductosLacteos(scene) {
                     fuente,
                     prenda.codigo,
                     prenda.x,
-                    0.65,
+                    0.35,
                     prenda.z,
                     prenda.altura,
                     GIRO_FRENTE,
@@ -1306,8 +1301,6 @@ export function crearProductosLacteos(scene) {
         modelosFallidos
     });
 
-    // Devuelve una copia del registro para evitar
-    // que otros módulos alteren accidentalmente el arreglo.
     productos.userData.listarUnidades = () => {
         return [...unidades];
     };
