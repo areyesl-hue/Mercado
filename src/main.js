@@ -1,4 +1,3 @@
-
 import * as THREE from 'three';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 
@@ -10,6 +9,9 @@ import { crearClienteSupermercado } from './cliente.js';
 import { crearCarrito } from './carrito.js';
 import { crearVehiculos } from './vehiculos.js';
 import { crearEstacionamiento } from './estacionamiento.js';
+
+// SISTEMA INDEPENDIENTE DE LADRONES
+import { crearLadron } from './ladron.js';
 
 // ============================================================
 // CONFIGURACIÓN GENERAL
@@ -34,7 +36,6 @@ const CONFIG = {
     suavizadoCarrito: 6,
 
     velocidadCliente: 1.5,
-    velocidadLadron: 1.8,
     probabilidadCompra: 0.75,
     tiempoExaminar: 1.5,
     distanciaRecoger: 2,
@@ -43,13 +44,11 @@ const CONFIG = {
     tiempoCompraAuto: 60,
     maximoProductosCliente: 3,
 
-    // CUATRO CAJAS REGISTRADORAS
-    // Coordenadas de los puntos donde pagan los clientes.
     cajasRegistradoras: [
-    { id: 1, x: -17, z: 23.95 },
-    { id: 2, x: -12, z: 23.95 },
-    { id: 3, x: 12, z: 23.95 },
-    { id: 4, x: 17, z: 23.95 }
+        { id: 1, x: -17, z: 23.95 },
+        { id: 2, x: -12, z: 23.95 },
+        { id: 3, x: 12, z: 23.95 },
+        { id: 4, x: 17, z: 23.95 }
     ],
 
     distanciaRegistro: 0.7,
@@ -170,46 +169,25 @@ const CONFIG_CLIENTES = [
 ];
 
 // ============================================================
-// CONFIGURACIÓN DE LADRONES
+// CONFIGURACIÓN INDEPENDIENTE DE LADRONES
 // ============================================================
 
 const CONFIG_LADRONES = [
     {
-        nombre: 'Ladron1',
+        id: 'Ladron1',
         modelo: '/modelos/ladron1.glb',
-        velocidad: 1.8,
-        ruta: [
-            { x: -2, z: 21 },
-            { x: -5, z: 19 },
-            { x: -5, z: 6.5 },
-            { x: -5, z: -6 },
-            { x: -5, z: -19 },
-            { x: 0, z: -22 },
-            { x: 5, z: -19 },
-            { x: 5, z: -6 },
-            { x: 5, z: 6.5 },
-            { x: 0, z: 19 }
-        ]
+        posicion: { x: -2, y: 0, z: 31 },
+        velocidadCaminar: 1.8,
+        velocidadHuida: 5.8,
+        productosRobados: 2
     },
     {
-        nombre: 'Ladron2',
+        id: 'Ladron2',
         modelo: '/modelos/ladron2.glb',
-        velocidad: 2,
-        ruta: [
-            { x: 2, z: 21 },
-            { x: 5, z: 19 },
-            { x: 13, z: 19 },
-            { x: 13, z: 6.5 },
-            { x: 13, z: -6 },
-            { x: 13, z: -19 },
-            { x: 5, z: -19 },
-            { x: -5, z: -19 },
-            { x: -13, z: -19 },
-            { x: -13, z: -6 },
-            { x: -13, z: 6.5 },
-            { x: -13, z: 19 },
-            { x: -5, z: 19 }
-        ]
+        posicion: { x: 2, y: 0, z: 31 },
+        velocidadCaminar: 2,
+        velocidadHuida: 6.2,
+        productosRobados: 3
     }
 ];
 
@@ -296,43 +274,6 @@ const movimientoJugador = new THREE.Vector3();
 const ejeVertical = new THREE.Vector3(0, 1, 0);
 
 // ============================================================
-// RESERVACIÓN DE CAJAS
-// ============================================================
-
-function obtenerCajaDisponible() {
-    return CONFIG.cajasRegistradoras.find(
-        caja => !cajasOcupadas.has(caja.id)
-    ) ?? null;
-}
-
-function reservarCaja(visita) {
-    if (!visita) return null;
-    if (visita.cajaAsignada) return visita.cajaAsignada;
-
-    const caja = obtenerCajaDisponible();
-    if (!caja) return null;
-
-    cajasOcupadas.set(caja.id, visita.idVehiculo);
-    visita.cajaAsignada = caja;
-
-    console.info(`[CAJA ${caja.id}] Reservada para ${visita.nombreCliente}.`);
-    return caja;
-}
-
-function liberarCajaVisitante(visita) {
-    if (!visita?.cajaAsignada) return;
-
-    const caja = visita.cajaAsignada;
-
-    if (cajasOcupadas.get(caja.id) === visita.idVehiculo) {
-        cajasOcupadas.delete(caja.id);
-        console.info(`[CAJA ${caja.id}] Liberada.`);
-    }
-
-    visita.cajaAsignada = null;
-}
-
-// ============================================================
 // INICIO
 // ============================================================
 
@@ -350,7 +291,9 @@ function iniciar() {
     crearInterfaz();
     crearEstructuraSupermercado();
 
+    // Los ladrones se crean después de cargar los productos.
     crearLadrones();
+
     crearSistemaVehiculos();
 
     configurarEventos();
@@ -475,7 +418,7 @@ function crearEstructuraSupermercado() {
 
     try {
         productosLacteos = crearProductosLacteos(escena);
-        console.info('Productos iniciados.');
+        console.info('Productos iniciados:', productosLacteos);
     } catch (error) {
         console.error('Error al iniciar productos:', error);
     }
@@ -511,43 +454,61 @@ function crearControles() {
 }
 
 // ============================================================
-// LADRONES
+// LADRONES: SISTEMA INDEPENDIENTE
 // ============================================================
 
 function crearLadrones() {
+    if (!productosLacteos) {
+        console.error(
+            '[LADRONES] No se recibieron los productos del supermercado. ' +
+            'Revisa qué devuelve crearProductosLacteos().'
+        );
+        return;
+    }
+
     for (const config of CONFIG_LADRONES) {
         try {
-            const primerPunto = config.ruta[0];
+            const ladron = crearLadron(
+                escena,
+                productosLacteos,
+                {
+                    ...config,
 
-            const ladron = crearClienteSupermercado(escena, {
-                id: config.nombre,
-                modelo: config.modelo,
-                posicion: {
-                    x: primerPunto.x,
-                    y: 0,
-                    z: primerPunto.z
-                },
-                velocidad: config.velocidad,
-                escala: 1,
-                ruta: config.ruta.slice(1),
-                repetirRuta: true,
-                probabilidadCompra: 0,
-                tiempoExaminar: 0,
-                distanciaRecoger: 0,
-                pausaEntreCompras: 0,
-                distanciaDestino: 0.8,
-                radioColision: 0.42
-            });
+                    altura: 1.75,
+                    escala: 1,
 
-            if (!ladron) continue;
+                    distanciaProducto: 1.5,
+                    tiempoRobo: 1.3,
 
-            ladron.nombre = config.nombre;
-            ladron._esLadron = true;
+                    margenColision: 0.35,
+                    tamanoCelda: 0.5,
+
+                    alEscapar: datos => {
+                        console.info(
+                            `[LADRÓN] ${datos.id} escapó.`,
+                            datos
+                        );
+
+                        mostrarMensaje(
+                            `${datos.id} escapó con ${datos.cantidadRobada} productos.`
+                        );
+                    }
+                }
+            );
+
+            if (!ladron) {
+                console.error(`[LADRONES] No se pudo crear ${config.id}.`);
+                continue;
+            }
+
             ladronesSupermercado.push(ladron);
 
-            console.info(`[LADRÓN] ${config.nombre} creado.`);
+            console.info(`[LADRONES] ${config.id} creado correctamente.`);
         } catch (error) {
-            console.error(`Error creando ${config.nombre}:`, error);
+            console.error(
+                `[LADRONES] Error creando ${config.id}:`,
+                error
+            );
         }
     }
 }
@@ -672,7 +633,9 @@ function crearClienteParaVehiculo(datos) {
                     });
                 }
 
-                mostrarMensaje(`${visita.nombreCliente} entró al supermercado.`);
+                mostrarMensaje(
+                    `${visita.nombreCliente} entró al supermercado.`
+                );
             }
         });
 
@@ -768,7 +731,11 @@ function crearCarritoVisitante(cliente, idVisita) {
             return null;
         }
 
-        carrito.seguirObjetivo(grupoCliente, CONFIG.distanciaCarrito);
+        carrito.seguirObjetivo(
+            grupoCliente,
+            CONFIG.distanciaCarrito
+        );
+
         carritosClientes.push(carrito);
 
         console.info(`[CARRITO] Creado para ${idVisita}.`);
@@ -802,15 +769,21 @@ function retirarClienteYCarritoDeVisita(visita) {
     }
 
     const indiceCliente = clientesSupermercado.indexOf(cliente);
-    if (indiceCliente !== -1) clientesSupermercado.splice(indiceCliente, 1);
+    if (indiceCliente !== -1) {
+        clientesSupermercado.splice(indiceCliente, 1);
+    }
 
     const indiceCarrito = carritosClientes.indexOf(carrito);
-    if (indiceCarrito !== -1) carritosClientes.splice(indiceCarrito, 1);
+    if (indiceCarrito !== -1) {
+        carritosClientes.splice(indiceCarrito, 1);
+    }
 
     visita.cliente = null;
     visita.carrito = null;
 
-    console.info(`[VISITANTE] ${visita.nombreCliente}: cliente y carrito retirados.`);
+    console.info(
+        `[VISITANTE] ${visita.nombreCliente}: cliente y carrito retirados.`
+    );
 }
 
 // ============================================================
@@ -831,13 +804,58 @@ function limpiarVisitaVehiculo(idVehiculo) {
     }
 
     const indiceCliente = clientesSupermercado.indexOf(visita.cliente);
-    if (indiceCliente !== -1) clientesSupermercado.splice(indiceCliente, 1);
+    if (indiceCliente !== -1) {
+        clientesSupermercado.splice(indiceCliente, 1);
+    }
 
     const indiceCarrito = carritosClientes.indexOf(visita.carrito);
-    if (indiceCarrito !== -1) carritosClientes.splice(indiceCarrito, 1);
+    if (indiceCarrito !== -1) {
+        carritosClientes.splice(indiceCarrito, 1);
+    }
 
     visitantesPorVehiculo.delete(idVehiculo);
+
     console.info(`[VISITANTE] Visita ${idVehiculo} eliminada.`);
+}
+
+// ============================================================
+// RESERVACIÓN DE CAJAS
+// ============================================================
+
+function obtenerCajaDisponible() {
+    return CONFIG.cajasRegistradoras.find(
+        caja => !cajasOcupadas.has(caja.id)
+    ) ?? null;
+}
+
+function reservarCaja(visita) {
+    if (!visita) return null;
+    if (visita.cajaAsignada) return visita.cajaAsignada;
+
+    const caja = obtenerCajaDisponible();
+    if (!caja) return null;
+
+    cajasOcupadas.set(caja.id, visita.idVehiculo);
+    visita.cajaAsignada = caja;
+
+    console.info(
+        `[CAJA ${caja.id}] Reservada para ${visita.nombreCliente}.`
+    );
+
+    return caja;
+}
+
+function liberarCajaVisitante(visita) {
+    if (!visita?.cajaAsignada) return;
+
+    const caja = visita.cajaAsignada;
+
+    if (cajasOcupadas.get(caja.id) === visita.idVehiculo) {
+        cajasOcupadas.delete(caja.id);
+        console.info(`[CAJA ${caja.id}] Liberada.`);
+    }
+
+    visita.cajaAsignada = null;
 }
 
 // ============================================================
@@ -845,7 +863,10 @@ function limpiarVisitaVehiculo(idVehiculo) {
 // ============================================================
 
 function actualizarEntidades(delta) {
+    // Los clientes se actualizan desde cliente.js.
     actualizarLista(clientesSupermercado, delta);
+
+    // Los ladrones se actualizan exclusivamente desde ladron.js.
     actualizarLista(ladronesSupermercado, delta);
 
     for (let i = carritosClientes.length - 1; i >= 0; i--) {
@@ -1007,14 +1028,18 @@ function iniciarPagoVisitante(visita) {
     if (!caja) {
         visita.fase = 'esperandoCaja';
         visita.pagoSolicitado = false;
-        mostrarMensaje(`${visita.nombreCliente} está esperando una caja libre.`);
+        mostrarMensaje(
+            `${visita.nombreCliente} está esperando una caja libre.`
+        );
         return;
     }
 
     visita.fase = 'caja';
     visita.pagoSolicitado = true;
 
-    mostrarMensaje(`${visita.nombreCliente} se dirige a la caja ${caja.id}.`);
+    mostrarMensaje(
+        `${visita.nombreCliente} se dirige a la caja ${caja.id}.`
+    );
 
     try {
         const iniciado = cliente.iniciarPago(
@@ -1079,7 +1104,9 @@ function finalizarPagoVisitante(visita, ticket) {
 
                 visita.fase = 'esperandoSalida';
 
-                mostrarMensaje(`${visita.nombreCliente} regresó a su vehículo.`);
+                mostrarMensaje(
+                    `${visita.nombreCliente} regresó a su vehículo.`
+                );
 
                 retirarClienteYCarritoDeVisita(visita);
                 solicitarSalidaVisitante(visita);
@@ -1108,7 +1135,9 @@ function solicitarSalidaVisitante(visita) {
         return false;
     }
 
-    const resultado = sistemaVehiculos.solicitarSalida(visita.idVehiculo);
+    const resultado = sistemaVehiculos.solicitarSalida(
+        visita.idVehiculo
+    );
 
     if (resultado === true) {
         visita.salidaSolicitada = true;
@@ -1130,29 +1159,50 @@ function solicitarSalidaVisitante(visita) {
 // ============================================================
 
 function actualizarJugador(delta) {
-    if (!juegoIniciado || !controles.isLocked || vistaSeguridad !== null) return;
+    if (!juegoIniciado || !controles.isLocked || vistaSeguridad !== null) {
+        return;
+    }
 
     movimientoJugador.set(0, 0, 0);
 
     controles.getDirection(vectorAdelante);
     vectorAdelante.y = 0;
 
-    if (vectorAdelante.lengthSq() > 0) vectorAdelante.normalize();
+    if (vectorAdelante.lengthSq() > 0) {
+        vectorAdelante.normalize();
+    }
 
-    vectorDerecha.crossVectors(vectorAdelante, ejeVertical).normalize();
+    vectorDerecha.crossVectors(
+        vectorAdelante,
+        ejeVertical
+    ).normalize();
 
     const velocidad = (
         teclas.ShiftLeft || teclas.ShiftRight
     ) ? CONFIG.velocidadCorrer : CONFIG.velocidadCaminar;
 
-    if (teclas.KeyW || teclas.ArrowUp) movimientoJugador.add(vectorAdelante);
-    if (teclas.KeyS || teclas.ArrowDown) movimientoJugador.sub(vectorAdelante);
-    if (teclas.KeyD || teclas.ArrowRight) movimientoJugador.add(vectorDerecha);
-    if (teclas.KeyA || teclas.ArrowLeft) movimientoJugador.sub(vectorDerecha);
+    if (teclas.KeyW || teclas.ArrowUp) {
+        movimientoJugador.add(vectorAdelante);
+    }
+
+    if (teclas.KeyS || teclas.ArrowDown) {
+        movimientoJugador.sub(vectorAdelante);
+    }
+
+    if (teclas.KeyD || teclas.ArrowRight) {
+        movimientoJugador.add(vectorDerecha);
+    }
+
+    if (teclas.KeyA || teclas.ArrowLeft) {
+        movimientoJugador.sub(vectorDerecha);
+    }
 
     if (movimientoJugador.lengthSq() > 0) {
         movimientoJugador.normalize();
-        camara.position.addScaledVector(movimientoJugador, velocidad * delta);
+        camara.position.addScaledVector(
+            movimientoJugador,
+            velocidad * delta
+        );
     }
 
     velocidadVertical -= CONFIG.gravedad * delta;
@@ -1222,7 +1272,11 @@ function exportarTrayectoria() {
         )
     ];
 
-    descargarCSV(filas.join('\n'), 'recorrido_supermercado.csv');
+    descargarCSV(
+        filas.join('\n'),
+        'recorrido_supermercado.csv'
+    );
+
     mostrarMensaje('Recorrido exportado.');
 }
 
@@ -1240,11 +1294,17 @@ function obtenerArticulosTicket(ticket) {
 function obtenerSubtotalArticulo(articulo) {
     const cantidad = Number(articulo.cantidad ?? 1);
 
-    if (articulo.subtotal !== undefined && Number.isFinite(Number(articulo.subtotal))) {
+    if (
+        articulo.subtotal !== undefined &&
+        Number.isFinite(Number(articulo.subtotal))
+    ) {
         return Number(articulo.subtotal);
     }
 
-    if (articulo.total !== undefined && Number.isFinite(Number(articulo.total))) {
+    if (
+        articulo.total !== undefined &&
+        Number.isFinite(Number(articulo.total))
+    ) {
         return Number(articulo.total);
     }
 
@@ -1289,7 +1349,11 @@ function exportarTickets() {
         }
     }
 
-    descargarCSV(filas.join('\n'), 'tickets_supermercado.csv');
+    descargarCSV(
+        filas.join('\n'),
+        'tickets_supermercado.csv'
+    );
+
     mostrarMensaje('Tickets exportados.');
 }
 
@@ -1419,7 +1483,11 @@ function crearInterfazCamaras() {
 }
 
 function cambiarVistaSeguridad(numero) {
-    if (!Number.isInteger(numero) || numero < 1 || numero > CONFIG_CAMARAS.length) {
+    if (
+        !Number.isInteger(numero) ||
+        numero < 1 ||
+        numero > CONFIG_CAMARAS.length
+    ) {
         return;
     }
 
@@ -1498,7 +1566,9 @@ function crearInterfaz() {
             cursor:pointer;
         }
 
-        .boton-supermercado:hover { background:#217a59; }
+        .boton-supermercado:hover {
+            background:#217a59;
+        }
 
         #hud-supermercado {
             position:fixed;
@@ -1582,7 +1652,9 @@ function crearInterfaz() {
             border-radius:8px;
         }
 
-        #ticket-contenido h2 { text-align:center; }
+        #ticket-contenido h2 {
+            text-align:center;
+        }
 
         #ticket-contenido table {
             width:100%;
@@ -1611,7 +1683,9 @@ function crearInterfaz() {
             margin-top:15px;
         }
 
-        #ticket-contenido .ticket-botones button { flex:1; }
+        #ticket-contenido .ticket-botones button {
+            flex:1;
+        }
 
         @media(max-width:650px) {
             #hud-supermercado {
@@ -1634,7 +1708,9 @@ function crearInterfaz() {
         }
 
         @media print {
-            body * { visibility:hidden !important; }
+            body * {
+                visibility:hidden !important;
+            }
 
             #ticket-supermercado,
             #ticket-supermercado * {
@@ -1652,7 +1728,9 @@ function crearInterfaz() {
                 box-shadow:none;
             }
 
-            #ticket-contenido .ticket-botones { display:none; }
+            #ticket-contenido .ticket-botones {
+                display:none;
+            }
         }
     `;
 
@@ -1751,7 +1829,9 @@ function crearInterfaz() {
         actualizarIluminacion();
 
         mostrarMensaje(
-            modoNoche ? 'Modo nocturno activado.' : 'Modo diurno activado.'
+            modoNoche
+                ? 'Modo nocturno activado.'
+                : 'Modo diurno activado.'
         );
     };
 
@@ -1764,7 +1844,9 @@ function crearInterfaz() {
         const resultado = sistemaVehiculos.solicitarLlegada();
 
         if (resultado === false || resultado === 0) {
-            mostrarMensaje('No hay plazas disponibles o no se pudo solicitar el vehículo.');
+            mostrarMensaje(
+                'No hay plazas disponibles o no se pudo solicitar el vehículo.'
+            );
             return;
         }
 
@@ -1774,8 +1856,17 @@ function crearInterfaz() {
     document.getElementById('btn-entrada').onclick = () => {
         volverAlJugador();
 
-        camara.position.set(0, CONFIG.alturaJugador, 25);
-        camara.lookAt(0, CONFIG.alturaJugador, 15);
+        camara.position.set(
+            0,
+            CONFIG.alturaJugador,
+            25
+        );
+
+        camara.lookAt(
+            0,
+            CONFIG.alturaJugador,
+            15
+        );
 
         velocidadVertical = 0;
         jugadorEnSuelo = true;
@@ -1783,8 +1874,11 @@ function crearInterfaz() {
         registrarTrayectoria(camara.position);
     };
 
-    document.getElementById('btn-recorrido').onclick = exportarTrayectoria;
-    document.getElementById('btn-tickets').onclick = exportarTickets;
+    document.getElementById('btn-recorrido').onclick =
+        exportarTrayectoria;
+
+    document.getElementById('btn-tickets').onclick =
+        exportarTickets;
 
     document.getElementById('ticket-cerrar').onclick = () => {
         ticket.style.display = 'none';
@@ -1806,7 +1900,9 @@ function mostrarMensaje(texto) {
     elemento.textContent = texto;
     elemento.style.display = 'block';
 
-    if (temporizadorMensaje) clearTimeout(temporizadorMensaje);
+    if (temporizadorMensaje) {
+        clearTimeout(temporizadorMensaje);
+    }
 
     temporizadorMensaje = setTimeout(() => {
         elemento.style.display = 'none';
@@ -1829,11 +1925,13 @@ function actualizarHUD() {
     }
 
     if (recorrido) {
-        recorrido.textContent = `Recorrido: ${trayectoriaJugador.length} puntos`;
+        recorrido.textContent =
+            `Recorrido: ${trayectoriaJugador.length} puntos`;
     }
 
     if (compras) {
-        compras.textContent = `Tickets: ${ticketsGenerados.length}`;
+        compras.textContent =
+            `Tickets: ${ticketsGenerados.length}`;
     }
 
     actualizarEstadoVista();
@@ -1845,7 +1943,10 @@ function actualizarHUD() {
 
 function configurarEventos() {
     window.addEventListener('keydown', evento => {
-        if (evento.code === 'Space' || evento.code.startsWith('Arrow')) {
+        if (
+            evento.code === 'Space' ||
+            evento.code.startsWith('Arrow')
+        ) {
             evento.preventDefault();
         }
 
@@ -1870,7 +1971,10 @@ function configurarEventos() {
             cambiarVistaSeguridad(Number(evento.code.slice(-1)));
         }
 
-        if (evento.code === 'Digit0' || evento.code === 'Numpad0') {
+        if (
+            evento.code === 'Digit0' ||
+            evento.code === 'Numpad0'
+        ) {
             volverAlJugador();
         }
     });
@@ -1889,10 +1993,16 @@ function configurarEventos() {
         camara.aspect = window.innerWidth / window.innerHeight;
         camara.updateProjectionMatrix();
 
-        renderizador.setSize(window.innerWidth, window.innerHeight);
+        renderizador.setSize(
+            window.innerWidth,
+            window.innerHeight
+        );
 
         renderizador.setPixelRatio(
-            Math.min(window.devicePixelRatio || 1, CONFIG.pixelRatioMaximo)
+            Math.min(
+                window.devicePixelRatio || 1,
+                CONFIG.pixelRatioMaximo
+            )
         );
     });
 }
