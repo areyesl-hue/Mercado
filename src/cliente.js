@@ -1,4 +1,3 @@
-
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
@@ -60,7 +59,7 @@ const CONFIG_BASE = {
     tiempoRecoger: 1.1,
     tiempoInspeccionar: 3.2,
     tiempoGuardar: 1.4,
-    tiempoDevolver: 1.4,
+    tiempoDevolver: 1.8,
     tiempoEntreProductos: 0.8,
     tiempoReintento: 1.5,
 
@@ -80,6 +79,9 @@ const CONFIG_BASE = {
 
     alturaProductoInspeccion: 1.25,
     distanciaProductoInspeccion: 0.32,
+
+    // Altura mundial por debajo de la cual se agacha.
+    alturaEstanteInferior: 0.90,
 
     maximoProductos: 3,
     distanciaMaximaBusqueda: 40,
@@ -223,6 +225,8 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     let productoEnMano = null;
     let productoOriginal = null;
 
+    let productoEsInferior = false;
+
     let rackReservado = null;
 
     let compras = [];
@@ -243,19 +247,41 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     const rig = {
         cadera: null,
         torso: null,
+
         brazoIzquierdo: null,
         brazoDerecho: null,
+
         antebrazoIzquierdo: null,
         antebrazoDerecho: null,
+
         manoIzquierda: null,
         manoDerecha: null,
+
         piernaIzquierda: null,
         piernaDerecha: null,
+
         pantorrillaIzquierda: null,
         pantorrillaDerecha: null
     };
 
     const EJE_X = new THREE.Vector3(1, 0, 0);
+
+    // ========================================================
+    // ANIMACIÓN DEL PRODUCTO DEVUELTO
+    // ========================================================
+
+    const animacionProducto = {
+        activa: false,
+        tipo: null,
+        tiempo: 0,
+        duracion: 0,
+
+        posicionInicial: new THREE.Vector3(),
+        posicionFinal: new THREE.Vector3(),
+
+        quaternionInicial: new THREE.Quaternion(),
+        quaternionFinal: new THREE.Quaternion()
+    };
 
     // ========================================================
     // PUERTA
@@ -386,47 +412,74 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         rig.cadera = buscarHueso('hips', 'pelvis');
 
         rig.torso = buscarHueso(
-            'spine2', 'spine1', 'spine', 'chest'
+            'spine2',
+            'spine1',
+            'spine',
+            'chest'
         );
 
         rig.brazoIzquierdo = buscarHueso(
-            'leftupperarm', 'upperarml', 'leftarm'
+            'leftupperarm',
+            'upperarml',
+            'leftarm'
         );
 
         rig.brazoDerecho = buscarHueso(
-            'rightupperarm', 'upperarmr', 'rightarm'
+            'rightupperarm',
+            'upperarmr',
+            'rightarm'
         );
 
         rig.antebrazoIzquierdo = buscarHueso(
-            'leftforearm', 'forearml', 'lowerarml'
+            'leftforearm',
+            'forearml',
+            'lowerarml'
         );
 
         rig.antebrazoDerecho = buscarHueso(
-            'rightforearm', 'forearmr', 'lowerarmr'
+            'rightforearm',
+            'forearmr',
+            'lowerarmr'
         );
 
         rig.manoIzquierda = buscarHueso(
-            'lefthand', 'handl', 'handleft'
+            'lefthand',
+            'handl',
+            'handleft'
         );
 
         rig.manoDerecha = buscarHueso(
-            'righthand', 'handr', 'handright'
+            'righthand',
+            'handr',
+            'handright'
         );
 
         rig.piernaIzquierda = buscarHueso(
-            'leftupleg', 'uplegleft', 'leftthigh', 'thighl'
+            'leftupleg',
+            'uplegleft',
+            'leftthigh',
+            'thighl'
         );
 
         rig.piernaDerecha = buscarHueso(
-            'rightupleg', 'uplegright', 'rightthigh', 'thighr'
+            'rightupleg',
+            'uplegright',
+            'rightthigh',
+            'thighr'
         );
 
         rig.pantorrillaIzquierda = buscarHueso(
-            'leftleg', 'lowerlegleft', 'calfl', 'leftcalf'
+            'leftleg',
+            'lowerlegleft',
+            'calfl',
+            'leftcalf'
         );
 
         rig.pantorrillaDerecha = buscarHueso(
-            'rightleg', 'lowerlegright', 'calfr', 'rightcalf'
+            'rightleg',
+            'lowerlegright',
+            'calfr',
+            'rightcalf'
         );
     }
 
@@ -463,7 +516,26 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     }
 
     // ========================================================
-    // ANIMACIONES
+    // DETECTAR ALTURA DEL PRODUCTO
+    // ========================================================
+
+    function productoEstaEnEstanteInferior(producto) {
+
+        if (!producto) return false;
+
+        producto.updateMatrixWorld(true);
+
+        const caja = new THREE.Box3().setFromObject(producto);
+
+        if (caja.isEmpty()) return false;
+
+        const alturaCentro = (caja.min.y + caja.max.y) / 2;
+
+        return alturaCentro < config.alturaEstanteInferior;
+    }
+
+    // ========================================================
+    // ANIMACIONES PROCEDURALES
     // ========================================================
 
     function animarCaminarProcedural(delta) {
@@ -472,8 +544,17 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         const paso = Math.sin(faseAnimacion) * 0.24;
 
-        aplicarRotacion(rig.piernaIzquierda, EJE_X, paso);
-        aplicarRotacion(rig.piernaDerecha, EJE_X, -paso);
+        aplicarRotacion(
+            rig.piernaIzquierda,
+            EJE_X,
+            paso
+        );
+
+        aplicarRotacion(
+            rig.piernaDerecha,
+            EJE_X,
+            -paso
+        );
 
         aplicarRotacion(
             rig.pantorrillaIzquierda,
@@ -487,12 +568,74 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             Math.max(0, paso) * 0.4
         );
 
-        aplicarRotacion(rig.brazoIzquierdo, EJE_X, -paso * 0.65);
-        aplicarRotacion(rig.brazoDerecho, EJE_X, paso * 0.65);
+        aplicarRotacion(
+            rig.brazoIzquierdo,
+            EJE_X,
+            -paso * 0.65
+        );
+
+        aplicarRotacion(
+            rig.brazoDerecho,
+            EJE_X,
+            paso * 0.65
+        );
 
         restaurarHueso(rig.torso);
         restaurarHueso(rig.cadera);
     }
+
+    // ========================================================
+    // AGACHARSE
+    // ========================================================
+
+    function animarAgacharse(intensidad = 1) {
+
+        intensidad = limitar(intensidad, 0, 1);
+
+        // Flexión de cadera.
+        aplicarRotacion(
+            rig.cadera,
+            EJE_X,
+            0.30 * intensidad
+        );
+
+        // Inclinación del torso hacia delante.
+        aplicarRotacion(
+            rig.torso,
+            EJE_X,
+            0.25 * intensidad
+        );
+
+        // Flexión de las piernas.
+        aplicarRotacion(
+            rig.piernaIzquierda,
+            EJE_X,
+            -0.65 * intensidad
+        );
+
+        aplicarRotacion(
+            rig.piernaDerecha,
+            EJE_X,
+            -0.65 * intensidad
+        );
+
+        // Compensación de las pantorrillas.
+        aplicarRotacion(
+            rig.pantorrillaIzquierda,
+            EJE_X,
+            0.28 * intensidad
+        );
+
+        aplicarRotacion(
+            rig.pantorrillaDerecha,
+            EJE_X,
+            0.28 * intensidad
+        );
+    }
+
+    // ========================================================
+    // RECOGER PRODUCTO
+    // ========================================================
 
     function animarRecogerProcedural() {
 
@@ -500,6 +643,14 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             tiempoEstado / Math.max(config.tiempoRecoger, 0.01)
         );
 
+        const agachado = productoEsInferior ? 1 : 0;
+
+        // El cuerpo baja progresivamente.
+        animarAgacharse(
+            agachado * suavizar(t * 1.5)
+        );
+
+        // Extiende el brazo derecho hacia el producto.
         aplicarRotacion(
             rig.brazoDerecho,
             EJE_X,
@@ -512,10 +663,29 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             THREE.MathUtils.lerp(-0.1, -0.65, t)
         );
 
-        aplicarRotacion(rig.brazoIzquierdo, EJE_X, -0.2 * t);
-        aplicarRotacion(rig.antebrazoIzquierdo, EJE_X, -0.15 * t);
-        aplicarRotacion(rig.torso, EJE_X, 0.10 * t);
+        aplicarRotacion(
+            rig.brazoIzquierdo,
+            EJE_X,
+            -0.2 * t
+        );
+
+        aplicarRotacion(
+            rig.antebrazoIzquierdo,
+            EJE_X,
+            -0.15 * t
+        );
+
+        // Inclina un poco más el torso si el producto está abajo.
+        aplicarRotacion(
+            rig.torso,
+            EJE_X,
+            0.10 * t + 0.25 * agachado * t
+        );
     }
+
+    // ========================================================
+    // INSPECCIONAR PRODUCTO
+    // ========================================================
 
     function animarInspeccionarProcedural() {
 
@@ -534,9 +704,24 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             -1.05 + oscilacion * 0.5
         );
 
-        aplicarRotacion(rig.brazoIzquierdo, EJE_X, -0.65);
-        aplicarRotacion(rig.antebrazoIzquierdo, EJE_X, -0.75);
-        aplicarRotacion(rig.torso, EJE_X, 0.10);
+        aplicarRotacion(
+            rig.brazoIzquierdo,
+            EJE_X,
+            -0.65
+        );
+
+        aplicarRotacion(
+            rig.antebrazoIzquierdo,
+            EJE_X,
+            -0.75
+        );
+
+        // Si viene de un estante inferior, vuelve a levantarse.
+        if (productoEsInferior) {
+            animarAgacharse(
+                1 - suavizar(tiempoEstado * 1.5)
+            );
+        }
 
         if (productoEnMano) {
 
@@ -546,24 +731,235 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         }
     }
 
+    // ========================================================
+    // GUARDAR PRODUCTO EN CARRITO
+    // ========================================================
+
     function animarGuardarProcedural() {
 
         const t = Math.sin(tiempoEstado * 5) * 0.08;
 
-        aplicarRotacion(rig.brazoDerecho, EJE_X, -0.75 + t);
-        aplicarRotacion(rig.antebrazoDerecho, EJE_X, -0.8);
-        aplicarRotacion(rig.brazoIzquierdo, EJE_X, -0.45);
-        aplicarRotacion(rig.antebrazoIzquierdo, EJE_X, -0.55);
+        aplicarRotacion(
+            rig.brazoDerecho,
+            EJE_X,
+            -0.75 + t
+        );
+
+        aplicarRotacion(
+            rig.antebrazoDerecho,
+            EJE_X,
+            -0.8
+        );
+
+        aplicarRotacion(
+            rig.brazoIzquierdo,
+            EJE_X,
+            -0.45
+        );
+
+        aplicarRotacion(
+            rig.antebrazoIzquierdo,
+            EJE_X,
+            -0.55
+        );
     }
+
+    // ========================================================
+    // DEVOLVER PRODUCTO AL ESTANTE
+    // ========================================================
+
+    function animarDevolverProcedural() {
+
+        const t = suavizar(
+            tiempoEstado / Math.max(config.tiempoDevolver, 0.01)
+        );
+
+        // Si el artículo estaba abajo, conserva la postura
+        // agachada mientras lo coloca.
+        if (productoEsInferior) {
+            animarAgacharse(1 - t * 0.25);
+        }
+
+        // Extiende el brazo para colocar el producto.
+        aplicarRotacion(
+            rig.brazoDerecho,
+            EJE_X,
+            THREE.MathUtils.lerp(-1.0, -0.15, t)
+        );
+
+        aplicarRotacion(
+            rig.antebrazoDerecho,
+            EJE_X,
+            THREE.MathUtils.lerp(-0.8, -0.1, t)
+        );
+
+        aplicarRotacion(
+            rig.brazoIzquierdo,
+            EJE_X,
+            THREE.MathUtils.lerp(-0.45, -0.1, t)
+        );
+
+        aplicarRotacion(
+            rig.antebrazoIzquierdo,
+            EJE_X,
+            THREE.MathUtils.lerp(-0.55, -0.1, t)
+        );
+    }
+
+    // ========================================================
+    // ANIMACIÓN DEL PRODUCTO DURANTE LA DEVOLUCIÓN
+    // ========================================================
+
+    function actualizarAnimacionProducto(delta) {
+
+        if (!animacionProducto.activa || !productoEnMano) {
+            return false;
+        }
+
+        const producto = productoEnMano;
+
+        animacionProducto.tiempo += delta;
+
+        const duracion = Math.max(
+            animacionProducto.duracion,
+            0.01
+        );
+
+        const t = limitar(
+            animacionProducto.tiempo / duracion,
+            0,
+            1
+        );
+
+        const suave = suavizar(t);
+
+        const posicion = new THREE.Vector3().lerpVectors(
+            animacionProducto.posicionInicial,
+            animacionProducto.posicionFinal,
+            suave
+        );
+
+        // Elevación ligera en el movimiento para evitar
+        // que parezca que el producto se desliza.
+        posicion.y += Math.sin(Math.PI * t) * 0.10;
+
+        const quaternion = new THREE.Quaternion().slerpQuaternions(
+            animacionProducto.quaternionInicial,
+            animacionProducto.quaternionFinal,
+            suave
+        );
+
+        const padre = producto.parent;
+
+        if (padre) {
+
+            padre.updateMatrixWorld(true);
+
+            const posicionLocal = padre.worldToLocal(
+                posicion.clone()
+            );
+
+            producto.position.copy(posicionLocal);
+
+            const quaternionPadre = new THREE.Quaternion();
+
+            padre.getWorldQuaternion(quaternionPadre);
+
+            producto.quaternion
+                .copy(quaternionPadre.invert())
+                .multiply(quaternion);
+        }
+
+        if (t >= 1) {
+
+            finalizarDevolucionProducto();
+
+            return true;
+        }
+
+        return false;
+    }
+
+    // ========================================================
+    // FINALIZAR DEVOLUCIÓN
+    // ========================================================
+
+    function finalizarDevolucionProducto() {
+
+        if (!productoEnMano || !productoOriginal) {
+
+            animacionProducto.activa = false;
+            animacionProducto.tipo = null;
+
+            return;
+        }
+
+        const producto = productoEnMano;
+        const original = productoOriginal;
+
+        producto.parent?.remove(producto);
+
+        if (original.parent) {
+            original.parent.add(producto);
+        } else {
+            scene.add(producto);
+        }
+
+        producto.position.copy(original.posicion);
+        producto.quaternion.copy(original.quaternion);
+        producto.scale.copy(original.escala);
+        producto.visible = original.visible;
+
+        producto.userData.reservado = false;
+        delete producto.userData.reservadoPor;
+
+        producto.updateMatrixWorld(true);
+
+        productoEnMano = null;
+        productoOriginal = null;
+
+        animacionProducto.activa = false;
+        animacionProducto.tipo = null;
+        animacionProducto.tiempo = 0;
+
+        liberarReserva();
+
+        console.log(
+            `[CLIENTE ${id}] Producto colocado nuevamente en su estante.`
+        );
+    }
+
+    // ========================================================
+    // ANIMAR PAGO
+    // ========================================================
 
     function animarPagarProcedural() {
 
         const t = Math.sin(tiempoEstado * 3) * 0.08;
 
-        aplicarRotacion(rig.brazoDerecho, EJE_X, -0.9 + t);
-        aplicarRotacion(rig.antebrazoDerecho, EJE_X, -0.6);
-        aplicarRotacion(rig.brazoIzquierdo, EJE_X, -0.7);
-        aplicarRotacion(rig.antebrazoIzquierdo, EJE_X, -0.4);
+        aplicarRotacion(
+            rig.brazoDerecho,
+            EJE_X,
+            -0.9 + t
+        );
+
+        aplicarRotacion(
+            rig.antebrazoDerecho,
+            EJE_X,
+            -0.6
+        );
+
+        aplicarRotacion(
+            rig.brazoIzquierdo,
+            EJE_X,
+            -0.7
+        );
+
+        aplicarRotacion(
+            rig.antebrazoIzquierdo,
+            EJE_X,
+            -0.4
+        );
     }
 
     // ========================================================
@@ -693,7 +1089,11 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             }
         }
 
-        if (!caminando) {
+        // No restaurar la pose durante una devolución activa.
+        if (
+            !caminando &&
+            nuevoEstado !== ESTADOS.DEVOLVIENDO
+        ) {
             restaurarPoseCompleta();
         }
 
@@ -727,10 +1127,12 @@ export function crearClienteSupermercado(scene, opciones = {}) {
                 obstaculos.push({
                     x: numero(colision.x),
                     z: numero(colision.z),
+
                     ancho: numero(
                         colision.ancho,
                         colision.width ?? 1
                     ),
+
                     profundidad: numero(
                         colision.profundidad,
                         colision.depth ?? 1
@@ -1508,6 +1910,8 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         producto.updateMatrixWorld(true);
 
+        productoEsInferior = productoEstaEnEstanteInferior(producto);
+
         productoOriginal = {
             parent: producto.parent,
             posicion: producto.position.clone(),
@@ -1573,12 +1977,13 @@ export function crearClienteSupermercado(scene, opciones = {}) {
                 producto.userData?.nombre ??
                 producto.name ??
                 'producto'
-            }`
+            }`,
+            productoEsInferior ? '(estante inferior)' : '(estante normal)'
         );
     }
 
     // ========================================================
-    // DEVOLVER PRODUCTO
+    // DEVOLVER PRODUCTO AL ESTANTE
     // ========================================================
 
     function devolverProductoAlEstante() {
@@ -1588,37 +1993,70 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             productoEnMano = null;
             productoOriginal = null;
 
+            animacionProducto.activa = false;
+
             liberarReserva();
 
             return;
         }
 
+        // Evitar iniciar dos devoluciones.
+        if (animacionProducto.activa) return;
+
         const producto = productoEnMano;
         const original = productoOriginal;
 
-        producto.parent?.remove(producto);
-
-        if (original.parent) {
-            original.parent.add(producto);
-        } else {
-            scene.add(producto);
+        if (!original.parent) {
+            finalizarDevolucionProducto();
+            return;
         }
 
-        producto.position.copy(original.posicion);
-        producto.quaternion.copy(original.quaternion);
-        producto.scale.copy(original.escala);
-        producto.visible = original.visible;
-
+        grupo.updateMatrixWorld(true);
         producto.updateMatrixWorld(true);
+        original.parent.updateMatrixWorld(true);
 
-        productoEnMano = null;
-        productoOriginal = null;
+        const posicionMundo = new THREE.Vector3();
+        const quaternionMundo = new THREE.Quaternion();
 
-        liberarReserva();
+        producto.getWorldPosition(posicionMundo);
+        producto.getWorldQuaternion(quaternionMundo);
 
-        console.log(
-            `[CLIENTE ${id}] Producto devuelto al estante.`
+        // Transformación mundial de la posición original.
+        const matrizOriginal = new THREE.Matrix4();
+
+        matrizOriginal.compose(
+            original.posicion,
+            original.quaternion,
+            original.escala
         );
+
+        const matrizMundoOriginal = new THREE.Matrix4();
+
+        matrizMundoOriginal.multiplyMatrices(
+            original.parent.matrixWorld,
+            matrizOriginal
+        );
+
+        const posicionFinal = new THREE.Vector3();
+        const quaternionFinal = new THREE.Quaternion();
+        const escalaFinal = new THREE.Vector3();
+
+        matrizMundoOriginal.decompose(
+            posicionFinal,
+            quaternionFinal,
+            escalaFinal
+        );
+
+        animacionProducto.activa = true;
+        animacionProducto.tipo = 'DEVOLVER';
+        animacionProducto.tiempo = 0;
+        animacionProducto.duracion = config.tiempoDevolver;
+
+        animacionProducto.posicionInicial.copy(posicionMundo);
+        animacionProducto.posicionFinal.copy(posicionFinal);
+
+        animacionProducto.quaternionInicial.copy(quaternionMundo);
+        animacionProducto.quaternionFinal.copy(quaternionFinal);
     }
 
     // ========================================================
@@ -1651,9 +2089,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
             if (config.carrito?.agregarProducto) {
 
-                // IMPORTANTE:
-                // No retirar el producto de su padre.
-                // agregarProducto necesita el parent original.
                 agregado = config.carrito.agregarProducto(producto, {
                     nombre: compra.nombre,
                     precio: compra.precio,
@@ -1673,8 +2108,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             );
         }
 
-        // Si el carrito no acepta el producto,
-        // se devuelve a su estante original.
         if (!agregado) {
 
             console.error(
@@ -1683,22 +2116,22 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
             if (productoOriginal) {
                 devolverProductoAlEstante();
+                cambiarEstado(ESTADOS.DEVOLVIENDO);
             } else {
                 productoEnMano = null;
                 productoOriginal = null;
                 liberarReserva();
+                cambiarEstado(ESTADOS.BUSCANDO);
             }
-
-            cambiarEstado(ESTADOS.BUSCANDO);
 
             return;
         }
 
-        // Registrar la compra únicamente si fue aceptada.
         compras.push(compra);
 
         producto.userData.enCarrito = true;
         producto.userData.reservado = false;
+
         delete producto.userData.reservadoPor;
 
         productoEnMano = null;
@@ -1909,7 +2342,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             });
 
         } catch (error) {
-
             console.error(error);
         }
 
@@ -2033,7 +2465,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         liberarReserva();
 
         if (productoEnMano) {
-            devolverProductoAlEstante();
+            finalizarDevolucionProducto();
         }
 
         compras = [];
@@ -2097,7 +2529,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         liberarReserva();
 
         if (productoEnMano) {
-            devolverProductoAlEstante();
+            finalizarDevolucionProducto();
         }
 
         actualizarColisiones();
@@ -2240,6 +2672,10 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             case ESTADOS.INACTIVO:
                 break;
 
+            // ------------------------------------------------
+            // MOVIMIENTO
+            // ------------------------------------------------
+
             case ESTADOS.ENTRANDO:
             case ESTADOS.ACERCANDO:
             case ESTADOS.RUTA:
@@ -2279,6 +2715,10 @@ export function crearClienteSupermercado(scene, opciones = {}) {
                 break;
             }
 
+            // ------------------------------------------------
+            // BUSCAR
+            // ------------------------------------------------
+
             case ESTADOS.BUSCANDO: {
 
                 if (tiempoEstado < config.tiempoEntreProductos) {
@@ -2295,6 +2735,10 @@ export function crearClienteSupermercado(scene, opciones = {}) {
                 break;
             }
 
+            // ------------------------------------------------
+            // RECOGER
+            // ------------------------------------------------
+
             case ESTADOS.RECOGIENDO: {
 
                 animarRecogerProcedural();
@@ -2306,6 +2750,10 @@ export function crearClienteSupermercado(scene, opciones = {}) {
                 break;
             }
 
+            // ------------------------------------------------
+            // INSPECCIONAR
+            // ------------------------------------------------
+
             case ESTADOS.INSPECCIONANDO: {
 
                 animarInspeccionarProcedural();
@@ -2316,6 +2764,10 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
                 break;
             }
+
+            // ------------------------------------------------
+            // DECIDIR
+            // ------------------------------------------------
 
             case ESTADOS.DECIDIENDO: {
 
@@ -2334,6 +2786,10 @@ export function crearClienteSupermercado(scene, opciones = {}) {
                 break;
             }
 
+            // ------------------------------------------------
+            // GUARDAR EN CARRITO
+            // ------------------------------------------------
+
             case ESTADOS.GUARDANDO: {
 
                 animarGuardarProcedural();
@@ -2345,19 +2801,29 @@ export function crearClienteSupermercado(scene, opciones = {}) {
                 break;
             }
 
+            // ------------------------------------------------
+            // DEVOLVER AL ESTANTE
+            // ------------------------------------------------
+
             case ESTADOS.DEVOLVIENDO: {
 
-                animarGuardarProcedural();
+                animarDevolverProcedural();
 
-                if (tiempoEstado >= config.tiempoDevolver) {
+                actualizarAnimacionProducto(delta);
 
-                    devolverProductoAlEstante();
-
+                if (
+                    tiempoEstado >= config.tiempoDevolver &&
+                    !animacionProducto.activa
+                ) {
                     cambiarEstado(ESTADOS.BUSCANDO);
                 }
 
                 break;
             }
+
+            // ------------------------------------------------
+            // ESPERAR
+            // ------------------------------------------------
 
             case ESTADOS.ESPERANDO: {
 
@@ -2372,6 +2838,10 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
                 break;
             }
+
+            // ------------------------------------------------
+            // PAGAR
+            // ------------------------------------------------
 
             case ESTADOS.PAGANDO: {
 
@@ -2398,9 +2868,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
                         if (typeof callback === 'function') {
 
                             try {
-
                                 callback(ticket);
-
                             } catch (error) {
 
                                 console.error(
@@ -2410,8 +2878,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
                             }
                         }
 
-                        // El callback puede iniciar el regreso.
-                        // No sobrescribir REGRESANDO con FINALIZADO.
                         if (estado === ESTADOS.PAGANDO) {
                             cambiarEstado(ESTADOS.FINALIZADO);
                         }
@@ -2499,11 +2965,13 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         if (eliminado) return;
 
-        liberarReserva();
-
+        // Si el cliente desaparece durante una devolución,
+        // el producto se restaura inmediatamente en su estante.
         if (productoEnMano) {
-            devolverProductoAlEstante();
+            finalizarDevolucionProducto();
         }
+
+        liberarReserva();
 
         callbackPagoPendiente = null;
         callbackRegreso = null;
