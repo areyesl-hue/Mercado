@@ -1129,13 +1129,9 @@ export function crearProductosLacteos(scene) {
 // ========================================================
 // 6. DEPARTAMENTO DE ROPA
 // ========================================================
-
 const ALTURA_TUBO_ROPA = 1.75;
 
-// Altura de colocación de las prendas
 const BASE_PRENDA = 0.90;
-
-// Tamaño de los modelos
 const ALTURA_PRENDA = 1.60;
 
 const prendas = [
@@ -1143,8 +1139,8 @@ const prendas = [
         nombre: 'Blusa',
         archivo: '/modelos/Blusa.glb',
         codigo: 'BLUSA',
-        x: -28.35,
-        z: -2,
+        x: -26.35,
+        z: -4,
         ancho: 1.40,
         profundidad: 0.90
     },
@@ -1153,7 +1149,7 @@ const prendas = [
         archivo: '/modelos/SudaderaNegra.glb',
         codigo: 'SUDADERA_NEGRA',
         x: -25.05,
-        z: -2,
+        z: -4,
         ancho: 1.40,
         profundidad: 0.90
     },
@@ -1162,7 +1158,7 @@ const prendas = [
         archivo: '/modelos/sudaderaroja.glb',
         codigo: 'SUDADERA_ROJA',
         x: -26.35,
-        z: 4,
+        z: 2,
         ancho: 1.20,
         profundidad: 0.90
     },
@@ -1171,7 +1167,7 @@ const prendas = [
         archivo: '/modelos/chamarranegra.glb',
         codigo: 'CHAMARRA_NEGRA',
         x: -25.05,
-        z: 4,
+        z: 2,
         ancho: 1.20,
         profundidad: 0.90
     },
@@ -1180,7 +1176,7 @@ const prendas = [
         archivo: '/modelos/pantalomezclilla.glb',
         codigo: 'PANTALON_MEZCLILLA',
         x: -26.35,
-        z: 7,
+        z: 8,
         ancho: 1.15,
         profundidad: 0.65
     },
@@ -1189,7 +1185,7 @@ const prendas = [
         archivo: '/modelos/vesitdo.glb',
         codigo: 'VESTIDO',
         x: -25.05,
-        z: 7,
+        z: 8,
         ancho: 1.20,
         profundidad: 0.70
     }
