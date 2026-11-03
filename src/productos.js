@@ -1,11 +1,10 @@
-
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 // ============================================================
 // PRODUCTOS DEL SUPERMERCADO
-// Precios provisionales en pesos mexicanos (MXN).
-// Cada unidad tiene su propio identificador, precio y estado.
+// Cada grupo independiente de un GLB representa un producto.
+// Cada unidad tiene ID, precio, categoría y estado propio.
 // ============================================================
 
 export function crearProductosLacteos(scene) {
@@ -82,12 +81,10 @@ export function crearProductosLacteos(scene) {
         VESTIDO: 380
     };
 
-    // Alturas de las superficies de exposición.
     const nivelesGondola = [0.48, 1.12, 1.76];
     const nivelesRefrigerador = [0.55, 1.15, 1.75];
     const nivelesLimpieza = [0.48, 1.13, 1.78];
 
-    // Separación entre productos.
     const posicionesEstante = [-0.55, 0.55];
     const posicionesRefrigerador = [-0.48, 0.48];
     const posicionesLimpieza = [-0.48, 0.48];
@@ -100,7 +97,7 @@ export function crearProductosLacteos(scene) {
     const cacheModelos = new Map();
 
     // ========================================================
-    // CARGAR CADA MODELO UNA SOLA VEZ
+    // CARGA DE MODELOS CON CACHÉ
     // ========================================================
 
     function cargarModelo(archivo, nombre, callback) {
@@ -112,7 +109,6 @@ export function crearProductosLacteos(scene) {
             } else {
                 existente.callbacks.push(callback);
             }
-
             return;
         }
 
@@ -125,7 +121,6 @@ export function crearProductosLacteos(scene) {
 
         loader.load(
             archivo,
-
             (gltf) => {
                 const original = gltf.scene;
 
@@ -150,7 +145,7 @@ export function crearProductosLacteos(scene) {
                         fn(original);
                     } catch (error) {
                         console.error(
-                            `Error colocando el modelo "${nombre}".`,
+                            `Error colocando ${nombre}:`,
                             error
                         );
                     }
@@ -158,17 +153,13 @@ export function crearProductosLacteos(scene) {
 
                 console.info(`Modelo cargado: ${nombre}`);
             },
-
             undefined,
-
             (error) => {
                 modelosFallidos++;
                 cacheModelos.delete(archivo);
 
                 console.error(
-                    `No se pudo cargar "${archivo}". ` +
-                    'Verifica que el archivo exista en public/modelos ' +
-                    'y que el nombre coincida exactamente.',
+                    `No se pudo cargar ${archivo}.`,
                     error
                 );
             }
@@ -176,7 +167,113 @@ export function crearProductosLacteos(scene) {
     }
 
     // ========================================================
-    // IDENTIFICAR UNA UNIDAD DE PRODUCTO
+    // DETECTAR GRUPOS DE PRODUCTOS DENTRO DEL GLB
+    //
+    // Busca primero un contenedor que tenga varios grupos
+    // independientes con mallas.
+    //
+    // Evita dividir las piezas internas de cada producto.
+    // ========================================================
+
+    function contieneMallas(objeto) {
+        let encontrado = false;
+
+        objeto.traverse((hijo) => {
+            if (hijo.isMesh) encontrado = true;
+        });
+
+        return encontrado;
+    }
+
+    function obtenerGruposProducto(original) {
+        original.updateMatrixWorld(true);
+
+        function buscarContenedor(padre) {
+            const gruposHijos = padre.children.filter((hijo) => {
+                return (
+                    hijo.isGroup &&
+                    contieneMallas(hijo)
+                );
+            });
+
+            // Si encontramos varios grupos hermanos con
+            // geometría, son candidatos a productos separados.
+            if (gruposHijos.length >= 2) {
+                return gruposHijos;
+            }
+
+            // Si existe un solo grupo, seguir buscando
+            // dentro de él por si contiene varios productos.
+            for (const hijo of padre.children) {
+                const resultado = buscarContenedor(hijo);
+
+                if (resultado && resultado.length >= 2) {
+                    return resultado;
+                }
+            }
+
+            return null;
+        }
+
+        const grupos = buscarContenedor(original);
+
+        if (!grupos || grupos.length === 0) {
+            console.warn(
+                `No se detectaron grupos independientes en "${original.name}". ` +
+                'Se utilizará el modelo completo como una unidad.'
+            );
+
+            return [original];
+        }
+
+        return grupos;
+    }
+
+    // ========================================================
+    // CREAR FUENTES INDEPENDIENTES
+    //
+    // Importante:
+    // Conserva las transformaciones relativas del GLB.
+    // No reinicia las transformaciones internas de las piezas.
+    // ========================================================
+
+    function crearFuentesIndependientes(original) {
+        const grupos = obtenerGruposProducto(original);
+
+        original.updateMatrixWorld(true);
+
+        const inversaRaiz = original.matrixWorld.clone().invert();
+
+        return grupos.map((grupo, indice) => {
+            const matrizRelativa = new THREE.Matrix4()
+                .multiplyMatrices(
+                    inversaRaiz,
+                    grupo.matrixWorld
+                );
+
+            const fuente = new THREE.Group();
+
+            fuente.name = `FUENTE_PRODUCTO_${indice + 1}`;
+
+            fuente.matrixAutoUpdate = false;
+            fuente.matrix.copy(matrizRelativa);
+
+            const copia = grupo.clone(true);
+
+            copia.matrixAutoUpdate = true;
+
+            // Se conserva la transformación local del grupo.
+            // La transformación del padre se conserva en fuente.
+            fuente.add(copia);
+
+            fuente.updateMatrixWorld(true);
+
+            return fuente;
+        });
+    }
+
+    // ========================================================
+    // IDENTIFICADORES Y PRECIOS
     // ========================================================
 
     function obtenerCodigoCatalogo(nombreUnidad) {
@@ -193,18 +290,18 @@ export function crearProductosLacteos(scene) {
         }
 
         console.warn(
-            `No hay precio configurado para "${codigo}". Se asignarán $0.00 MXN.`
+            `No hay precio para ${codigo}. Se asignará $0.00 MXN.`
         );
 
         return 0;
     }
 
     // ========================================================
-    // CREAR UNA COPIA DE PRODUCTO
+    // CREAR UNA UNIDAD DE PRODUCTO
     // ========================================================
 
     function crearCopia(
-        original,
+        fuente,
         nombre,
         x,
         y,
@@ -213,21 +310,20 @@ export function crearProductosLacteos(scene) {
         rotacionY = 0,
         categoria = 'Abarrotes'
     ) {
-        if (!original) return null;
+        if (!fuente) return null;
 
-        const modelo = original.clone(true);
+        const modelo = fuente.clone(true);
 
         modelo.name = nombre;
 
-        modelo.position.set(0, 0, 0);
-        modelo.rotation.set(0, 0, 0);
-        modelo.scale.set(1, 1, 1);
-
-        modelo.rotation.y = rotacionY + GIRO_FRENTE;
+        // Aplicar el giro a todo el producto.
+        modelo.rotation.y += rotacionY + GIRO_FRENTE;
 
         modelo.updateMatrixWorld(true);
 
-        const cajaInicial = new THREE.Box3().setFromObject(modelo);
+        const cajaInicial = new THREE.Box3()
+            .setFromObject(modelo);
+
         const dimensiones = new THREE.Vector3();
 
         cajaInicial.getSize(dimensiones);
@@ -239,20 +335,22 @@ export function crearProductosLacteos(scene) {
             altura <= 0
         ) {
             console.warn(
-                `Dimensiones inválidas para el producto "${nombre}".`
+                `Dimensiones inválidas para ${nombre}.`
             );
 
             return null;
         }
 
-        // Ajustar el tamaño a la altura solicitada.
+        // Ajustar altura sin alterar proporciones.
         const escala = altura / dimensiones.y;
 
-        modelo.scale.setScalar(escala);
+        modelo.scale.multiplyScalar(escala);
+
         modelo.updateMatrixWorld(true);
 
-        // Colocar la base del modelo sobre la altura indicada.
-        const cajaFinal = new THREE.Box3().setFromObject(modelo);
+        const cajaFinal = new THREE.Box3()
+            .setFromObject(modelo);
+
         const centro = new THREE.Vector3();
 
         cajaFinal.getCenter(centro);
@@ -266,7 +364,7 @@ export function crearProductosLacteos(scene) {
         modelo.updateMatrixWorld(true);
 
         // ----------------------------------------------------
-        // METADATOS DE INTERACCIÓN
+        // METADATOS INDIVIDUALES
         // ----------------------------------------------------
 
         const idUnidad = `UNIDAD_${String(
@@ -280,32 +378,25 @@ export function crearProductosLacteos(scene) {
         modelo.userData.tipo = 'producto';
         modelo.userData.esProducto = true;
 
-        // Identificadores.
         modelo.userData.idUnidadProducto = idUnidad;
         modelo.userData.codigoProducto = idUnidad;
         modelo.userData.codigoCatalogo = codigoCatalogo;
         modelo.userData.skuProducto = codigoCatalogo;
 
-        // Nombres.
         modelo.userData.nombreProducto = codigoCatalogo;
         modelo.userData.nombreVisible = nombre;
         modelo.userData.nombreUnidad = nombre;
 
-        // Precio y moneda.
         modelo.userData.precio = precio;
         modelo.userData.moneda = 'MXN';
-
-        // Categoría.
         modelo.userData.categoria = categoria;
 
-        // Estado inicial.
         modelo.userData.recogido = false;
         modelo.userData.vendido = false;
         modelo.userData.reservado = false;
         modelo.userData.enCarrito = false;
         modelo.userData.disponible = true;
 
-        // Posición original para devolverlo al estante.
         modelo.userData.posicionEstante = {
             x: modelo.position.x,
             y: modelo.position.y,
@@ -318,18 +409,71 @@ export function crearProductosLacteos(scene) {
             z: modelo.rotation.z
         };
 
-        modelo.updateMatrixWorld(true);
+        modelo.userData.escalaEstante = {
+            x: modelo.scale.x,
+            y: modelo.scale.y,
+            z: modelo.scale.z
+        };
 
         productos.add(modelo);
+
         unidadesColocadas++;
 
         return modelo;
     }
 
     // ========================================================
+    // COLOCAR GRUPOS INDEPENDIENTES EN UNA GÓNDOLA
+    // ========================================================
+
+    function colocarEnGondola(config) {
+        cargarModelo(
+            config.archivo,
+            config.nombre,
+            (original) => {
+                const fuentes = crearFuentesIndependientes(original);
+
+                const posiciones = [];
+
+                nivelesGondola.forEach((nivel, nivelIndex) => {
+                    posicionesEstante.forEach((desplazamiento, indice) => {
+                        posiciones.push({
+                            nivel,
+                            nivelIndex,
+                            indice,
+                            x: config.rackX + config.lado * 0.30,
+                            z: config.rackZ + desplazamiento
+                        });
+                    });
+                });
+
+                posiciones.forEach((posicion, indice) => {
+                    const fuente = fuentes[
+                        indice % fuentes.length
+                    ];
+
+                    crearCopia(
+                        fuente,
+                        `${config.codigo}_N${posicion.nivelIndex + 1}_${posicion.indice + 1}`,
+                        posicion.x,
+                        posicion.nivel + 0.07,
+                        posicion.z,
+                        config.altura,
+                        0,
+                        config.categoria
+                    );
+                });
+
+                console.info(
+                    `${config.nombre}: ${fuentes.length} grupos detectados, ` +
+                    `${posiciones.length} espacios ocupados.`
+                );
+            }
+        );
+    }
+
+    // ========================================================
     // 1. GÓNDOLAS
-    // Se retiraron temporalmente galletas e higiene agrupada.
-    // Doritos y Sabritas permanecen en ambas ubicaciones.
     // ========================================================
 
     const catalogoGondolas = [
@@ -505,32 +649,6 @@ export function crearProductosLacteos(scene) {
         }
     ];
 
-    function colocarEnGondola(config) {
-        cargarModelo(
-            config.archivo,
-            config.nombre,
-            (original) => {
-                nivelesGondola.forEach((nivel, nivelIndex) => {
-                    posicionesEstante.forEach((desplazamiento, indice) => {
-                        const x = config.rackX + config.lado * 0.30;
-                        const z = config.rackZ + desplazamiento;
-
-                        crearCopia(
-                            original,
-                            `${config.codigo}_N${nivelIndex + 1}_${indice + 1}`,
-                            x,
-                            nivel + 0.07,
-                            z,
-                            config.altura,
-                            0,
-                            config.categoria
-                        );
-                    });
-                });
-            }
-        );
-    }
-
     catalogoGondolas.forEach(colocarEnGondola);
 
     // ========================================================
@@ -601,10 +719,17 @@ export function crearProductosLacteos(scene) {
             config.archivo,
             config.nombre,
             (original) => {
+                const fuentes = crearFuentesIndependientes(original);
+
                 nivelesRefrigerador.forEach((nivel, nivelIndex) => {
                     posicionesRefrigerador.forEach((dx, indice) => {
+                        const fuente = fuentes[
+                            (nivelIndex * posicionesRefrigerador.length + indice) %
+                            fuentes.length
+                        ];
+
                         crearCopia(
-                            original,
+                            fuente,
                             `${config.codigo}_N${nivelIndex + 1}_${indice + 1}`,
                             config.x + dx,
                             nivel + 0.04,
@@ -642,9 +767,13 @@ export function crearProductosLacteos(scene) {
             config.archivo,
             config.nombre,
             (original) => {
+                const fuentes = crearFuentesIndependientes(original);
+
                 config.posiciones.forEach(([dx, dz], indice) => {
+                    const fuente = fuentes[indice % fuentes.length];
+
                     crearCopia(
-                        original,
+                        fuente,
                         `${config.codigo}_${String(indice + 1).padStart(2, '0')}`,
                         mesa.x + dx,
                         1.015,
@@ -747,9 +876,13 @@ export function crearProductosLacteos(scene) {
             config.archivo,
             config.nombre,
             (original) => {
+                const fuentes = crearFuentesIndependientes(original);
+
                 config.posiciones.forEach(([dx, dz], indice) => {
+                    const fuente = fuentes[indice % fuentes.length];
+
                     crearCopia(
-                        original,
+                        fuente,
                         `${config.codigo}_${indice + 1}`,
                         25.1 + dx,
                         1.24,
@@ -785,7 +918,6 @@ export function crearProductosLacteos(scene) {
 
     // ========================================================
     // 5. LIMPIEZA
-    // Se retiró temporalmente el detergente surtido.
     // ========================================================
 
     const productosLimpieza = [
@@ -816,10 +948,17 @@ export function crearProductosLacteos(scene) {
             config.archivo,
             config.nombre,
             (original) => {
+                const fuentes = crearFuentesIndependientes(original);
+
                 nivelesLimpieza.forEach((nivel, nivelIndex) => {
                     posicionesLimpieza.forEach((dx, indice) => {
+                        const fuente = fuentes[
+                            (nivelIndex * posicionesLimpieza.length + indice) %
+                            fuentes.length
+                        ];
+
                         crearCopia(
-                            original,
+                            fuente,
                             `${config.codigo}_N${nivelIndex + 1}_${indice + 1}`,
                             28.3 + dx,
                             nivel + 0.04,
@@ -894,8 +1033,10 @@ export function crearProductosLacteos(scene) {
             prenda.archivo,
             prenda.nombre,
             (original) => {
+                const fuentes = crearFuentesIndependientes(original);
+
                 crearCopia(
-                    original,
+                    fuentes[0],
                     prenda.codigo,
                     prenda.x,
                     0.65,
@@ -933,21 +1074,23 @@ export function crearProductosLacteos(scene) {
     productos.userData.obtenerPorCategoria = (categoria) => {
         return productos.userData
             .listarUnidades()
-            .filter(
-                (objeto) => objeto.userData.categoria === categoria
-            );
+            .filter((objeto) => {
+                return objeto.userData.categoria === categoria;
+            });
     };
 
     productos.userData.obtenerDisponibles = () => {
         return productos.userData
             .listarUnidades()
             .filter((objeto) => {
+                const datos = objeto.userData;
+
                 return (
-                    objeto.userData.disponible &&
-                    !objeto.userData.recogido &&
-                    !objeto.userData.vendido &&
-                    !objeto.userData.reservado &&
-                    !objeto.userData.enCarrito
+                    datos.disponible &&
+                    !datos.recogido &&
+                    !datos.vendido &&
+                    !datos.reservado &&
+                    !datos.enCarrito
                 );
             });
     };
@@ -955,10 +1098,9 @@ export function crearProductosLacteos(scene) {
     productos.userData.buscarPorId = (idUnidad) => {
         return productos.userData
             .listarUnidades()
-            .find(
-                (objeto) =>
-                    objeto.userData.idUnidadProducto === idUnidad
-            ) ?? null;
+            .find((objeto) => {
+                return objeto.userData.idUnidadProducto === idUnidad;
+            }) ?? null;
     };
 
     productos.userData.obtenerEstadisticas = () => {
@@ -967,12 +1109,15 @@ export function crearProductosLacteos(scene) {
         return {
             total: unidades.length,
 
-            disponibles: unidades.filter(
-                (unidad) =>
-                    unidad.userData.disponible &&
-                    !unidad.userData.recogido &&
-                    !unidad.userData.vendido
-            ).length,
+            disponibles: unidades.filter((unidad) => {
+                const datos = unidad.userData;
+
+                return (
+                    datos.disponible &&
+                    !datos.recogido &&
+                    !datos.vendido
+                );
+            }).length,
 
             recogidos: unidades.filter(
                 (unidad) => unidad.userData.recogido
@@ -1001,7 +1146,7 @@ export function crearProductosLacteos(scene) {
 
     console.info(
         'Catálogo de productos iniciado. ' +
-        'Precios provisionales MXN asignados por unidad.'
+        'Unidades independientes con precios provisionales MXN.'
     );
 
     return productos;
