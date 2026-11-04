@@ -6,7 +6,7 @@ const loader = new GLTFLoader();
 
 const CONFIG_DEFAULT = {
     modelo: '/modelos/carrito.glb',
-    posicion: { x: 0, y: -1, z: 0 },
+    posicion: { x: 0, y: -3, z: 0 },
     escala: 1,
     distancia: 0.25,
     suavizado: 9,
