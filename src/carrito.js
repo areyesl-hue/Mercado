@@ -1,4 +1,3 @@
-
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
@@ -35,11 +34,17 @@ const CONFIG_CESTA = {
     maxProfundidadProducto: 0.21,
     maxAlturaProducto: 0.28,
     alturaEntreNiveles: 0.18,
-    margenBase: 0.015
+    margenBase: 0.015,
+
+    // Desplazamiento de los productos hacia el frente.
+    desplazamientoFrontal: 0.20,
+
+    // Elevación adicional para la base detectada.
+    elevacionBase: 0.12
 };
 
 // Altura utilizada cuando no se detecta el fondo del carrito.
-const ALTURA_BASE_RESPALDO = 0.72;
+const ALTURA_BASE_RESPALDO = 0.92;
 
 // ============================================================
 // CREAR CARRITO
@@ -532,7 +537,9 @@ export function crearCarrito(scene, opciones = {}) {
 
         if (candidatos.length > 0) {
             estado.baseCestaLocal =
-                candidatos[0].altura + CONFIG_CESTA.margenBase;
+                candidatos[0].altura +
+                CONFIG_CESTA.margenBase +
+                CONFIG_CESTA.elevacionBase;
 
             console.info(
                 '[CARRITO] Fondo candidato seleccionado:',
@@ -761,7 +768,7 @@ export function crearCarrito(scene, opciones = {}) {
             fila - (filas - 1) / 2
         ) * (
             CONFIG_CESTA.profundidadInterior / filas
-        );
+        ) + CONFIG_CESTA.desplazamientoFrontal;
 
         return new THREE.Vector3(
             x,
@@ -793,6 +800,7 @@ export function crearCarrito(scene, opciones = {}) {
         const posicion = obtenerPosicionLocalDeposito(indice);
 
         objeto.rotation.set(0, rotacionY, 0);
+
         objeto.position.set(
             posicion.x,
             0,
@@ -852,7 +860,8 @@ export function crearCarrito(scene, opciones = {}) {
             producto: objeto.name,
             baseCesta: alturaBase,
             baseProducto: cajaFinal?.min.y,
-            techoProducto: cajaFinal?.max.y
+            techoProducto: cajaFinal?.max.y,
+            desplazamientoFrontal: CONFIG_CESTA.desplazamientoFrontal
         });
 
         return true;
