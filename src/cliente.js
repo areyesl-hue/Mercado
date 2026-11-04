@@ -2971,7 +2971,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         if ([
             ESTADOS.ENTRANDO,
             ESTADOS.BUSCANDO,
-            ESTADOS.ACER CANDO,
+            ESTADOS.ACERCANDO,
             ESTADOS.RECOGIENDO,
             ESTADOS.INSPECCIONANDO,
             ESTADOS.DECIDIENDO,
