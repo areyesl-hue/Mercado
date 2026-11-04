@@ -916,5 +916,4 @@ export function crearCarrito(scene, opciones = {}) {
 
         return true;
     }
-
-    // =============================================
+    }
