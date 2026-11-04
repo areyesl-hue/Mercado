@@ -698,6 +698,19 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         hueso.quaternion.multiply(quaternionTemporal);
     }
 
+    function aplicarRotacionEuler(hueso, x, y = 0, z = 0) {
+        if (!hueso) return;
+
+        const base = huesosBase.get(hueso);
+        if (!base) return;
+
+        const euler = new THREE.Euler(x, y, z, 'XYZ');
+        quaternionTemporal.setFromEuler(euler);
+
+        hueso.quaternion.copy(base.quaternion);
+        hueso.quaternion.multiply(quaternionTemporal);
+    }
+
     function restaurarHueso(hueso, intensidad = 0.15) {
         if (!hueso) return;
 
@@ -744,7 +757,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             if (accionCaminar.isRunning()) {
                 accionCaminar.setEffectiveTimeScale(
                     config.velocidadAnimacionGLB *
-                    THREE.MathUtils.lerp(0.65, 1.15, movimientoSuave)
+                    THREE.MathUtils.lerp(0.55, 1.32, movimientoSuave)
                 );
             }
             return;
@@ -756,38 +769,42 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             1.25
         );
 
-        faseAnimacion += delta * (7.0 + ritmo * 0.75);
+        faseAnimacion += delta * (7.0 + ritmo * 1.8);
 
         const paso = Math.sin(faseAnimacion);
         const contrapasado = Math.cos(faseAnimacion);
-        const apoyo = paso * 0.38 * movimientoSuave;
-        const rebote = Math.abs(Math.sin(faseAnimacion * 2)) * 0.018 * movimientoSuave;
-        const balanceo = contrapasado * 0.022 * movimientoSuave;
-        const peso = Math.sin(faseAnimacion) >= 0 ? 0.018 : -0.018;
-        const contraGiro = limitar(intensidadGiro * 0.08, -0.08, 0.08);
+        const apoyo = paso * 0.42 * movimientoSuave;
+        const rebote = (1 - Math.cos(faseAnimacion * 2)) * 0.012 * movimientoSuave;
+        const balanceo = contrapasado * 0.026 * movimientoSuave;
+        const giroCadera = contrapasado * 0.035 * movimientoSuave;
+        const inclinacionGiro = limitar(intensidadGiro * 0.11, -0.11, 0.11);
 
-        aplicarRotacion(rig.piernaIzquierda, EJE_X, apoyo);
-        aplicarRotacion(rig.piernaDerecha, EJE_X, -apoyo);
+        aplicarRotacionEuler(rig.piernaIzquierda, apoyo, 0, balanceo * 0.35);
+        aplicarRotacionEuler(rig.piernaDerecha, -apoyo, 0, -balanceo * 0.35);
 
         aplicarRotacion(rig.pantorrillaIzquierda, EJE_X,
-            Math.max(0, -apoyo) * 0.82 + Math.max(0, apoyo) * 0.12);
+            Math.max(0, -apoyo) * 0.9 + Math.max(0, apoyo) * 0.16);
         aplicarRotacion(rig.pantorrillaDerecha, EJE_X,
-            Math.max(0, apoyo) * 0.82 + Math.max(0, -apoyo) * 0.12);
+            Math.max(0, apoyo) * 0.9 + Math.max(0, -apoyo) * 0.16);
 
-        aplicarRotacion(rig.brazoIzquierdo, EJE_X, -apoyo * 0.72);
-        aplicarRotacion(rig.brazoDerecho, EJE_X, apoyo * 0.72);
+        aplicarRotacionEuler(rig.brazoIzquierdo, -apoyo * 0.82, 0, -0.025 * movimientoSuave);
+        aplicarRotacionEuler(rig.brazoDerecho, apoyo * 0.82, 0, 0.025 * movimientoSuave);
         aplicarRotacion(rig.antebrazoIzquierdo, EJE_X,
-            -0.08 + Math.max(0, apoyo) * 0.18);
+            -0.10 + Math.max(0, apoyo) * 0.28);
         aplicarRotacion(rig.antebrazoDerecho, EJE_X,
-            -0.08 + Math.max(0, -apoyo) * 0.18);
+            -0.10 + Math.max(0, -apoyo) * 0.28);
 
-        aplicarRotacion(rig.cadera, EJE_X, balanceo * 0.35 + peso);
-        aplicarRotacion(rig.torso, EJE_X,
-            -balanceo * 0.35 + inclinacionTorsoObjetivo + contraGiro);
-        aplicarRotacion(rig.cabeza, EJE_X,
-            -balanceo * 0.48 + inclinacionCabezaObjetivo);
+        aplicarRotacionEuler(rig.cadera, balanceo * 0.35, giroCadera, balanceo * 0.8);
+        aplicarRotacionEuler(rig.torso,
+            -balanceo * 0.42 + inclinacionTorsoObjetivo,
+            -giroCadera * 0.55,
+            -balanceo * 1.05 - inclinacionGiro);
+        aplicarRotacionEuler(rig.cabeza,
+            -balanceo * 0.48 + inclinacionCabezaObjetivo,
+            giroCabezaObjetivo - giroCadera * 0.25,
+            -contrapasado * 0.012 * movimientoSuave);
 
-        grupo.position.y = numero(config.posicion.y) + rebote * movimientoSuave;
+        grupo.position.y = numero(config.posicion.y) + rebote;
     }
 
     // ========================================================
@@ -815,59 +832,42 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
     function animarRecogerProcedural() {
         const progreso = limitar(
-            tiempoEstado / Math.max(config.tiempoRecoger, 0.01),
-            0,
-            1
+            tiempoEstado / Math.max(config.tiempoRecoger, 0.01), 0, 1
         );
         const contactoObjetivo = limitar(
-            numero(config.progresoContactoProducto, 0.78),
-            0.55,
-            0.88
+            numero(config.progresoContactoProducto, 0.78), 0.55, 0.88
         );
-        const alcance = suavizar(limitar(progreso / contactoObjetivo, 0, 1));
+        const acercarse = suavizar(limitar(progreso / contactoObjetivo, 0, 1));
         const contacto = suavizar(limitar(
-            (progreso - contactoObjetivo) / Math.max(1 - contactoObjetivo, 0.12),
-            0,
-            1
+            (progreso - contactoObjetivo) / Math.max(1 - contactoObjetivo, 0.12), 0, 1
         ));
-        const retirada = suavizar(limitar(
-            progreso / Math.max(contactoObjetivo, 0.55),
-            0,
-            1
-        ));
+        const retirada = suavizar(Math.max(0, Math.min(progreso, 1)));
         const agachado = productoEsInferior ? 1 : 0;
 
         animarAgacharse(agachado * suavizar(progreso * 1.35));
 
-        // El brazo desacelera al llegar al estante; la mano solo se
-        // cierra alrededor del producto cuando el alcance está completo.
-        aplicarRotacion(
-            rig.brazoDerecho,
-            EJE_X,
-            THREE.MathUtils.lerp(-0.12, -1.05 * (productoEsInferior ? 0.72 : 1), alcance)
-        );
-        aplicarRotacion(
-            rig.antebrazoDerecho,
-            EJE_X,
-            THREE.MathUtils.lerp(-0.08, -0.72, alcance)
-        );
-        aplicarRotacion(rig.manoDerecha, EJE_X, -0.18 + contacto * -0.52);
+        const hombro = THREE.MathUtils.lerp(-0.08, -1.08 * (productoEsInferior ? 0.72 : 1), acercarse);
+        const antebrazo = THREE.MathUtils.lerp(-0.08, -0.78, acercarse);
 
-        aplicarRotacion(
-            rig.brazoIzquierdo,
-            EJE_X,
-            -0.12 - 0.20 * retirada
-        );
-        aplicarRotacion(rig.antebrazoIzquierdo, EJE_X, -0.12 - 0.22 * retirada);
-        aplicarRotacion(rig.manoIzquierda, EJE_X, -0.08 - contacto * 0.12);
+        aplicarRotacionEuler(rig.brazoDerecho, hombro, -0.06 * acercarse, 0.08 * acercarse);
+        aplicarRotacionEuler(rig.antebrazoDerecho, antebrazo, -0.12 * acercarse, 0.06);
+        aplicarRotacionEuler(rig.manoDerecha, -0.18 - contacto * 0.58, contacto * 0.08, -0.18 * contacto);
 
-        aplicarRotacion(
-            rig.torso,
-            EJE_X,
-            0.08 * alcance + 0.28 * agachado * alcance
-        );
-        aplicarRotacion(rig.cabeza, EJE_X, 0.14 + 0.10 * alcance);
-        aplicarRotacion(rig.cuello, EJE_X, 0.08 + 0.08 * alcance);
+        aplicarRotacionEuler(rig.brazoIzquierdo,
+            -0.12 - 0.22 * retirada, 0, 0.06 * retirada);
+        aplicarRotacionEuler(rig.antebrazoIzquierdo,
+            -0.12 - 0.28 * retirada, 0.04, -0.04);
+        aplicarRotacion(rig.manoIzquierda, EJE_X, -0.08 - contacto * 0.16);
+
+        aplicarRotacionEuler(rig.torso,
+            0.08 * acercarse + 0.28 * agachado * acercarse,
+            -0.10 * acercarse,
+            -0.04 * acercarse);
+        aplicarRotacionEuler(rig.cabeza,
+            0.14 + 0.12 * acercarse + Math.sin(tiempoEstado * 2.1) * 0.018,
+            -0.12 * acercarse,
+            0.025 * Math.sin(tiempoEstado * 1.6));
+        aplicarRotacion(rig.cuello, EJE_X, 0.08 + 0.08 * acercarse);
     }
 
     // ========================================================
@@ -877,25 +877,30 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     function animarInspeccionarProcedural() {
         const entrada = suavizar(Math.min(tiempoEstado / 0.55, 1));
         const salida = suavizar(Math.min((config.tiempoInspeccionar - tiempoEstado) / 0.45, 1));
-        const mirarLento = (1 - Math.cos(tiempoEstado * 0.82)) * 0.018;
-        const giroSuave = Math.sin(tiempoEstado * 1.45) * 0.045;
-        const giroProducto = suavizar((1 - Math.cos(tiempoEstado * 1.45)) * 0.5) * giroSuave;
-        const oscilarCabeza = Math.sin(tiempoEstado * 1.18) * 0.028 + mirarLento;
-        const respiracion = Math.sin(tiempoEstado * 1.75) * 0.012;
         const levantar = entrada * salida;
-        const girarProducto = giroProducto;
+        const giroProducto = Math.sin(tiempoEstado * 1.22) * 0.09;
+        const balanceoProducto = Math.sin(tiempoEstado * 2.05) * 0.035;
+        const oscilarCabeza = Math.sin(tiempoEstado * 1.18) * 0.032;
+        const respiracion = Math.sin(tiempoEstado * 1.75) * 0.012;
 
-        aplicarRotacion(rig.brazoDerecho, EJE_X, (-1.08 + girarProducto) * levantar);
-        aplicarRotacion(rig.antebrazoDerecho, EJE_X, (-0.92 + girarProducto * 0.5) * levantar);
-        aplicarRotacion(rig.manoDerecha, EJE_X, -0.28 + girarProducto);
+        aplicarRotacionEuler(rig.brazoDerecho, -1.08 * levantar + giroProducto,
+            0.12 * levantar, 0.10 * Math.sin(tiempoEstado));
+        aplicarRotacionEuler(rig.antebrazoDerecho, -0.92 * levantar + balanceoProducto,
+            -0.15 * levantar, -0.18);
+        aplicarRotacionEuler(rig.manoDerecha, -0.28 + giroProducto,
+            balanceoProducto * 0.8, 0.15);
 
-        aplicarRotacion(rig.brazoIzquierdo, EJE_X, -0.76 * levantar);
-        aplicarRotacion(rig.antebrazoIzquierdo, EJE_X, -0.82 * levantar);
-        aplicarRotacion(rig.manoIzquierda, EJE_X, -0.22 + girarProducto * 0.35);
+        aplicarRotacionEuler(rig.brazoIzquierdo, -0.76 * levantar,
+            -0.10 * levantar, -0.08);
+        aplicarRotacionEuler(rig.antebrazoIzquierdo, -0.82 * levantar,
+            0.08, 0.12);
+        aplicarRotacion(rig.manoIzquierda, EJE_X, -0.22 + giroProducto * 0.35);
 
-        aplicarRotacion(rig.cabeza, EJE_X, 0.20 + oscilarCabeza);
+        aplicarRotacionEuler(rig.cabeza, 0.20 + oscilarCabeza,
+            Math.sin(tiempoEstado * 0.48) * 0.16,
+            Math.sin(tiempoEstado * 0.62) * 0.035);
         aplicarRotacion(rig.cuello, EJE_X, 0.08 + respiracion);
-        aplicarRotacion(rig.torso, EJE_X, respiracion * 0.8);
+        aplicarRotacionEuler(rig.torso, respiracion * 0.8, 0, Math.sin(tiempoEstado * 0.55) * 0.018);
 
         if (productoEsInferior) {
             animarAgacharse((1 - suavizar(tiempoEstado * 1.5)) * levantar);
@@ -907,15 +912,26 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     // ========================================================
 
     function animarGuardarProcedural() {
-        const t = Math.sin(tiempoEstado * 5) * 0.08;
+        const progreso = limitar(tiempoEstado / Math.max(config.tiempoGuardar, 0.01), 0, 1);
+        const bajar = suavizar(limitar(progreso / 0.72, 0, 1));
+        const subir = suavizar(limitar((progreso - 0.72) / 0.28, 0, 1));
+        const vacilar = Math.sin(tiempoEstado * 5) * 0.025;
 
-        aplicarRotacion(rig.brazoDerecho, EJE_X, -0.75 + t);
-        aplicarRotacion(rig.antebrazoDerecho, EJE_X, -0.8);
+        aplicarRotacionEuler(rig.brazoDerecho,
+            THREE.MathUtils.lerp(-0.92, -0.36, subir) + vacilar,
+            -0.08, 0.08);
+        aplicarRotacionEuler(rig.antebrazoDerecho,
+            THREE.MathUtils.lerp(-0.88, -0.55, subir), 0, 0.05);
+        aplicarRotacionEuler(rig.manoDerecha, -0.25 + vacilar, 0, 0.10);
 
-        aplicarRotacion(rig.brazoIzquierdo, EJE_X, -0.45);
-        aplicarRotacion(rig.antebrazoIzquierdo, EJE_X, -0.55);
+        aplicarRotacionEuler(rig.brazoIzquierdo, -0.50 + bajar * 0.18,
+            0.05, -0.08);
+        aplicarRotacionEuler(rig.antebrazoIzquierdo, -0.58 + subir * 0.12,
+            0, -0.04);
 
-        aplicarRotacion(rig.cabeza, EJE_X, 0.10);
+        aplicarRotacionEuler(rig.torso, 0.08 + bajar * 0.16, 0, -0.025);
+        aplicarRotacionEuler(rig.cabeza, 0.14 + bajar * 0.10,
+            -0.08, Math.sin(tiempoEstado * 2.3) * 0.02);
     }
 
     // ========================================================
@@ -931,35 +947,25 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             animarAgacharse(1 - t * 0.25);
         }
 
-        aplicarRotacion(
-            rig.brazoDerecho,
-            EJE_X,
-            THREE.MathUtils.lerp(-1.0, -0.15, t)
-        );
+        aplicarRotacionEuler(rig.brazoDerecho,
+            THREE.MathUtils.lerp(-1.05, -0.12, t),
+            THREE.MathUtils.lerp(-0.08, 0, t),
+            0.08);
+        aplicarRotacionEuler(rig.antebrazoDerecho,
+            THREE.MathUtils.lerp(-0.82, -0.08, t),
+            -0.06, -0.04);
+        aplicarRotacion(rig.manoDerecha, EJE_X,
+            THREE.MathUtils.lerp(-0.55, -0.08, t));
 
-        aplicarRotacion(
-            rig.antebrazoDerecho,
-            EJE_X,
-            THREE.MathUtils.lerp(-0.8, -0.1, t)
-        );
+        aplicarRotacionEuler(rig.brazoIzquierdo,
+            THREE.MathUtils.lerp(-0.48, -0.1, t), 0, -0.08);
+        aplicarRotacionEuler(rig.antebrazoIzquierdo,
+            THREE.MathUtils.lerp(-0.58, -0.1, t), 0, 0.04);
 
-        aplicarRotacion(
-            rig.brazoIzquierdo,
-            EJE_X,
-            THREE.MathUtils.lerp(-0.45, -0.1, t)
-        );
-
-        aplicarRotacion(
-            rig.antebrazoIzquierdo,
-            EJE_X,
-            THREE.MathUtils.lerp(-0.55, -0.1, t)
-        );
-
-        aplicarRotacion(
-            rig.cabeza,
-            EJE_X,
-            THREE.MathUtils.lerp(0.15, 0, t)
-        );
+        aplicarRotacionEuler(rig.cabeza,
+            THREE.MathUtils.lerp(0.18, 0.03, t),
+            -0.08 * (1 - t),
+            Math.sin(tiempoEstado * 1.9) * 0.025);
     }
 
     // ========================================================
@@ -968,22 +974,31 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
     function animarPagarProcedural() {
         const entrada = suavizar(Math.min(tiempoEstado / 0.65, 1));
+        const salida = suavizar(Math.min((2.5 - tiempoEstado) / 0.45, 1));
+        const levantar = entrada * salida;
         const mirarCaja = Math.sin(tiempoEstado * 0.9) * 0.035;
         const respiracion = Math.sin(tiempoEstado * 1.8) * 0.012;
         const movimientoPago = Math.sin(tiempoEstado * 2.4) * 0.035;
+        const cambioDePeso = Math.sin(tiempoEstado * 0.72) * 0.018;
 
-        aplicarRotacion(rig.brazoDerecho, EJE_X, (-0.88 + movimientoPago) * entrada);
-        aplicarRotacion(rig.antebrazoDerecho, EJE_X, -0.58 * entrada);
+        aplicarRotacionEuler(rig.brazoDerecho, (-0.88 + movimientoPago) * levantar,
+            -0.12 * levantar, 0.10);
+        aplicarRotacionEuler(rig.antebrazoDerecho, -0.58 * levantar,
+            movimientoPago * 0.35, -0.08);
         aplicarRotacion(rig.manoDerecha, EJE_X, movimientoPago * 0.35);
 
-        aplicarRotacion(rig.brazoIzquierdo, EJE_X, -0.68 * entrada);
-        aplicarRotacion(rig.antebrazoIzquierdo, EJE_X, -0.42 * entrada);
+        aplicarRotacionEuler(rig.brazoIzquierdo, -0.68 * levantar,
+            0.08 * levantar, -0.08);
+        aplicarRotacionEuler(rig.antebrazoIzquierdo, -0.42 * levantar,
+            movimientoPago * -0.18, 0.04);
         aplicarRotacion(rig.manoIzquierda, EJE_X, movimientoPago * -0.2);
 
-        aplicarRotacion(rig.cabeza, EJE_X, 0.08 + mirarCaja);
+        aplicarRotacionEuler(rig.cabeza, 0.08 + mirarCaja,
+            Math.sin(tiempoEstado * 0.55) * 0.10,
+            Math.sin(tiempoEstado * 0.38) * 0.025);
         aplicarRotacion(rig.cuello, EJE_X, respiracion);
-        aplicarRotacion(rig.torso, EJE_X, respiracion * 0.7);
-        aplicarRotacion(rig.cadera, EJE_X, respiracion * 0.3);
+        aplicarRotacionEuler(rig.torso, respiracion * 0.7, 0, cambioDePeso);
+        aplicarRotacionEuler(rig.cadera, respiracion * 0.3, 0, -cambioDePeso);
     }
 
     // ========================================================
@@ -3255,8 +3270,18 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         } else {
             velocidadActual = THREE.MathUtils.lerp(
                 velocidadActual,
-                velocidadActual,
-                1
+                0,
+                1 - Math.exp(-4 * delta)
+            );
+            movimientoSuave = THREE.MathUtils.lerp(
+                movimientoSuave,
+                0,
+                1 - Math.exp(-5 * delta)
+            );
+            giroCabezaObjetivo = THREE.MathUtils.lerp(
+                giroCabezaObjetivo,
+                0,
+                1 - Math.exp(-2.5 * delta)
             );
         }
 
@@ -3417,6 +3442,14 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             // ------------------------------------------------
 
             case ESTADOS.DECIDIENDO: {
+                const duda = Math.sin(tiempoEstado * 2.15) * 0.035;
+                aplicarRotacionEuler(rig.cabeza,
+                    0.08 + duda,
+                    Math.sin(tiempoEstado * 0.85) * 0.12,
+                    Math.sin(tiempoEstado * 1.35) * 0.045);
+                aplicarRotacionEuler(rig.torso, 0.02,
+                    -Math.sin(tiempoEstado * 0.85) * 0.04, 0);
+
                 if (tiempoEstado >= 0.5) {
                     decisionCompra =
                         Math.random() <
@@ -3488,6 +3521,15 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             // ------------------------------------------------
 
             case ESTADOS.ESPERANDO: {
+                aplicarRotacionEuler(rig.cabeza,
+                    0.06 + Math.sin(tiempoEstado * 1.8) * 0.018,
+                    Math.sin(tiempoEstado * 0.42) * 0.14,
+                    Math.sin(tiempoEstado * 0.58) * 0.035);
+                aplicarRotacionEuler(rig.brazoDerecho, -0.12,
+                    0, Math.sin(tiempoEstado * 0.7) * 0.025);
+                aplicarRotacionEuler(rig.brazoIzquierdo, -0.12,
+                    0, -Math.sin(tiempoEstado * 0.7) * 0.025);
+
                 if (
                     tiempoEstado >= config.tiempoReintento
                 ) {
