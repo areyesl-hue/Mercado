@@ -445,6 +445,7 @@ export function crearLadron(scene, productos, opciones = {}) {
     let tiempoAnimacionRobo = 0;
 
     let soporteProducto = null;
+    let rigModelo = null;
     const productosEnMano = [];
 
     function normalizarNombre(nombre) {
@@ -477,6 +478,24 @@ export function crearLadron(scene, productos, opciones = {}) {
         });
 
         const mapa = {
+            manoDerecha: buscarHueso(huesos, [
+                /righthand$/,
+                /rightwrist/,
+                /handright/,
+                /wristight/,
+                /manoderecha/,
+                /manoder/
+            ]),
+
+            manoIzquierda: buscarHueso(huesos, [
+                /lefthand$/,
+                /leftwrist/,
+                /handleft/,
+                /wristleft/,
+                /manoizquierda/,
+                /manoizq/
+            ]),
+
             brazoIzquierdo: buscarHueso(huesos, [
                 /leftarm$/,
                 /leftupperarm/,
@@ -681,16 +700,24 @@ export function crearLadron(scene, productos, opciones = {}) {
 
         soporteProducto = new THREE.Group();
         soporteProducto.name = 'PRODUCTOS_ROBADOS_EN_MANO';
+        soporteProducto.visible = false;
 
-        soporteProducto.position.set(0.30, 0.95, 0.22);
+        const huesoMano =
+            rigModelo?.manoDerecha ||
+            rigModelo?.antebrazoDerecho ||
+            rigModelo?.brazoDerecho ||
+            modeloCargado;
 
-        modeloCargado.add(soporteProducto);
+        soporteProducto.position.set(0, 0.04, 0.02);
+        soporteProducto.rotation.set(0, 0, 0);
+        huesoMano.add(soporteProducto);
     }
 
     function colocarProductoEnMano(producto) {
         if (!producto || !modeloCargado) return;
 
         prepararSoporteProducto();
+        soporteProducto.visible = true;
 
         const copia = producto.clone(true);
 
@@ -751,6 +778,10 @@ export function crearLadron(scene, productos, opciones = {}) {
         }
 
         productosEnMano.length = 0;
+
+        if (soporteProducto) {
+            soporteProducto.visible = false;
+        }
     }
 
     // =========================================================
@@ -825,7 +856,7 @@ export function crearLadron(scene, productos, opciones = {}) {
 
                 modeloCargado = modelo;
 
-                prepararAnimacionCorporal(modelo);
+                rigModelo = prepararAnimacionCorporal(modelo);
                 prepararSoporteProducto();
 
                 if (gltf.animations?.length) {
