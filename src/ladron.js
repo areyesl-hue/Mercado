@@ -20,6 +20,8 @@ export function crearLadron(scene, productos, opciones = {}) {
         productosRobados: 2,
         distanciaProducto: 1.5,
         tiempoRobo: 1.3,
+        tiempoObservacion: 1.8,
+        tiempoAtascado: 4,
         altura: 1.75,
         escala: 1,
         margenColision: 0.35,
@@ -765,6 +767,10 @@ export function crearLadron(scene, productos, opciones = {}) {
     let ruta = [];
     let indiceRuta = 0;
     let tiempoBusqueda = 0;
+    let tiempoObservacion = 0;
+    let tiempoEstado = 0;
+    let tiempoSinAvance = 0;
+    let posicionAnterior = grupo.position.clone();
 
     const productosRobados = [];
 
@@ -852,6 +858,7 @@ export function crearLadron(scene, productos, opciones = {}) {
                 }
 
                 estado = 'entrando';
+                tiempoObservacion = 0;
 
                 if (establecerDestino({ x: 0, z: 27 })) {
                     cambiarAnimacion(caminar);
@@ -1226,8 +1233,49 @@ export function crearLadron(scene, productos, opciones = {}) {
 
         mixer?.update(delta);
 
+        tiempoEstado += delta;
+
+        const desplazamiento = grupo.position.distanceTo(posicionAnterior);
+
+        if (
+            ['entrando', 'acercandose', 'huyendo'].includes(estado) &&
+            desplazamiento > 0.025
+        ) {
+            posicionAnterior.copy(grupo.position);
+            tiempoSinAvance = 0;
+        } else if (['entrando', 'acercandose', 'huyendo'].includes(estado)) {
+            tiempoSinAvance += delta;
+        } else {
+            posicionAnterior.copy(grupo.position);
+            tiempoSinAvance = 0;
+        }
+
+        if (
+            tiempoSinAvance >= CONFIG.tiempoAtascado &&
+            ['entrando', 'acercandose', 'huyendo'].includes(estado)
+        ) {
+            tiempoSinAvance = 0;
+            ruta = [];
+            indiceRuta = 0;
+
+            if (estado === 'acercandose') {
+                liberarReserva();
+                estado = 'buscando';
+                tiempoBusqueda = 0;
+            } else if (estado === 'huyendo') {
+                establecerDestino({
+                    x: Math.random() < 0.5 ? -26 : 26,
+                    z: 34
+                });
+            } else {
+                establecerDestino({ x: 0, z: 27 });
+            }
+        }
+
         const estaCorriendo = estado === 'huyendo';
-        const estaQuieto = estado === 'robando';
+        const estaQuieto =
+            estado === 'robando' ||
+            estado === 'observando';
 
         animarCuerpo(
             delta,
@@ -1246,7 +1294,30 @@ export function crearLadron(scene, productos, opciones = {}) {
                         variacionVelocidad
                     )
                 ) {
+                    estado = 'observando';
+                    tiempoEstado = 0;
+                    tiempoObservacion =
+                        CONFIG.tiempoObservacion *
+                        (0.75 + Math.random() * 0.75);
+                }
+
+                break;
+            }
+
+            case 'observando': {
+                cambiarAnimacion(null);
+                tiempoObservacion -= delta;
+
+                if (caminar?.isRunning()) {
+                    caminar.paused = true;
+                }
+
+                if (tiempoObservacion <= 0) {
+                    if (caminar?.isRunning()) {
+                        caminar.paused = false;
+                    }
                     estado = 'buscando';
+                    tiempoEstado = 0;
                     tiempoBusqueda = 0;
                 }
 
@@ -1289,6 +1360,37 @@ export function crearLadron(scene, productos, opciones = {}) {
                 }
 
                 cambiarAnimacion(caminar);
+
+                if (productoObjetivo) {
+                    const posicionProducto =
+                        productoObjetivo.getWorldPosition(
+                            new THREE.Vector3()
+                        );
+
+                    const dx =
+                        posicionProducto.x - grupo.position.x;
+                    const dz =
+                        posicionProducto.z - grupo.position.z;
+
+                    if (Math.hypot(dx, dz) > 0.01) {
+                        const rotacionObjetivo =
+                            Math.atan2(dx, dz);
+
+                        let diferencia =
+                            rotacionObjetivo - grupo.rotation.y;
+
+                        while (diferencia > Math.PI) {
+                            diferencia -= Math.PI * 2;
+                        }
+
+                        while (diferencia < -Math.PI) {
+                            diferencia += Math.PI * 2;
+                        }
+
+                        grupo.rotation.y += diferencia *
+                            (1 - Math.exp(-6 * delta));
+                    }
+                }
 
                 if (
                     avanzar(
