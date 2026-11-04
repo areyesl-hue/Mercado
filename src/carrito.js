@@ -37,7 +37,7 @@ const CONFIG_CESTA = {
     margenBase: 0.015,
 
     // Desplazamiento de los productos hacia el frente.
-    desplazamientoFrontal: 0.20,
+    desplazamientoFrontal: 0.35,
 
     // Elevación adicional para la base detectada.
     elevacionBase: 0.12
