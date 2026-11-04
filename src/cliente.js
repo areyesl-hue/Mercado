@@ -90,16 +90,13 @@ const CONFIG_BASE = {
     separacionProductoRack: 0.06,
     alturaMovimientoProducto: 0.12,
 
-    // Recuperación de rutas
     intervaloRecalculoRuta: 0.55,
     maximosIntentosMovimiento: 5,
     distanciaRecalculo: 0.45,
 
-    // Movimiento
     distanciaLlegada: 0.16,
     distanciaWaypoint: 0.30,
 
-    // Animación
     usarAnimacionesGLB: true,
     velocidadAnimacionGLB: 1,
 
@@ -125,11 +122,9 @@ const CONFIG_BASE = {
 const loaderGLTF = new GLTFLoader();
 
 const reservasProductos = new WeakMap();
-const reservasRacks = new Map();
+let siguienteIdCliente = 1;
 
 const TAMANO_ZONA_RACK = 3.5;
-
-let siguienteIdCliente = 1;
 
 // ============================================================
 // UTILIDADES
@@ -159,7 +154,7 @@ function suavizar(valor) {
 }
 
 // ============================================================
-// COLA DE PRIORIDAD PARA A*
+// COLA DE PRIORIDAD
 // ============================================================
 
 class MinHeap {
@@ -171,27 +166,21 @@ class MinHeap {
         return this.elementos.length;
     }
 
-    limpiar() {
-        this.elementos.length = 0;
-    }
-
     insertar(elemento) {
         const lista = this.elementos;
         lista.push(elemento);
 
-        let indice = lista.length - 1;
+        let i = lista.length - 1;
 
-        while (indice > 0) {
-            const padre = Math.floor((indice - 1) / 2);
+        while (i > 0) {
+            const padre = Math.floor((i - 1) / 2);
 
-            if (lista[padre].f <= lista[indice].f) {
-                break;
-            }
+            if (lista[padre].f <= lista[i].f) break;
 
-            [lista[padre], lista[indice]] =
-                [lista[indice], lista[padre]];
+            [lista[padre], lista[i]] =
+                [lista[i], lista[padre]];
 
-            indice = padre;
+            i = padre;
         }
     }
 
@@ -204,34 +193,30 @@ class MinHeap {
         const primero = lista[0];
         lista[0] = lista.pop();
 
-        let indice = 0;
+        let i = 0;
 
         while (true) {
-            const izquierda = indice * 2 + 1;
+            const izquierda = i * 2 + 1;
             const derecha = izquierda + 1;
 
-            let menor = indice;
+            let menor = i;
 
             if (
                 izquierda < lista.length &&
                 lista[izquierda].f < lista[menor].f
-            ) {
-                menor = izquierda;
-            }
+            ) menor = izquierda;
 
             if (
                 derecha < lista.length &&
                 lista[derecha].f < lista[menor].f
-            ) {
-                menor = derecha;
-            }
+            ) menor = derecha;
 
-            if (menor === indice) break;
+            if (menor === i) break;
 
-            [lista[indice], lista[menor]] =
-                [lista[menor], lista[indice]];
+            [lista[i], lista[menor]] =
+                [lista[menor], lista[i]];
 
-            indice = menor;
+            i = menor;
         }
 
         return primero;
@@ -291,7 +276,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     scene.add(grupo);
 
     // ========================================================
-    // VARIABLES PRINCIPALES
+    // VARIABLES
     // ========================================================
 
     let modelo = null;
@@ -315,18 +300,15 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
     let tiempoEstado = 0;
     let tiempoActualizarObstaculos = 0;
-
-    // Recuperación de movimiento con temporizador.
     let tiempoRecalculoRuta = 0;
+
     let intentosMovimiento = 0;
-    let ultimaPosicionMovimiento = new THREE.Vector3();
 
     let productoObjetivo = null;
     let productoEnMano = null;
     let productoOriginal = null;
 
     let productoEsInferior = false;
-
     let rackReservado = null;
 
     let compras = [];
@@ -366,7 +348,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         pantorrillaDerecha: null
     };
 
-    // Temporales reutilizables.
     const EJE_X = new THREE.Vector3(1, 0, 0);
     const quaternionTemporal = new THREE.Quaternion();
     const vectorTemporal = new THREE.Vector3();
@@ -374,11 +355,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     const escalaTemporal = new THREE.Vector3();
     const cajaTemporal = new THREE.Box3();
     const tamanoTemporal = new THREE.Vector3();
-    const matrizTemporal = new THREE.Matrix4();
-
-    // ========================================================
-    // ANIMACIÓN DE AGARRE
-    // ========================================================
 
     const animacionAgarre = {
         activa: false,
@@ -394,10 +370,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         escalaInicial: new THREE.Vector3(1, 1, 1),
         escalaFinal: new THREE.Vector3(1, 1, 1)
     };
-
-    // ========================================================
-    // ANIMACIÓN DE DEVOLUCIÓN / REUBICACIÓN
-    // ========================================================
 
     const animacionProducto = {
         activa: false,
@@ -425,27 +397,26 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     // ========================================================
 
     function estaEnCorredorPuerta(x, z) {
-        const mitadPuerta = config.puertaAncho / 2;
-
         return (
-            Math.abs(x - config.puertaCentroX) <= mitadPuerta &&
+            Math.abs(x - config.puertaCentroX) <=
+                config.puertaAncho / 2 &&
             z >= config.puertaZInterior - 1 &&
             z <= config.puertaZExterior + 1
         );
     }
 
     function esObstaculoDeFachada(obstaculo) {
-        const zPuerta = config.puertaZUmbral;
+        const z = config.puertaZUmbral;
 
         return (
-            Math.abs(obstaculo.z - zPuerta) < 2.5 &&
-            obstaculo.z - obstaculo.profundidad / 2 <= zPuerta + 1 &&
-            obstaculo.z + obstaculo.profundidad / 2 >= zPuerta - 1
+            Math.abs(obstaculo.z - z) < 2.5 &&
+            obstaculo.z - obstaculo.profundidad / 2 <= z + 1 &&
+            obstaculo.z + obstaculo.profundidad / 2 >= z - 1
         );
     }
 
     // ========================================================
-    // IDENTIFICAR RACKS
+    // RACKS Y RESERVAS
     // ========================================================
 
     function obtenerClaveRack(producto) {
@@ -455,56 +426,100 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             return datos.rackReubicado;
         }
 
-        const claveExplicita =
+        const explicita =
             datos.idRack ??
             datos.rackId ??
             datos.estante ??
             datos.departamento ??
             datos.categoria;
 
-        if (
-            claveExplicita !== undefined &&
-            claveExplicita !== null
-        ) {
-            return `rack:${claveExplicita}`;
+        if (explicita !== undefined && explicita !== null) {
+            return `rack:${explicita}`;
         }
 
         producto.getWorldPosition(vectorTemporal);
 
-        const x = Math.round(vectorTemporal.x / TAMANO_ZONA_RACK);
-        const z = Math.round(vectorTemporal.z / TAMANO_ZONA_RACK);
+        const x = Math.round(
+            vectorTemporal.x / TAMANO_ZONA_RACK
+        );
+
+        const z = Math.round(
+            vectorTemporal.z / TAMANO_ZONA_RACK
+        );
 
         return `zona:${x},${z}`;
     }
 
+    // Ya no bloquea un rack completo.
+    // Cada producto tiene su propia reserva.
     function rackDisponible(producto) {
-        const clave = obtenerClaveRack(producto);
-        const propietario = reservasRacks.get(clave);
-
-        return propietario === undefined || propietario === id;
+        return !!producto;
     }
 
     function reservarRack(producto) {
-        const clave = obtenerClaveRack(producto);
+        if (!producto) return false;
 
-        if (!rackDisponible(producto)) return false;
-
-        rackReservado = clave;
-        reservasRacks.set(clave, id);
-
-        racksVisitados.add(clave);
+        rackReservado = obtenerClaveRack(producto);
+        racksVisitados.add(rackReservado);
 
         return true;
     }
 
     function liberarRack() {
-        if (!rackReservado) return;
+        rackReservado = null;
+    }
 
-        if (reservasRacks.get(rackReservado) === id) {
-            reservasRacks.delete(rackReservado);
+    function productoDisponible(producto) {
+        if (!producto || !producto.visible) return false;
+
+        if (producto.userData?.vendido) return false;
+        if (producto.userData?.enCarrito) return false;
+
+        const propietario = reservasProductos.get(producto);
+
+        if (propietario !== undefined && propietario !== id) {
+            return false;
         }
 
-        rackReservado = null;
+        if (
+            producto.userData?.reservado &&
+            producto.userData?.reservadoPor !== id
+        ) {
+            return false;
+        }
+
+        return true;
+    }
+
+    function reservarProducto(producto) {
+        if (!productoDisponible(producto)) return false;
+
+        reservasProductos.set(producto, id);
+
+        producto.userData.reservado = true;
+        producto.userData.reservadoPor = id;
+
+        productoObjetivo = producto;
+
+        reservarRack(producto);
+
+        return true;
+    }
+
+    function liberarReserva() {
+        liberarRack();
+
+        if (productoObjetivo) {
+            if (reservasProductos.get(productoObjetivo) === id) {
+                reservasProductos.delete(productoObjetivo);
+
+                productoObjetivo.userData.reservado = false;
+
+                delete productoObjetivo.userData.reservadoPor;
+            }
+        }
+
+        productoObjetivo = null;
     }
 
     // ========================================================
@@ -532,7 +547,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
     function buscarHueso(...patrones) {
         for (const [nombre, hueso] of Object.entries(huesos)) {
-            if (patrones.some(patron => nombre.includes(patron))) {
+            if (patrones.some(p => nombre.includes(p))) {
                 return hueso;
             }
         }
@@ -544,92 +559,60 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         rig.cadera = buscarHueso('hips', 'pelvis');
 
         rig.torso = buscarHueso(
-            'spine2',
-            'spine1',
-            'spine',
-            'chest'
+            'spine2', 'spine1', 'spine', 'chest'
         );
 
         rig.cuello = buscarHueso('neck', 'cuello');
         rig.cabeza = buscarHueso('head', 'cabeza');
 
         rig.brazoIzquierdo = buscarHueso(
-            'leftupperarm',
-            'upperarml',
-            'leftarm'
+            'leftupperarm', 'upperarml', 'leftarm'
         );
 
         rig.brazoDerecho = buscarHueso(
-            'rightupperarm',
-            'upperarmr',
-            'rightarm'
+            'rightupperarm', 'upperarmr', 'rightarm'
         );
 
         rig.antebrazoIzquierdo = buscarHueso(
-            'leftforearm',
-            'forearml',
-            'lowerarml'
+            'leftforearm', 'forearml', 'lowerarml'
         );
 
         rig.antebrazoDerecho = buscarHueso(
-            'rightforearm',
-            'forearmr',
-            'lowerarmr'
+            'rightforearm', 'forearmr', 'lowerarmr'
         );
 
         rig.manoIzquierda = buscarHueso(
-            'lefthand',
-            'handl',
-            'handleft'
+            'lefthand', 'handl', 'handleft'
         );
 
         rig.manoDerecha = buscarHueso(
-            'righthand',
-            'handr',
-            'handright'
+            'righthand', 'handr', 'handright'
         );
 
         rig.piernaIzquierda = buscarHueso(
-            'leftupleg',
-            'uplegleft',
-            'leftthigh',
-            'thighl'
+            'leftupleg', 'uplegleft', 'leftthigh', 'thighl'
         );
 
         rig.piernaDerecha = buscarHueso(
-            'rightupleg',
-            'uplegright',
-            'rightthigh',
-            'thighr'
+            'rightupleg', 'uplegright', 'rightthigh', 'thighr'
         );
 
         rig.pantorrillaIzquierda = buscarHueso(
-            'leftleg',
-            'lowerlegleft',
-            'calfl',
-            'leftcalf'
+            'leftleg', 'lowerlegleft', 'calfl', 'leftcalf'
         );
 
         rig.pantorrillaDerecha = buscarHueso(
-            'rightleg',
-            'lowerlegright',
-            'calfr',
-            'rightcalf'
+            'rightleg', 'lowerlegright', 'calfr', 'rightcalf'
         );
     }
 
     // ========================================================
-    // CONTROL DE ANIMACIONES
+    // ANIMACIONES GLB
     // ========================================================
 
     function detenerAccionesGLB() {
-        if (accionCaminar) {
-            accionCaminar.fadeOut(0.12);
-        }
-
-        if (accionReposo) {
-            accionReposo.fadeOut(0.12);
-        }
+        accionCaminar?.fadeOut(0.12);
+        accionReposo?.fadeOut(0.12);
     }
 
     function activarCaminarGLB() {
@@ -691,7 +674,10 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         const base = huesosBase.get(hueso);
         if (!base) return;
 
-        hueso.quaternion.slerp(base.quaternion, intensidad);
+        hueso.quaternion.slerp(
+            base.quaternion,
+            intensidad
+        );
     }
 
     function restaurarPoseCompleta() {
@@ -704,501 +690,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     }
 
     // ========================================================
-    // ALTURA DEL PRODUCTO
-    // ========================================================
-
-    function productoEstaEnEstanteInferior(producto) {
-        if (!producto) return false;
-
-        producto.updateMatrixWorld(true);
-
-        cajaTemporal.setFromObject(producto);
-
-        if (cajaTemporal.isEmpty()) return false;
-
-        const alturaCentro =
-            (cajaTemporal.min.y + cajaTemporal.max.y) / 2;
-
-        return alturaCentro < config.alturaEstanteInferior;
-    }
-
-    // ========================================================
-    // ANIMACIÓN PROCEDURAL DE CAMINAR
-    // ========================================================
-
-    function animarCaminarProcedural(delta) {
-        // Si hay animación GLB de caminar, no modificar sus huesos.
-        if (config.usarAnimacionesGLB && accionCaminar) {
-            return;
-        }
-
-        faseAnimacion += delta * 8.5;
-
-        const paso = Math.sin(faseAnimacion) * 0.32;
-        const rebote =
-            Math.abs(Math.sin(faseAnimacion)) * 0.025;
-
-        aplicarRotacion(rig.piernaIzquierda, EJE_X, paso);
-        aplicarRotacion(rig.piernaDerecha, EJE_X, -paso);
-
-        aplicarRotacion(
-            rig.pantorrillaIzquierda,
-            EJE_X,
-            Math.max(0, -paso) * 0.65
-        );
-
-        aplicarRotacion(
-            rig.pantorrillaDerecha,
-            EJE_X,
-            Math.max(0, paso) * 0.65
-        );
-
-        aplicarRotacion(
-            rig.brazoIzquierdo,
-            EJE_X,
-            -paso * 0.75
-        );
-
-        aplicarRotacion(
-            rig.brazoDerecho,
-            EJE_X,
-            paso * 0.75
-        );
-
-        aplicarRotacion(
-            rig.antebrazoIzquierdo,
-            EJE_X,
-            Math.max(0, paso) * 0.25
-        );
-
-        aplicarRotacion(
-            rig.antebrazoDerecho,
-            EJE_X,
-            Math.max(0, -paso) * 0.25
-        );
-
-        restaurarHueso(rig.torso, 0.12);
-        restaurarHueso(rig.cadera, 0.12);
-        restaurarHueso(rig.cabeza, 0.12);
-
-        grupo.position.y =
-            numero(config.posicion.y) + rebote;
-    }
-
-    // ========================================================
-    // AGACHARSE
-    // ========================================================
-
-    function animarAgacharse(intensidad = 1) {
-        intensidad = limitar(intensidad, 0, 1);
-
-        aplicarRotacion(rig.cadera, EJE_X, 0.30 * intensidad);
-        aplicarRotacion(rig.torso, EJE_X, 0.25 * intensidad);
-
-        aplicarRotacion(
-            rig.piernaIzquierda,
-            EJE_X,
-            -0.65 * intensidad
-        );
-
-        aplicarRotacion(
-            rig.piernaDerecha,
-            EJE_X,
-            -0.65 * intensidad
-        );
-
-        aplicarRotacion(
-            rig.pantorrillaIzquierda,
-            EJE_X,
-            0.28 * intensidad
-        );
-
-        aplicarRotacion(
-            rig.pantorrillaDerecha,
-            EJE_X,
-            0.28 * intensidad
-        );
-    }
-
-    // ========================================================
-    // ANIMACIÓN DE RECOGIDA
-    // ========================================================
-
-    function animarRecogerProcedural() {
-        const t = suavizar(
-            tiempoEstado / Math.max(config.tiempoRecoger, 0.01)
-        );
-
-        const agachado = productoEsInferior ? 1 : 0;
-
-        animarAgacharse(
-            agachado * suavizar(t * 1.5)
-        );
-
-        aplicarRotacion(
-            rig.brazoDerecho,
-            EJE_X,
-            THREE.MathUtils.lerp(-0.15, -0.85, t)
-        );
-
-        aplicarRotacion(
-            rig.antebrazoDerecho,
-            EJE_X,
-            THREE.MathUtils.lerp(-0.1, -0.65, t)
-        );
-
-        aplicarRotacion(
-            rig.brazoIzquierdo,
-            EJE_X,
-            -0.2 * t
-        );
-
-        aplicarRotacion(
-            rig.antebrazoIzquierdo,
-            EJE_X,
-            -0.15 * t
-        );
-
-        aplicarRotacion(
-            rig.torso,
-            EJE_X,
-            0.10 * t + 0.25 * agachado * t
-        );
-
-        aplicarRotacion(rig.cabeza, EJE_X, 0.18 * t);
-        aplicarRotacion(rig.cuello, EJE_X, 0.12 * t);
-    }
-
-    // ========================================================
-    // ANIMACIÓN DE INSPECCIÓN
-    // ========================================================
-
-    function animarInspeccionarProcedural() {
-        const oscilacion =
-            Math.sin(tiempoEstado * 2.5) * 0.035;
-
-        const movimientoCabeza =
-            Math.sin(tiempoEstado * 1.4) * 0.045;
-
-        aplicarRotacion(
-            rig.brazoDerecho,
-            EJE_X,
-            -1.10 + oscilacion
-        );
-
-        aplicarRotacion(
-            rig.antebrazoDerecho,
-            EJE_X,
-            -1.0 + oscilacion
-        );
-
-        aplicarRotacion(rig.brazoIzquierdo, EJE_X, -0.72);
-        aplicarRotacion(rig.antebrazoIzquierdo, EJE_X, -0.85);
-
-        aplicarRotacion(
-            rig.cabeza,
-            EJE_X,
-            0.22 + movimientoCabeza
-        );
-
-        aplicarRotacion(rig.cuello, EJE_X, 0.10);
-
-        if (productoEsInferior) {
-            animarAgacharse(
-                1 - suavizar(tiempoEstado * 1.5)
-            );
-        }
-    }
-
-    // ========================================================
-    // ANIMACIÓN DE GUARDAR
-    // ========================================================
-
-    function animarGuardarProcedural() {
-        const t = Math.sin(tiempoEstado * 5) * 0.08;
-
-        aplicarRotacion(rig.brazoDerecho, EJE_X, -0.75 + t);
-        aplicarRotacion(rig.antebrazoDerecho, EJE_X, -0.8);
-
-        aplicarRotacion(rig.brazoIzquierdo, EJE_X, -0.45);
-        aplicarRotacion(rig.antebrazoIzquierdo, EJE_X, -0.55);
-
-        aplicarRotacion(rig.cabeza, EJE_X, 0.10);
-    }
-
-    // ========================================================
-    // ANIMACIÓN DE DEVOLUCIÓN
-    // ========================================================
-
-    function animarDevolverProcedural() {
-        const t = suavizar(
-            tiempoEstado / Math.max(config.tiempoDevolver, 0.01)
-        );
-
-        if (productoEsInferior) {
-            animarAgacharse(1 - t * 0.25);
-        }
-
-        aplicarRotacion(
-            rig.brazoDerecho,
-            EJE_X,
-            THREE.MathUtils.lerp(-1.0, -0.15, t)
-        );
-
-        aplicarRotacion(
-            rig.antebrazoDerecho,
-            EJE_X,
-            THREE.MathUtils.lerp(-0.8, -0.1, t)
-        );
-
-        aplicarRotacion(
-            rig.brazoIzquierdo,
-            EJE_X,
-            THREE.MathUtils.lerp(-0.45, -0.1, t)
-        );
-
-        aplicarRotacion(
-            rig.antebrazoIzquierdo,
-            EJE_X,
-            THREE.MathUtils.lerp(-0.55, -0.1, t)
-        );
-
-        aplicarRotacion(
-            rig.cabeza,
-            EJE_X,
-            THREE.MathUtils.lerp(0.15, 0, t)
-        );
-    }
-
-    // ========================================================
-    // ANIMACIÓN DE PAGO
-    // ========================================================
-
-    function animarPagarProcedural() {
-        const t = Math.sin(tiempoEstado * 3) * 0.08;
-
-        aplicarRotacion(rig.brazoDerecho, EJE_X, -0.9 + t);
-        aplicarRotacion(rig.antebrazoDerecho, EJE_X, -0.6);
-
-        aplicarRotacion(rig.brazoIzquierdo, EJE_X, -0.7);
-        aplicarRotacion(rig.antebrazoIzquierdo, EJE_X, -0.4);
-
-        aplicarRotacion(rig.cabeza, EJE_X, 0.08);
-    }
-
-    // ========================================================
-    // ACTUALIZAR ANIMACIÓN DE AGARRE
-    // ========================================================
-
-    function actualizarAnimacionAgarre(delta) {
-        if (!animacionAgarre.activa || !productoEnMano) {
-            return false;
-        }
-
-        const producto = productoEnMano;
-
-        animacionAgarre.tiempo += delta;
-
-        const duracion = Math.max(
-            animacionAgarre.duracion,
-            0.01
-        );
-
-        const t = limitar(
-            animacionAgarre.tiempo / duracion,
-            0,
-            1
-        );
-
-        const suave = suavizar(t);
-
-        producto.position.lerpVectors(
-            animacionAgarre.posicionInicial,
-            animacionAgarre.posicionFinal,
-            suave
-        );
-
-        producto.quaternion.slerpQuaternions(
-            animacionAgarre.quaternionInicial,
-            animacionAgarre.quaternionFinal,
-            suave
-        );
-
-        producto.scale.lerpVectors(
-            animacionAgarre.escalaInicial,
-            animacionAgarre.escalaFinal,
-            suave
-        );
-
-        if (t >= 1) {
-            producto.position.copy(
-                animacionAgarre.posicionFinal
-            );
-
-            producto.quaternion.copy(
-                animacionAgarre.quaternionFinal
-            );
-
-            producto.scale.copy(
-                animacionAgarre.escalaFinal
-            );
-
-            animacionAgarre.activa = false;
-            animacionAgarre.tiempo = 0;
-
-            return true;
-        }
-
-        return false;
-    }
-
-    // ========================================================
-    // ACTUALIZAR ANIMACIÓN DE PRODUCTO
-    // ========================================================
-
-    function actualizarAnimacionProducto(delta) {
-        if (!animacionProducto.activa || !productoEnMano) {
-            return false;
-        }
-
-        const producto = productoEnMano;
-
-        animacionProducto.tiempo += delta;
-
-        const duracion = Math.max(
-            animacionProducto.duracion,
-            0.01
-        );
-
-        const t = limitar(
-            animacionProducto.tiempo / duracion,
-            0,
-            1
-        );
-
-        const suave = suavizar(t);
-
-        const posicion = animacionProducto.posicionTemporal;
-        const quaternion = animacionProducto.quaternionTemporal;
-
-        posicion.lerpVectors(
-            animacionProducto.posicionInicial,
-            animacionProducto.posicionFinal,
-            suave
-        );
-
-        posicion.y +=
-            Math.sin(Math.PI * t) *
-            config.alturaMovimientoProducto;
-
-        quaternion.slerpQuaternions(
-            animacionProducto.quaternionInicial,
-            animacionProducto.quaternionFinal,
-            suave
-        );
-
-        const padre = producto.parent;
-
-        if (padre) {
-            padre.updateMatrixWorld(true);
-
-            const posicionLocal =
-                animacionProducto.posicionLocalTemporal.copy(posicion);
-
-            padre.worldToLocal(posicionLocal);
-
-            producto.position.copy(posicionLocal);
-
-            padre.getWorldQuaternion(
-                animacionProducto.quaternionPadreTemporal
-            );
-
-            producto.quaternion
-                .copy(animacionProducto.quaternionPadreTemporal)
-                .invert()
-                .multiply(quaternion);
-
-            producto.scale.lerpVectors(
-                animacionProducto.escalaInicial,
-                animacionProducto.escalaFinal,
-                suave
-            );
-        }
-
-        if (t >= 1) {
-            finalizarDevolucionProducto();
-            return true;
-        }
-
-        return false;
-    }
-
-    // ========================================================
-    // FINALIZAR DEVOLUCIÓN
-    // ========================================================
-
-    function finalizarDevolucionProducto() {
-        if (!productoEnMano || !productoOriginal) {
-            animacionProducto.activa = false;
-            animacionProducto.tipo = null;
-
-            animacionAgarre.activa = false;
-            animacionAgarre.tiempo = 0;
-
-            return;
-        }
-
-        const producto = productoEnMano;
-        const original = productoOriginal;
-        const tipoDevolucion = animacionProducto.tipo;
-
-        animacionAgarre.activa = false;
-        animacionAgarre.tiempo = 0;
-
-        producto.parent?.remove(producto);
-
-        if (original.parent) {
-            original.parent.add(producto);
-        } else {
-            scene.add(producto);
-        }
-
-        producto.position.copy(original.posicion);
-        producto.quaternion.copy(original.quaternion);
-        producto.scale.copy(original.escala);
-        producto.visible = original.visible;
-
-        if (tipoDevolucion === 'REUBICAR') {
-            producto.userData.reubicado = true;
-            producto.userData.rackAnterior =
-                original.rackAnterior ?? null;
-
-            producto.userData.rackNuevo =
-                original.rackNuevo ?? null;
-
-            producto.userData.rackReubicado =
-                original.rackNuevo ?? null;
-        } else {
-            producto.userData.reubicado = false;
-        }
-
-        producto.userData.reservado = false;
-        delete producto.userData.reservadoPor;
-
-        producto.updateMatrixWorld(true);
-
-        productoEnMano = null;
-        productoOriginal = null;
-
-        animacionProducto.activa = false;
-        animacionProducto.tipo = null;
-        animacionProducto.tiempo = 0;
-
-        liberarReserva();
-    }
-
-    // ========================================================
-    // CARGAR MODELO GLB
+    // CARGAR MODELO
     // ========================================================
 
     function cargarModelo() {
@@ -1251,6 +743,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
                     if (caminar) {
                         accionCaminar = mixer.clipAction(caminar);
+
                         accionCaminar.setEffectiveTimeScale(
                             config.velocidadAnimacionGLB
                         );
@@ -1294,7 +787,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         estado = nuevoEstado;
         tiempoEstado = 0;
 
-        // Reiniciar recuperación solo al cambiar de tarea.
         intentosMovimiento = 0;
         tiempoRecalculoRuta = 0;
 
@@ -1315,14 +807,10 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         ].includes(estado);
 
         if (caminando) {
-            const usaGLB = activarCaminarGLB();
-
-            if (!usaGLB) {
+            if (!activarCaminarGLB()) {
                 detenerAccionesGLB();
             }
         } else if (animacionProcedural) {
-            // Las acciones GLB se desvanecen antes de mover
-            // manualmente los huesos.
             detenerAccionesGLB();
         } else {
             detenerAccionesGLB();
@@ -1331,9 +819,11 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         if (
             !caminando &&
-            nuevoEstado !== ESTADOS.DEVOLVIENDO &&
-            nuevoEstado !== ESTADOS.INSPECCIONANDO &&
-            nuevoEstado !== ESTADOS.RECOGIENDO
+            ![
+                ESTADOS.DEVOLVIENDO,
+                ESTADOS.INSPECCIONANDO,
+                ESTADOS.RECOGIENDO
+            ].includes(nuevoEstado)
         ) {
             restaurarPoseCompleta();
         }
@@ -1359,21 +849,16 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         const obstaculos = [];
 
         if (Array.isArray(config.colisiones)) {
-            for (const colision of config.colisiones) {
-                if (!colision) continue;
+            for (const c of config.colisiones) {
+                if (!c) continue;
 
                 obstaculos.push({
-                    x: numero(colision.x),
-                    z: numero(colision.z),
-
-                    ancho: numero(
-                        colision.ancho,
-                        colision.width ?? 1
-                    ),
-
+                    x: numero(c.x),
+                    z: numero(c.z),
+                    ancho: numero(c.ancho, c.width ?? 1),
                     profundidad: numero(
-                        colision.profundidad,
-                        colision.depth ?? 1
+                        c.profundidad,
+                        c.depth ?? 1
                     )
                 });
             }
@@ -1387,9 +872,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
                     !obj.isMesh ||
                     obj.userData?.sinColision ||
                     obj.userData?.esProducto
-                ) {
-                    return;
-                }
+                ) return;
 
                 cajaTemporal.setFromObject(obj);
 
@@ -1399,9 +882,11 @@ export function crearClienteSupermercado(scene, opciones = {}) {
                 cajaTemporal.getSize(tamanoTemporal);
 
                 if (tamanoTemporal.y > 3.5) return;
-                if (tamanoTemporal.x < 0.08 || tamanoTemporal.z < 0.08) {
-                    return;
-                }
+
+                if (
+                    tamanoTemporal.x < 0.08 ||
+                    tamanoTemporal.z < 0.08
+                ) return;
 
                 obstaculos.push({
                     x: vectorTemporal.x,
@@ -1426,9 +911,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             x > config.limiteX ||
             z < config.limiteZMin ||
             z > config.limiteZMax
-        ) {
-            return false;
-        }
+        ) return false;
 
         const margen =
             config.radioColision +
@@ -1440,9 +923,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             if (
                 dentroPuerta &&
                 esObstaculoDeFachada(obstaculo)
-            ) {
-                continue;
-            }
+            ) continue;
 
             const mitadX = obstaculo.ancho / 2 + margen;
             const mitadZ = obstaculo.profundidad / 2 + margen;
@@ -1450,9 +931,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             if (
                 Math.abs(x - obstaculo.x) < mitadX &&
                 Math.abs(z - obstaculo.z) < mitadZ
-            ) {
-                return false;
-            }
+            ) return false;
         }
 
         return true;
@@ -1479,7 +958,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     }
 
     // ========================================================
-    // A* OPTIMIZADO
+    // A*
     // ========================================================
 
     function claveCelda(x, z) {
@@ -1570,15 +1049,10 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         nodos.set(inicioClave, nodoInicio);
 
         const direcciones = [
-            [1, 0, 1],
-            [-1, 0, 1],
-            [0, 1, 1],
-            [0, -1, 1],
-
-            [1, 1, 1.414],
-            [1, -1, 1.414],
-            [-1, 1, 1.414],
-            [-1, -1, 1.414]
+            [1, 0, 1], [-1, 0, 1],
+            [0, 1, 1], [0, -1, 1],
+            [1, 1, 1.414], [1, -1, 1.414],
+            [-1, 1, 1.414], [-1, -1, 1.414]
         ];
 
         let encontrado = null;
@@ -1588,7 +1062,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             iteraciones++;
 
             const actual = heap.extraer();
-
             if (!actual) break;
 
             const actualClave = claveCelda(
@@ -1596,12 +1069,8 @@ export function crearClienteSupermercado(scene, opciones = {}) {
                 actual.z
             );
 
-            // Ignorar nodos antiguos reemplazados por uno mejor.
             if (cerrados.has(actualClave)) continue;
-
-            const mejorNodo = nodos.get(actualClave);
-
-            if (mejorNodo !== actual) continue;
+            if (nodos.get(actualClave) !== actual) continue;
 
             if (actualClave === finClave) {
                 encontrado = actual;
@@ -1622,7 +1091,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
                 if (cerrados.has(vecinoClave)) continue;
                 if (!puntoLibre(mundoX, mundoZ)) continue;
 
-                // Evitar atravesar esquinas en diagonal.
                 if (dx !== 0 && dz !== 0) {
                     if (
                         !puntoLibre(
@@ -1633,9 +1101,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
                             actual.x * celda,
                             actual.z * celda + dz * celda
                         )
-                    ) {
-                        continue;
-                    }
+                    ) continue;
                 }
 
                 const nuevoG = actual.g + costo;
@@ -1667,7 +1133,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         if (!encontrado) return [];
 
         const camino = [];
-
         let actual = encontrado;
 
         while (actual) {
@@ -1682,9 +1147,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         camino.shift();
         camino.push(fin);
 
-        // Suavizado de ruta.
         const suavizado = [];
-
         let puntoActual = inicio;
         let indice = 0;
 
@@ -1710,482 +1173,869 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         return suavizado;
     }
-
+        // ========================================================
+    // MOVIMIENTO Y ORIENTACIÓN
     // ========================================================
-    // MOVIMIENTO Y RECUPERACIÓN
-    // ========================================================
 
-    function orientarHacia(dx, dz) {
-        if (Math.abs(dx) + Math.abs(dz) < 0.0001) {
-            return;
-        }
+    function orientarHacia(x, z, suavidad = 8, delta = 1 / 60) {
+        const dx = x - grupo.position.x;
+        const dz = z - grupo.position.z;
 
-        grupo.rotation.y =
-            Math.atan2(dx, dz) +
-            config.correccionRotacion;
-    }
+        if (Math.abs(dx) + Math.abs(dz) < 0.0001) return;
 
-    function orientarHaciaPunto(punto) {
-        if (!punto) return;
+        // El modelo base mira hacia -Z.
+        const anguloObjetivo = Math.atan2(dx, dz)
+            + config.correccionRotacion;
 
-        const dx = punto.x - grupo.position.x;
-        const dz = punto.z - grupo.position.z;
-
-        orientarHacia(dx, dz);
-    }
-
-    function establecerObjetivo(
-        destino,
-        nuevoEstado = ESTADOS.RUTA
-    ) {
-        if (!destino) return false;
-
-        const punto = {
-            x: limitar(
-                numero(destino.x, grupo.position.x),
-                -config.limiteX,
-                config.limiteX
-            ),
-
-            z: limitar(
-                numero(destino.z, grupo.position.z),
-                config.limiteZMin,
-                config.limiteZMax
-            )
-        };
-
-        const camino = encontrarCamino(
-            grupo.position,
-            punto
+        const diferencia = Math.atan2(
+            Math.sin(anguloObjetivo - grupo.rotation.y),
+            Math.cos(anguloObjetivo - grupo.rotation.y)
         );
 
-        if (!camino.length) return false;
+        grupo.rotation.y += diferencia *
+            (1 - Math.exp(-suavidad * delta));
+    }
 
-        ruta = camino;
+    function establecerRuta(destino, forzar = false) {
+        if (!destino) return false;
+
+        const origen = {
+            x: grupo.position.x,
+            z: grupo.position.z
+        };
+
+        const final = {
+            x: numero(destino.x),
+            z: numero(destino.z)
+        };
+
+        if (!puntoLibre(final.x, final.z)) {
+            return false;
+        }
+
+        const nuevaRuta = encontrarCamino(origen, final);
+
+        if (!nuevaRuta.length) {
+            if (!forzar) return false;
+            ruta = [];
+            indiceRuta = 0;
+            return false;
+        }
+
+        ruta = nuevaRuta;
         indiceRuta = 0;
-        objetivo = camino[camino.length - 1];
+        objetivo = final;
 
         intentosMovimiento = 0;
         tiempoRecalculoRuta = 0;
 
-        ultimaPosicionMovimiento.set(
-            grupo.position.x,
-            grupo.position.y,
-            grupo.position.z
-        );
-
-        cambiarEstado(nuevoEstado);
-
         return true;
     }
 
-    function recuperarMovimiento(forzar = false) {
-        if (!objetivo) return false;
-
-        if (!forzar && tiempoRecalculoRuta < config.intervaloRecalculoRuta) {
-            return false;
-        }
-
-        tiempoRecalculoRuta = 0;
-        intentosMovimiento++;
-
-        const nuevoCamino = encontrarCamino(
-            grupo.position,
-            objetivo
-        );
-
-        if (nuevoCamino.length) {
-            ruta = nuevoCamino;
-            indiceRuta = 0;
-            intentosMovimiento = 0;
-
-            return true;
-        }
-
-        return false;
-    }
-
-    function moverHaciaDestino(delta) {
+    function avanzarPorRuta(delta, velocidad = config.velocidad) {
         if (!ruta.length || indiceRuta >= ruta.length) {
             return true;
         }
 
-        const destino = ruta[indiceRuta];
+        const punto = ruta[indiceRuta];
 
-        const dx = destino.x - grupo.position.x;
-        const dz = destino.z - grupo.position.z;
+        const distancia = distanciaXZ(grupo.position, punto);
 
-        const distancia = Math.hypot(dx, dz);
-
-        if (distancia < config.distanciaLlegada) {
-            grupo.position.x = destino.x;
-            grupo.position.z = destino.z;
-            grupo.position.y = numero(config.posicion.y);
-
+        if (distancia <= config.distanciaWaypoint) {
             indiceRuta++;
 
             if (indiceRuta >= ruta.length) {
                 ruta = [];
-                objetivo = null;
+                indiceRuta = 0;
                 return true;
             }
 
             return false;
         }
 
-        let velocidad = config.velocidad;
+        orientarHacia(punto.x, punto.z, 10, delta);
 
-        if (estado === ESTADOS.ENTRANDO) {
-            velocidad = config.velocidadEntrada;
-        }
+        const dx = punto.x - grupo.position.x;
+        const dz = punto.z - grupo.position.z;
 
-        if (estado === ESTADOS.REGRESANDO) {
-            velocidad = config.velocidadRegreso;
-        }
+        const longitud = Math.hypot(dx, dz) || 1;
 
-        const direccionX = dx / distancia;
-        const direccionZ = dz / distancia;
-
-        orientarHacia(direccionX, direccionZ);
-
-        const avance = Math.min(
+        const paso = Math.min(
             distancia,
             velocidad * delta
         );
 
-        const nuevoX =
-            grupo.position.x + direccionX * avance;
+        const nuevoX = grupo.position.x +
+            dx / longitud * paso;
 
-        const nuevoZ =
-            grupo.position.z + direccionZ * avance;
+        const nuevoZ = grupo.position.z +
+            dz / longitud * paso;
 
-        if (
-            !segmentoLibre(
-                grupo.position,
-                { x: nuevoX, z: nuevoZ }
-            )
-        ) {
-            tiempoRecalculoRuta += delta;
-
-            recuperarMovimiento();
-
-            if (
-                intentosMovimiento >=
-                config.maximosIntentosMovimiento
-            ) {
-                console.warn(
-                    `[CLIENTE ${id}] No pudo continuar su ruta.`
-                );
-
-                ruta = [];
-                objetivo = null;
-                intentosMovimiento = 0;
-
-                if (estado === ESTADOS.REGRESANDO) {
-                    cambiarEstado(ESTADOS.ESPERANDO);
-                } else {
-                    liberarReserva();
-                    cambiarEstado(ESTADOS.BUSCANDO);
-                }
-            }
-
+        if (!puntoLibre(nuevoX, nuevoZ)) {
+            intentosMovimiento++;
+            tiempoRecalculoRuta = config.intervaloRecalculoRuta;
             return false;
         }
 
         grupo.position.x = nuevoX;
         grupo.position.z = nuevoZ;
-        grupo.position.y = numero(config.posicion.y);
-
-        tiempoRecalculoRuta = 0;
-        intentosMovimiento = 0;
-
-        animarCaminarProcedural(delta);
 
         return false;
     }
 
-    function establecerRuta(puntos, repetir = false) {
-        if (!Array.isArray(puntos) || !puntos.length) {
-            return false;
-        }
+    function moverHaciaDestino(delta, destino, velocidad) {
+        if (!destino) return false;
 
-        const camino = [];
+        if (!ruta.length) {
+            if (
+                distanciaXZ(grupo.position, destino) <=
+                config.distanciaLlegada
+            ) return true;
 
-        let actual = {
-            x: grupo.position.x,
-            z: grupo.position.z
-        };
+            if (!establecerRuta(destino)) {
+                intentosMovimiento++;
 
-        for (const punto of puntos) {
-            const segmento = encontrarCamino(actual, punto);
-
-            if (!segmento.length) continue;
-
-            camino.push(...segmento);
-            actual = segmento[segmento.length - 1];
-        }
-
-        if (!camino.length) return false;
-
-        ruta = camino;
-        indiceRuta = 0;
-        objetivo = camino[camino.length - 1];
-
-        config.repetirRuta = repetir;
-
-        cambiarEstado(ESTADOS.RUTA);
-
-        return true;
-    }
-
-    function establecerPosicion(posicion) {
-        if (!posicion) return false;
-
-        grupo.position.set(
-            numero(posicion.x, grupo.position.x),
-            numero(posicion.y, numero(config.posicion.y)),
-            numero(posicion.z, grupo.position.z)
-        );
-
-        ruta = [];
-        objetivo = null;
-
-        intentosMovimiento = 0;
-        tiempoRecalculoRuta = 0;
-
-        return true;
-    }
-        // ========================================================
-    // OBTENER PRODUCTOS
-    // ========================================================
-
-    function obtenerProductos() {
-        if (Array.isArray(config.productos)) {
-            return config.productos;
-        }
-
-        if (config.productos?.traverse) {
-            const encontrados = [];
-
-            config.productos.traverse(obj => {
-                if (obj.userData?.esProducto) {
-                    encontrados.push(obj);
+                if (
+                    intentosMovimiento >=
+                    config.maximosIntentosMovimiento
+                ) {
+                    manejarFalloMovimiento();
                 }
-            });
 
-            return encontrados;
-        }
-
-        return [];
-    }
-
-    function productoDisponible(producto) {
-        if (!producto || !producto.visible) return false;
-
-        if (producto.userData?.vendido) return false;
-        if (producto.userData?.enCarrito) return false;
-
-        const propietario = reservasProductos.get(producto);
-
-        if (propietario !== undefined && propietario !== id) {
-            return false;
-        }
-
-        if (
-            producto.userData?.reservado &&
-            producto.userData?.reservadoPor !== id
-        ) {
-            return false;
-        }
-
-        return true;
-    }
-
-    function reservarProducto(producto) {
-        if (!productoDisponible(producto)) return false;
-        if (!reservarRack(producto)) return false;
-
-        reservasProductos.set(producto, id);
-
-        producto.userData.reservado = true;
-        producto.userData.reservadoPor = id;
-
-        productoObjetivo = producto;
-
-        return true;
-    }
-
-    function liberarReserva() {
-        liberarRack();
-
-        if (productoObjetivo) {
-            if (reservasProductos.get(productoObjetivo) === id) {
-                reservasProductos.delete(productoObjetivo);
-
-                productoObjetivo.userData.reservado = false;
-
-                delete productoObjetivo.userData.reservadoPor;
+                return false;
             }
         }
 
-        productoObjetivo = null;
+        tiempoRecalculoRuta += delta;
+
+        if (
+            tiempoRecalculoRuta >=
+            config.intervaloRecalculoRuta
+        ) {
+            tiempoRecalculoRuta = 0;
+
+            const siguiente = ruta[indiceRuta];
+
+            if (
+                siguiente &&
+                !segmentoLibre(grupo.position, siguiente)
+            ) {
+                ruta = [];
+                indiceRuta = 0;
+                intentosMovimiento++;
+            }
+        }
+
+        const llego = avanzarPorRuta(delta, velocidad);
+
+        if (llego) {
+            intentosMovimiento = 0;
+            return true;
+        }
+
+        if (
+            intentosMovimiento >=
+            config.maximosIntentosMovimiento
+        ) {
+            manejarFalloMovimiento();
+        }
+
+        return false;
+    }
+
+    function manejarFalloMovimiento() {
+        ruta = [];
+        indiceRuta = 0;
+
+        switch (estado) {
+            case ESTADOS.REGRESANDO:
+                callbackRegreso = null;
+                cambiarEstado(ESTADOS.ESPERANDO);
+                break;
+
+            case ESTADOS.ACERCANDO:
+                liberarReserva();
+                cambiarEstado(ESTADOS.ESPERANDO);
+                break;
+
+            case ESTADOS.CAJA:
+                console.warn(
+                    `[CLIENTE ${id}] No pudo llegar a la caja.`
+                );
+                cambiarEstado(ESTADOS.ESPERANDO);
+                break;
+
+            default:
+                liberarReserva();
+                cambiarEstado(ESTADOS.BUSCANDO);
+                break;
+        }
+    }
+
+    function detenerMovimiento() {
+        ruta = [];
+        indiceRuta = 0;
+        objetivo = null;
+    }
+
+    // ========================================================
+    // ANIMACIÓN PROCEDURAL DEL CUERPO
+    // ========================================================
+
+    function animarCaminar(delta) {
+        if (accionCaminar) return;
+
+        faseAnimacion += delta * 9;
+
+        const intensidad = Math.sin(faseAnimacion);
+
+        aplicarRotacion(
+            rig.brazoIzquierdo,
+            EJE_X,
+            intensidad * 0.42
+        );
+
+        aplicarRotacion(
+            rig.brazoDerecho,
+            EJE_X,
+            -intensidad * 0.42
+        );
+
+        aplicarRotacion(
+            rig.piernaIzquierda,
+            EJE_X,
+            -intensidad * 0.50
+        );
+
+        aplicarRotacion(
+            rig.piernaDerecha,
+            EJE_X,
+            intensidad * 0.50
+        );
+
+        aplicarRotacion(
+            rig.pantorrillaIzquierda,
+            EJE_X,
+            Math.max(0, intensidad) * 0.30
+        );
+
+        aplicarRotacion(
+            rig.pantorrillaDerecha,
+            EJE_X,
+            Math.max(0, -intensidad) * 0.30
+        );
+
+        grupo.position.y =
+            numero(config.posicion.y) +
+            Math.abs(Math.sin(faseAnimacion * 2)) * 0.025;
+    }
+
+    function animarReposo(delta) {
+        if (accionReposo) return;
+
+        faseAnimacion += delta * 1.7;
+
+        grupo.position.y =
+            numero(config.posicion.y) +
+            Math.sin(faseAnimacion) * 0.008;
+
+        restaurarHueso(rig.brazoIzquierdo, 0.12);
+        restaurarHueso(rig.brazoDerecho, 0.12);
+        restaurarHueso(rig.piernaIzquierda, 0.12);
+        restaurarHueso(rig.piernaDerecha, 0.12);
+    }
+
+    function animarRecogida(delta) {
+        const progreso = suavizar(
+            tiempoEstado / Math.max(config.tiempoRecoger, 0.01)
+        );
+
+        const bajar = Math.sin(progreso * Math.PI);
+
+        aplicarRotacion(
+            rig.torso,
+            EJE_X,
+            -0.12 * bajar
+        );
+
+        aplicarRotacion(
+            rig.cuello,
+            EJE_X,
+            0.10 * bajar
+        );
+
+        aplicarRotacion(
+            rig.brazoDerecho,
+            EJE_X,
+            -0.85 * bajar
+        );
+
+        aplicarRotacion(
+            rig.antebrazoDerecho,
+            EJE_X,
+            -0.45 * bajar
+        );
+
+        aplicarRotacion(
+            rig.brazoIzquierdo,
+            EJE_X,
+            -0.20 * bajar
+        );
+
+        animarBrazoProducto(progreso);
+    }
+
+    function animarInspeccion(delta) {
+        const balanceo = Math.sin(tiempoEstado * 2.2) * 0.035;
+
+        aplicarRotacion(
+            rig.torso,
+            EJE_X,
+            -0.025
+        );
+
+        aplicarRotacion(
+            rig.cuello,
+            EJE_X,
+            -0.12
+        );
+
+        aplicarRotacion(
+            rig.brazoDerecho,
+            EJE_X,
+            -0.55 + balanceo
+        );
+
+        aplicarRotacion(
+            rig.antebrazoDerecho,
+            EJE_X,
+            -0.65
+        );
+
+        aplicarRotacion(
+            rig.brazoIzquierdo,
+            EJE_X,
+            -0.35
+        );
+
+        aplicarRotacion(
+            rig.antebrazoIzquierdo,
+            EJE_X,
+            -0.25
+        );
+    }
+
+    function animarGuardar(delta) {
+        const progreso = suavizar(
+            tiempoEstado / Math.max(config.tiempoGuardar, 0.01)
+        );
+
+        aplicarRotacion(
+            rig.brazoDerecho,
+            EJE_X,
+            THREE.MathUtils.lerp(-0.55, 0.05, progreso)
+        );
+
+        aplicarRotacion(
+            rig.antebrazoDerecho,
+            EJE_X,
+            THREE.MathUtils.lerp(-0.65, 0, progreso)
+        );
+
+        aplicarRotacion(
+            rig.brazoIzquierdo,
+            EJE_X,
+            THREE.MathUtils.lerp(-0.35, 0.05, progreso)
+        );
+
+        aplicarRotacion(
+            rig.antebrazoIzquierdo,
+            EJE_X,
+            THREE.MathUtils.lerp(-0.25, 0, progreso)
+        );
+    }
+
+    function animarDevolucion(delta) {
+        const progreso = suavizar(
+            tiempoEstado / Math.max(config.tiempoDevolver, 0.01)
+        );
+
+        const bajar = Math.sin(progreso * Math.PI);
+
+        aplicarRotacion(
+            rig.torso,
+            EJE_X,
+            -0.13 * bajar
+        );
+
+        aplicarRotacion(
+            rig.brazoDerecho,
+            EJE_X,
+            THREE.MathUtils.lerp(-0.55, -0.95, bajar)
+        );
+
+        aplicarRotacion(
+            rig.antebrazoDerecho,
+            EJE_X,
+            -0.50 * bajar
+        );
+
+        animarBrazoProducto(progreso);
+    }
+
+    function animarPago(delta) {
+        const movimiento = Math.sin(tiempoEstado * 3) * 0.06;
+
+        aplicarRotacion(
+            rig.brazoDerecho,
+            EJE_X,
+            -0.40 + movimiento
+        );
+
+        aplicarRotacion(
+            rig.antebrazoDerecho,
+            EJE_X,
+            -0.45
+        );
+
+        aplicarRotacion(
+            rig.brazoIzquierdo,
+            EJE_X,
+            -0.25
+        );
+
+        aplicarRotacion(
+            rig.antebrazoIzquierdo,
+            EJE_X,
+            -0.25
+        );
+
+        aplicarRotacion(
+            rig.cabeza,
+            EJE_X,
+            0.04
+        );
+    }
+
+    // ========================================================
+    // MANO PARA PRODUCTOS
+    // ========================================================
+
+    function obtenerMano() {
+        return (
+            rig.manoDerecha ||
+            rig.manoIzquierda ||
+            rig.brazoDerecho ||
+            modelo ||
+            grupo
+        );
+    }
+
+    function obtenerPosicionMano() {
+        const mano = obtenerMano();
+
+        mano.updateWorldMatrix(true, false);
+
+        const posicion = new THREE.Vector3();
+
+        mano.getWorldPosition(posicion);
+
+        if (!rig.manoDerecha && !rig.manoIzquierda) {
+            posicion.y += 0.20;
+            posicion.z += 0.12;
+        }
+
+        return posicion;
+    }
+
+    function prepararProductoEnMano(producto) {
+        if (!producto) return false;
+
+        const mano = obtenerMano();
+
+        if (!mano) return false;
+
+        producto.updateWorldMatrix(true, false);
+
+        const escalaMundo = producto.getWorldScale(
+            new THREE.Vector3()
+        );
+
+        const posicionMundo = producto.getWorldPosition(
+            new THREE.Vector3()
+        );
+
+        const quaternionMundo = producto.getWorldQuaternion(
+            new THREE.Quaternion()
+        );
+
+        mano.attach(producto);
+
+        producto.position.copy(
+            mano.worldToLocal(posicionMundo)
+        );
+
+        const quaternionMano = mano.getWorldQuaternion(
+            new THREE.Quaternion()
+        );
+
+        producto.quaternion
+            .copy(quaternionMano.invert())
+            .multiply(quaternionMundo);
+
+        const escalaMano = mano.getWorldScale(
+            new THREE.Vector3()
+        );
+
+        producto.scale.set(
+            escalaMundo.x / Math.max(escalaMano.x, 0.0001),
+            escalaMundo.y / Math.max(escalaMano.y, 0.0001),
+            escalaMundo.z / Math.max(escalaMano.z, 0.0001)
+        );
+
+        producto.userData.enMano = true;
+        producto.userData.clienteEnMano = id;
+
+        productoEnMano = producto;
+
+        return true;
+    }
+
+    function animarBrazoProducto(progreso = 0) {
+        if (!productoEnMano) return;
+
+        const mano = obtenerMano();
+
+        const objetivo = new THREE.Vector3(
+            config.offsetProductoMano.x,
+            config.offsetProductoMano.y,
+            config.offsetProductoMano.z
+        );
+
+        mano.updateMatrixWorld(true);
+
+        productoEnMano.position.lerp(
+            objetivo,
+            0.22
+        );
+
+        productoEnMano.rotation.x =
+            config.rotacionProductoMano.x;
+
+        productoEnMano.rotation.y =
+            config.rotacionProductoMano.y;
+
+        productoEnMano.rotation.z =
+            config.rotacionProductoMano.z;
+    }
+
+    function iniciarAnimacionAgarre(producto) {
+        if (!producto) return false;
+
+        if (!prepararProductoEnMano(producto)) {
+            return false;
+        }
+
+        animacionAgarre.activa = true;
+        animacionAgarre.tiempo = 0;
+        animacionAgarre.duracion = Math.max(
+            config.tiempoAnimacionAgarre,
+            0.05
+        );
+
+        animacionAgarre.posicionInicial.copy(
+            producto.position
+        );
+
+        animacionAgarre.posicionFinal.set(
+            config.offsetProductoMano.x,
+            config.offsetProductoMano.y,
+            config.offsetProductoMano.z
+        );
+
+        animacionAgarre.quaternionInicial.copy(
+            producto.quaternion
+        );
+
+        animacionAgarre.quaternionFinal.setFromEuler(
+            new THREE.Euler(
+                config.rotacionProductoMano.x,
+                config.rotacionProductoMano.y,
+                config.rotacionProductoMano.z
+            )
+        );
+
+        animacionAgarre.escalaInicial.copy(producto.scale);
+
+        animacionAgarre.escalaFinal.copy(producto.scale)
+            .multiplyScalar(config.escalaProductoMano);
+
+        return true;
+    }
+
+    function actualizarAnimacionAgarre(delta) {
+        if (!animacionAgarre.activa || !productoEnMano) {
+            animacionAgarre.activa = false;
+            return true;
+        }
+
+        animacionAgarre.tiempo += delta;
+
+        const progreso = limitar(
+            animacionAgarre.tiempo /
+                animacionAgarre.duracion,
+            0,
+            1
+        );
+
+        const t = suavizar(progreso);
+
+        productoEnMano.position.lerpVectors(
+            animacionAgarre.posicionInicial,
+            animacionAgarre.posicionFinal,
+            t
+        );
+
+        productoEnMano.quaternion.slerpQuaternions(
+            animacionAgarre.quaternionInicial,
+            animacionAgarre.quaternionFinal,
+            t
+        );
+
+        productoEnMano.scale.lerpVectors(
+            animacionAgarre.escalaInicial,
+            animacionAgarre.escalaFinal,
+            t
+        );
+
+        if (progreso >= 1) {
+            animacionAgarre.activa = false;
+            return true;
+        }
+
+        return false;
     }
 
     // ========================================================
     // BUSCAR PRODUCTOS
     // ========================================================
 
-    function buscarProducto() {
-        const productos = obtenerProductos();
+    function obtenerListaProductos() {
+        const fuente = config.productos;
+
+        if (!fuente) return [];
+
+        if (Array.isArray(fuente)) return fuente;
+
+        if (fuente instanceof Map) {
+            return [...fuente.values()].flat();
+        }
+
+        if (fuente.children) {
+            const lista = [];
+
+            fuente.traverse(obj => {
+                if (
+                    obj !== fuente &&
+                    (
+                        obj.userData?.esProducto ||
+                        obj.userData?.producto ||
+                        obj.userData?.codigoProducto ||
+                        obj.userData?.precio !== undefined
+                    )
+                ) {
+                    lista.push(obj);
+                }
+            });
+
+            return lista;
+        }
+
+        if (typeof fuente === 'object') {
+            return Object.values(fuente).flatMap(valor => {
+                if (Array.isArray(valor)) return valor;
+                return valor?.isObject3D ? [valor] : [];
+            });
+        }
+
+        return [];
+    }
+
+    function obtenerNombreProducto(producto) {
+        return (
+            producto.userData?.nombre ||
+            producto.userData?.nombreProducto ||
+            producto.userData?.codigoProducto ||
+            producto.name ||
+            'Producto'
+        );
+    }
+
+    function obtenerPuntoFrenteProducto(producto) {
+        producto.updateWorldMatrix(true, false);
+
+        const posicion = producto.getWorldPosition(
+            new THREE.Vector3()
+        );
+
+        const candidatos = [];
+
+        const direcciones = [
+            [0, 1],
+            [0, -1],
+            [1, 0],
+            [-1, 0],
+            [0.7, 0.7],
+            [-0.7, 0.7],
+            [0.7, -0.7],
+            [-0.7, -0.7]
+        ];
+
+        for (const [dx, dz] of direcciones) {
+            const punto = {
+                x: posicion.x + dx * config.distanciaFrenteProducto,
+                z: posicion.z + dz * config.distanciaFrenteProducto
+            };
+
+            if (!puntoLibre(punto.x, punto.z)) continue;
+
+            const camino = encontrarCamino(
+                grupo.position,
+                punto
+            );
+
+            if (!camino.length) continue;
+
+            const costoRuta = camino.reduce(
+                (total, puntoRuta, indice) => {
+                    const anterior = indice === 0
+                        ? grupo.position
+                        : camino[indice - 1];
+
+                    return total + distanciaXZ(
+                        anterior,
+                        puntoRuta
+                    );
+                },
+                0
+            );
+
+            candidatos.push({
+                ...punto,
+                costoRuta
+            });
+        }
+
+        candidatos.sort(
+            (a, b) => a.costoRuta - b.costoRuta
+        );
+
+        return candidatos[0] ?? null;
+    }
+
+    function buscarProductoDisponible() {
+        const productos = obtenerListaProductos();
+
+        if (!productos.length) return null;
 
         const candidatos = [];
 
         for (const producto of productos) {
+            if (!producto?.isObject3D) continue;
             if (!productoDisponible(producto)) continue;
             if (productosExaminados.has(producto)) continue;
 
-            const claveRack = obtenerClaveRack(producto);
-
-            if (!rackDisponible(producto)) continue;
-
-            producto.getWorldPosition(vectorTemporal);
+            const posicion = producto.getWorldPosition(
+                new THREE.Vector3()
+            );
 
             const distancia = distanciaXZ(
                 grupo.position,
-                vectorTemporal
+                posicion
             );
 
             if (distancia > config.distanciaMaximaBusqueda) {
                 continue;
             }
 
+            const frente = obtenerPuntoFrenteProducto(producto);
+
+            if (!frente) continue;
+
+            const variedad = obtenerClaveRack(producto);
+
+            const penalizacionRack =
+                racksVisitados.has(variedad) ? 1.8 : 0;
+
+            const costo = distancia + penalizacionRack;
+
             candidatos.push({
                 producto,
-                claveRack,
-                distancia
+                frente,
+                costo
             });
         }
 
-        if (!candidatos.length) return null;
+        candidatos.sort((a, b) => a.costo - b.costo);
 
-        let sinVisitar = candidatos.filter(
-            candidato => !racksVisitados.has(candidato.claveRack)
-        );
-
-        if (!sinVisitar.length) {
-            racksVisitados.clear();
-            sinVisitar = candidatos;
+        for (const candidato of candidatos) {
+            if (reservarProducto(candidato.producto)) {
+                return candidato;
+            }
         }
 
-        // Ordenar una sola vez por búsqueda, no por fotograma.
-        sinVisitar.sort((a, b) => {
-            const puntuacionA = a.distancia + Math.random() * 3;
-            const puntuacionB = b.distancia + Math.random() * 3;
-
-            return puntuacionA - puntuacionB;
-        });
-
-        return sinVisitar[0]?.producto ?? null;
+        return null;
     }
 
     // ========================================================
-    // POSICIÓN FRENTE AL PRODUCTO
+    // INICIAR BÚSQUEDA Y RECOGIDA
     // ========================================================
 
-    function obtenerPuntoFrenteProducto(producto) {
-        producto.getWorldPosition(vectorTemporal);
+    function iniciarBusqueda() {
+        if (eliminado || detenido) return;
 
-        const posicionProducto = {
-            x: vectorTemporal.x,
-            z: vectorTemporal.z
+        liberarReserva();
+
+        const encontrado = buscarProductoDisponible();
+
+        if (!encontrado) {
+            detenerMovimiento();
+            cambiarEstado(ESTADOS.ESPERANDO);
+            return;
+        }
+
+        productoObjetivo = encontrado.producto;
+
+        productoOriginal = {
+            parent: encontrado.producto.parent,
+            posicion: encontrado.producto.position.clone(),
+            quaternion: encontrado.producto.quaternion.clone(),
+            escala: encontrado.producto.scale.clone()
         };
 
-        const candidatos = [];
+        productoEsInferior =
+            encontrado.producto.getWorldPosition(
+                new THREE.Vector3()
+            ).y < config.alturaEstanteInferior;
 
-        const radioMinimo = Math.max(
-            0.75,
-            numero(config.distanciaProducto, 1.35)
-        );
+        objetivo = encontrado.frente;
 
-        const radioMaximo = Math.max(
-            radioMinimo + 0.4,
-            numero(config.distanciaFrenteProducto, 1.25) + 1.2
-        );
-
-        for (
-            let radio = radioMinimo;
-            radio <= radioMaximo;
-            radio += 0.3
-        ) {
-            for (
-                let angulo = 0;
-                angulo < Math.PI * 2;
-                angulo += Math.PI / 8
-            ) {
-                const punto = {
-                    x: posicionProducto.x + Math.cos(angulo) * radio,
-                    z: posicionProducto.z + Math.sin(angulo) * radio
-                };
-
-                if (!puntoLibre(punto.x, punto.z)) continue;
-
-                const camino = encontrarCamino(
-                    grupo.position,
-                    punto
-                );
-
-                if (!camino.length) continue;
-
-                candidatos.push({
-                    ...punto,
-                    distancia: distanciaXZ(grupo.position, punto)
-                });
-            }
-
-            if (candidatos.length) break;
-        }
-
-        if (!candidatos.length) return null;
-
-        candidatos.sort(
-            (a, b) => a.distancia - b.distancia
-        );
-
-        return candidatos[0];
-    }
-
-    function acercarseAProducto(producto) {
-        if (!reservarProducto(producto)) return false;
-
-        const destino = obtenerPuntoFrenteProducto(producto);
-
-        if (!destino) {
+        if (!establecerRuta(encontrado.frente)) {
             liberarReserva();
-            return false;
+            cambiarEstado(ESTADOS.ESPERANDO);
+            return;
         }
 
-        if (
-            !establecerObjetivo(
-                destino,
-                ESTADOS.ACERCANDO
-            )
-        ) {
-            liberarReserva();
-            return false;
-        }
-
-        return true;
+        cambiarEstado(ESTADOS.ACERCANDO);
     }
-
-    // ========================================================
-    // TOMAR PRODUCTO
-    // ========================================================
 
     function tomarProducto() {
-        if (
-            !productoObjetivo ||
-            !productoDisponible(productoObjetivo)
-        ) {
+        if (!productoObjetivo) {
+            cambiarEstado(ESTADOS.BUSCANDO);
+            return;
+        }
+
+        if (!productoDisponible(productoObjetivo)) {
             liberarReserva();
             cambiarEstado(ESTADOS.BUSCANDO);
             return;
@@ -2193,401 +2043,444 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         const producto = productoObjetivo;
 
-        producto.updateMatrixWorld(true);
+        productosExaminados.add(producto);
 
-        productoEsInferior =
-            productoEstaEnEstanteInferior(producto);
-
-        cajaTemporal.setFromObject(producto);
-
-        const tamanoProducto = new THREE.Vector3();
-
-        cajaTemporal.getSize(tamanoProducto);
-
-        productoOriginal = {
-            parent: producto.parent,
-
-            posicion: producto.position.clone(),
-            quaternion: producto.quaternion.clone(),
-            escala: producto.scale.clone(),
-
-            visible: producto.visible,
-            tamanoMundo: tamanoProducto.clone()
-        };
-
-        const mano =
-            rig.manoDerecha ||
-            rig.brazoDerecho;
-
-        if (!mano) {
-            console.warn(
-                `[CLIENTE ${id}] No se encontró la mano derecha.`
-            );
-
-            productoOriginal = null;
-
+        if (!iniciarAnimacionAgarre(producto)) {
             liberarReserva();
             cambiarEstado(ESTADOS.BUSCANDO);
-
             return;
         }
 
-        // Mirar directamente al producto antes de agarrarlo.
-        producto.getWorldPosition(vectorTemporal);
-
-        orientarHaciaPunto({
-            x: vectorTemporal.x,
-            z: vectorTemporal.z
-        });
-
-        grupo.updateMatrixWorld(true);
-        mano.updateMatrixWorld(true);
-        producto.updateMatrixWorld(true);
-
-        // Cambiar el padre conservando la posición mundial.
-        mano.attach(producto);
-
-        producto.updateMatrixWorld(true);
-
-        // Transform local conservado después de attach().
-        animacionAgarre.posicionInicial.copy(producto.position);
-        animacionAgarre.quaternionInicial.copy(producto.quaternion);
-        animacionAgarre.escalaInicial.copy(producto.scale);
-
-        const offset = config.offsetProductoMano;
-
-        animacionAgarre.posicionFinal.set(
-            numero(offset.x),
-            numero(offset.y),
-            numero(offset.z)
-        );
-
-        const rotacion = config.rotacionProductoMano;
-
-        const eulerFinal = new THREE.Euler(
-            numero(rotacion.x),
-            numero(rotacion.y),
-            numero(rotacion.z)
-        );
-
-        animacionAgarre.quaternionFinal.setFromEuler(eulerFinal);
-
-        animacionAgarre.escalaFinal
-            .copy(animacionAgarre.escalaInicial)
-            .multiplyScalar(config.escalaProductoMano);
-
-        animacionAgarre.tiempo = 0;
-
-        animacionAgarre.duracion = Math.max(
-            numero(config.tiempoAnimacionAgarre, 0.38),
-            0.05
-        );
-
-        animacionAgarre.activa = true;
-
-        producto.visible = true;
-        productoEnMano = producto;
-
-        productosExaminados.add(producto);
-
         cambiarEstado(ESTADOS.INSPECCIONANDO);
 
-        console.log(
-            `[CLIENTE ${id}] Agarró ${
-                producto.userData?.nombre ??
-                producto.name ??
-                'producto'
-            }.`
-        );
+        tiempoEstado = 0;
     }
 
     // ========================================================
-    // BUSCAR UBICACIÓN EN OTRO RACK
+    // DEVOLVER PRODUCTO AL ESTANTE
     // ========================================================
 
-    function buscarUbicacionOtroRack(producto) {
-        if (!producto || !productoOriginal) return null;
-
-        const productos = obtenerProductos();
-
-        const rackActual =
-            rackReservado ?? obtenerClaveRack(producto);
-
-        const tamanoProducto =
-            productoOriginal.tamanoMundo ??
-            new THREE.Vector3(0.3, 0.3, 0.3);
-
-        const candidatos = [];
-
-        for (const ancla of productos) {
-            if (!ancla || ancla === producto) continue;
-            if (!ancla.visible) continue;
-
-            if (ancla.userData?.vendido) continue;
-            if (ancla.userData?.enCarrito) continue;
-
-            if (!ancla.parent) continue;
-
-            const claveRack = obtenerClaveRack(ancla);
-
-            if (claveRack === rackActual) continue;
-            if (!rackDisponible(ancla)) continue;
-
-            ancla.updateMatrixWorld(true);
-
-            cajaTemporal.setFromObject(ancla);
-
-            if (cajaTemporal.isEmpty()) continue;
-
-            const tamanoAncla = new THREE.Vector3();
-
-            cajaTemporal.getSize(tamanoAncla);
-
-            const posicionAncla = new THREE.Vector3();
-
-            ancla.getWorldPosition(posicionAncla);
-
-            const separacion = config.separacionProductoRack;
-
-            const desplazamientoX =
-                tamanoAncla.x / 2 +
-                tamanoProducto.x / 2 +
-                separacion;
-
-            const desplazamientoZ =
-                tamanoAncla.z / 2 +
-                tamanoProducto.z / 2 +
-                separacion;
-
-            const posiciones = [
-                { x: desplazamientoX, z: 0 },
-                { x: -desplazamientoX, z: 0 },
-                { x: 0, z: desplazamientoZ },
-                { x: 0, z: -desplazamientoZ }
-            ];
-
-            for (const desplazamiento of posiciones) {
-                const posicionMundo = new THREE.Vector3(
-                    posicionAncla.x + desplazamiento.x,
-                    posicionAncla.y,
-                    posicionAncla.z + desplazamiento.z
-                );
-
-                const padre = ancla.parent;
-
-                padre.updateMatrixWorld(true);
-
-                const posicionLocal =
-                    padre.worldToLocal(posicionMundo.clone());
-
-                const quaternionLocal = ancla.quaternion.clone();
-
-                let ocupado = false;
-
-                const cajaPosicion = new THREE.Box3()
-                    .setFromCenterAndSize(
-                        posicionMundo,
-                        tamanoProducto
-                    );
-
-                for (const otro of productos) {
-                    if (
-                        !otro ||
-                        otro === producto ||
-                        otro === ancla ||
-                        !otro.visible
-                    ) {
-                        continue;
-                    }
-
-                    otro.updateMatrixWorld(true);
-
-                    const cajaOtro =
-                        new THREE.Box3().setFromObject(otro);
-
-                    if (cajaOtro.intersectsBox(cajaPosicion)) {
-                        ocupado = true;
-                        break;
-                    }
-                }
-
-                if (ocupado) continue;
-
-                const distancia = distanciaXZ(
-                    grupo.position,
-                    posicionMundo
-                );
-
-                candidatos.push({
-                    ancla,
-                    claveRack,
-                    padre,
-
-                    posicionMundo,
-                    posicionLocal,
-                    quaternionLocal,
-
-                    escala: productoOriginal.escala.clone(),
-
-                    distancia
-                });
-            }
+    function obtenerPosicionOriginalProducto() {
+        if (!productoObjetivo || !productoOriginal) {
+            return null;
         }
 
-        if (!candidatos.length) return null;
+        const posicion = new THREE.Vector3();
 
-        candidatos.sort(
-            (a, b) => a.distancia - b.distancia
-        );
+        if (productoOriginal.parent) {
+            productoOriginal.parent.updateWorldMatrix(true, false);
 
-        const cantidad = Math.min(3, candidatos.length);
+            posicion.copy(
+                productoOriginal.posicion
+            );
 
-        return candidatos[
-            Math.floor(Math.random() * cantidad)
-        ];
+            productoOriginal.parent.localToWorld(posicion);
+        } else {
+            posicion.copy(
+                productoOriginal.posicion
+            );
+        }
+
+        return posicion;
     }
 
-    // ========================================================
-    // PREPARAR REUBICACIÓN
-    // ========================================================
-
-    function prepararDevolucionEnOtroRack() {
-        if (!productoEnMano || !productoOriginal) {
-            return false;
+    function obtenerParentOriginal() {
+        if (
+            productoOriginal?.parent &&
+            productoOriginal.parent !== grupo
+        ) {
+            return productoOriginal.parent;
         }
 
-        const ubicacion = buscarUbicacionOtroRack(
-            productoEnMano
-        );
+        return scene;
+    }
 
-        if (!ubicacion) return false;
+    function devolverProductoAlEstante() {
+        if (!productoEnMano) return false;
 
-        const rackAnterior =
-            rackReservado ?? obtenerClaveRack(productoEnMano);
+        const producto = productoEnMano;
 
-        const escalaOriginal =
-            productoOriginal.escala.clone();
+        const parentDestino = obtenerParentOriginal();
 
-        const tamanoOriginal =
-            productoOriginal.tamanoMundo.clone();
+        const posicionDestino = obtenerPosicionOriginalProducto();
 
-        liberarReserva();
+        if (!posicionDestino) return false;
 
-        if (!reservarRack(ubicacion.ancla)) {
-            return false;
+        const quaternionDestino = new THREE.Quaternion();
+
+        if (productoOriginal.parent) {
+            productoOriginal.parent.updateWorldMatrix(true, false);
+
+            quaternionDestino
+                .copy(productoOriginal.parent.getWorldQuaternion(
+                    new THREE.Quaternion()
+                ))
+                .multiply(productoOriginal.quaternion);
+        } else {
+            quaternionDestino.copy(productoOriginal.quaternion);
         }
 
-        productoOriginal = {
-            parent: ubicacion.padre,
+        const escalaFinal = productoOriginal.escala.clone();
 
-            posicion: ubicacion.posicionLocal.clone(),
-            quaternion: ubicacion.quaternionLocal.clone(),
+        producto.updateWorldMatrix(true, false);
 
-            escala: escalaOriginal,
-            visible: true,
-
-            tamanoMundo: tamanoOriginal,
-
-            rackAnterior,
-            rackNuevo: ubicacion.claveRack
-        };
-
-        animacionProducto.tipo = 'REUBICAR';
-
-        console.log(
-            `[CLIENTE ${id}] Dejará el producto en otro rack.`,
-            ubicacion.claveRack
+        animacionProducto.activa = true;
+        animacionProducto.tipo = 'devolver';
+        animacionProducto.tiempo = 0;
+        animacionProducto.duracion = Math.max(
+            config.tiempoDevolver,
+            0.1
         );
+
+        animacionProducto.posicionInicial.copy(
+            producto.getWorldPosition(new THREE.Vector3())
+        );
+
+        animacionProducto.posicionFinal.copy(posicionDestino);
+
+        animacionProducto.quaternionInicial.copy(
+            producto.getWorldQuaternion(new THREE.Quaternion())
+        );
+
+        animacionProducto.quaternionFinal.copy(
+            quaternionDestino
+        );
+
+        animacionProducto.escalaInicial.copy(
+            producto.getWorldScale(new THREE.Vector3())
+        );
+
+        animacionProducto.escalaFinal.copy(
+            escalaFinal
+        );
+
+        parentDestino.attach(producto);
+
+        producto.updateWorldMatrix(true, false);
 
         return true;
     }
 
-    // ========================================================
-    // INICIAR DEVOLUCIÓN O REUBICACIÓN
-    // ========================================================
-
-    function devolverProductoAlEstante() {
-        if (!productoEnMano || !productoOriginal) {
-            productoEnMano = null;
-            productoOriginal = null;
-
-            animacionProducto.activa = false;
-            animacionAgarre.activa = false;
-
-            liberarReserva();
-            return;
-        }
-
-        if (animacionProducto.activa) return;
+    function finalizarDevolucionProducto() {
+        if (!productoEnMano) return;
 
         const producto = productoEnMano;
-        const original = productoOriginal;
 
-        if (!original.parent) {
-            finalizarDevolucionProducto();
+        if (productoOriginal?.parent) {
+            productoOriginal.parent.attach(producto);
+
+            producto.position.copy(productoOriginal.posicion);
+            producto.quaternion.copy(productoOriginal.quaternion);
+            producto.scale.copy(productoOriginal.escala);
+        } else {
+            scene.attach(producto);
+
+            producto.position.copy(
+                animacionProducto.posicionFinal
+            );
+        }
+
+        producto.userData.enMano = false;
+        delete producto.userData.clienteEnMano;
+
+        productoEnMano = null;
+        productoObjetivo = null;
+
+        animacionProducto.activa = false;
+
+        liberarReserva();
+    }
+
+    // ========================================================
+    // ANIMACIÓN DE DEVOLUCIÓN Y PRODUCTO
+    // ========================================================
+
+    function actualizarAnimacionProducto(delta) {
+        if (!animacionProducto.activa || !productoEnMano) {
             return;
         }
 
-        animacionAgarre.activa = false;
-        animacionAgarre.tiempo = 0;
+        const producto = productoEnMano;
 
-        grupo.updateMatrixWorld(true);
-        producto.updateMatrixWorld(true);
-        original.parent.updateMatrixWorld(true);
+        animacionProducto.tiempo += delta;
 
-        const posicionMundo = new THREE.Vector3();
-        const quaternionMundo = new THREE.Quaternion();
-        const escalaMundo = new THREE.Vector3();
-
-        producto.getWorldPosition(posicionMundo);
-        producto.getWorldQuaternion(quaternionMundo);
-        producto.getWorldScale(escalaMundo);
-
-        const matrizOriginal = new THREE.Matrix4();
-
-        matrizOriginal.compose(
-            original.posicion,
-            original.quaternion,
-            original.escala
+        const progreso = limitar(
+            animacionProducto.tiempo /
+                animacionProducto.duracion,
+            0,
+            1
         );
 
-        const matrizMundoOriginal = new THREE.Matrix4();
+        const t = suavizar(progreso);
 
-        matrizMundoOriginal.multiplyMatrices(
-            original.parent.matrixWorld,
-            matrizOriginal
+        animacionProducto.posicionTemporal.lerpVectors(
+            animacionProducto.posicionInicial,
+            animacionProducto.posicionFinal,
+            t
         );
 
-        const posicionFinal = new THREE.Vector3();
-        const quaternionFinal = new THREE.Quaternion();
-        const escalaFinal = new THREE.Vector3();
-
-        matrizMundoOriginal.decompose(
-            posicionFinal,
-            quaternionFinal,
-            escalaFinal
+        animacionProducto.quaternionTemporal.slerpQuaternions(
+            animacionProducto.quaternionInicial,
+            animacionProducto.quaternionFinal,
+            t
         );
 
-        animacionProducto.activa = true;
+        escalaTemporal.lerpVectors(
+            animacionProducto.escalaInicial,
+            animacionProducto.escalaFinal,
+            t
+        );
 
-        if (animacionProducto.tipo !== 'REUBICAR') {
-            animacionProducto.tipo = 'DEVOLVER';
+        producto.parent?.updateWorldMatrix(true, false);
+
+        if (producto.parent) {
+            producto.position.copy(
+                producto.parent.worldToLocal(
+                    animacionProducto.posicionTemporal.clone()
+                )
+            );
+
+            const quaternionPadre =
+                producto.parent.getWorldQuaternion(
+                    new THREE.Quaternion()
+                );
+
+            producto.quaternion
+                .copy(quaternionPadre.invert())
+                .multiply(animacionProducto.quaternionTemporal);
+
+            const escalaPadre =
+                producto.parent.getWorldScale(
+                    new THREE.Vector3()
+                );
+
+            producto.scale.set(
+                escalaTemporal.x / Math.max(escalaPadre.x, 0.0001),
+                escalaTemporal.y / Math.max(escalaPadre.y, 0.0001),
+                escalaTemporal.z / Math.max(escalaPadre.z, 0.0001)
+            );
         }
 
-        animacionProducto.tiempo = 0;
-        animacionProducto.duracion = Math.max(
-            config.tiempoDevolver,
-            0.05
+        if (progreso >= 1) {
+            finalizarDevolucionProducto();
+        }
+    }
+
+    // ========================================================
+    // DECISIÓN DE COMPRA
+    // ========================================================
+
+    function decidirCompra() {
+        if (!productoEnMano) {
+            cambiarEstado(ESTADOS.BUSCANDO);
+            return;
+        }
+
+        const compra = Math.random() <= config.probabilidadCompra;
+
+        if (compra) {
+            decisionCompra = true;
+            cambiarEstado(ESTADOS.GUARDANDO);
+            return;
+        }
+
+        decisionCompra = false;
+
+        const devolverEnOtroRack =
+            Math.random() < config.probabilidadDejarEnOtroRack;
+
+        if (devolverEnOtroRack) {
+            prepararDevolucionEnOtroRack();
+        } else {
+            prepararDevolucionOriginal();
+        }
+    }
+
+    function prepararDevolucionOriginal() {
+        if (!productoEnMano) {
+            cambiarEstado(ESTADOS.BUSCANDO);
+            return;
+        }
+
+        const posicion = obtenerPosicionOriginalProducto();
+
+        if (!posicion) {
+            cambiarEstado(ESTADOS.BUSCANDO);
+            return;
+        }
+
+        const destino = {
+            x: posicion.x,
+            z: posicion.z
+        };
+
+        const frente = obtenerPuntoFrenteProducto(
+            productoObjetivo
         );
 
-        animacionProducto.posicionInicial.copy(posicionMundo);
-        animacionProducto.posicionFinal.copy(posicionFinal);
+        if (!frente) {
+            cambiarEstado(ESTADOS.BUSCANDO);
+            return;
+        }
 
-        animacionProducto.quaternionInicial.copy(quaternionMundo);
-        animacionProducto.quaternionFinal.copy(quaternionFinal);
+        if (!establecerRuta(frente)) {
+            cambiarEstado(ESTADOS.BUSCANDO);
+            return;
+        }
 
-        animacionProducto.escalaInicial.copy(escalaMundo);
-        animacionProducto.escalaFinal.copy(escalaFinal);
+        cambiarEstado(ESTADOS.DEVOLVIENDO);
+
+        productoEnMano.userData.destinoDevolucion = destino;
+    }
+
+    function prepararDevolucionEnOtroRack() {
+        if (!productoEnMano) {
+            cambiarEstado(ESTADOS.BUSCANDO);
+            return;
+        }
+
+        const productos = obtenerListaProductos();
+
+        let candidato = null;
+        let mejorDistancia = Infinity;
+
+        const posicionActual = grupo.position;
+
+        for (const producto of productos) {
+            if (
+                !producto?.isObject3D ||
+                producto === productoObjetivo ||
+                !producto.visible
+            ) continue;
+
+            const posicion = producto.getWorldPosition(
+                new THREE.Vector3()
+            );
+
+            const distancia = distanciaXZ(
+                posicionActual,
+                posicion
+            );
+
+            if (distancia < mejorDistancia && distancia > 2) {
+                const punto = obtenerPuntoFrenteProducto(producto);
+
+                if (!punto) continue;
+
+                candidato = {
+                    punto,
+                    producto
+                };
+
+                mejorDistancia = distancia;
+            }
+        }
+
+        if (!candidato) {
+            prepararDevolucionOriginal();
+            return;
+        }
+
+        productoEnMano.userData.destinoDevolucion = {
+            x: candidato.producto.getWorldPosition(
+                new THREE.Vector3()
+            ).x,
+            z: candidato.producto.getWorldPosition(
+                new THREE.Vector3()
+            ).z
+        };
+
+        productoEnMano.userData.rackReubicado =
+            obtenerClaveRack(candidato.producto);
+
+        if (!establecerRuta(candidato.punto)) {
+            prepararDevolucionOriginal();
+            return;
+        }
+
+        cambiarEstado(ESTADOS.DEVOLVIENDO);
+    }
+
+    // ========================================================
+    // FINALIZAR DEVOLUCIÓN EN OTRO RACK
+    // ========================================================
+
+    function soltarProductoEnDestino() {
+        if (!productoEnMano) return false;
+
+        const producto = productoEnMano;
+        const destino = producto.userData.destinoDevolucion;
+
+        if (!destino) return false;
+
+        const origen = productoOriginal?.parent || scene;
+
+        const posicionMundo = producto.getWorldPosition(
+            new THREE.Vector3()
+        );
+
+        const quaternionMundo = producto.getWorldQuaternion(
+            new THREE.Quaternion()
+        );
+
+        const escalaMundo = producto.getWorldScale(
+            new THREE.Vector3()
+        );
+
+        origen.attach(producto);
+
+        producto.position.copy(posicionMundo);
+        producto.quaternion.copy(quaternionMundo);
+
+        const escalaPadre = origen.getWorldScale(
+            new THREE.Vector3()
+        );
+
+        producto.scale.set(
+            escalaMundo.x / Math.max(escalaPadre.x, 0.0001),
+            escalaMundo.y / Math.max(escalaPadre.y, 0.0001),
+            escalaMundo.z / Math.max(escalaPadre.z, 0.0001)
+        );
+
+        const punto = new THREE.Vector3(
+            destino.x,
+            producto.position.y,
+            destino.z
+        );
+
+        origen.worldToLocal(punto);
+
+        animacionProducto.activa = true;
+        animacionProducto.tipo = 'soltar';
+        animacionProducto.tiempo = 0;
+        animacionProducto.duracion = config.tiempoDevolver;
+
+        animacionProducto.posicionInicial.copy(
+            producto.position
+        );
+
+        animacionProducto.posicionFinal.copy(punto);
+
+        animacionProducto.quaternionInicial.copy(
+            producto.quaternion
+        );
+
+        animacionProducto.quaternionFinal.copy(
+            producto.quaternion
+        );
+
+        animacionProducto.escalaInicial.copy(
+            producto.scale
+        );
+
+        animacionProducto.escalaFinal.copy(
+            producto.scale
+        );
+
+        producto.userData.enMano = false;
+        delete producto.userData.clienteEnMano;
+
+        return true;
     }
 
     // ========================================================
@@ -2596,720 +2489,455 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
     function guardarProducto() {
         if (!productoEnMano) {
-            liberarReserva();
             cambiarEstado(ESTADOS.BUSCANDO);
             return;
         }
 
         const producto = productoEnMano;
-        const datos = producto.userData ?? {};
-
-        animacionAgarre.activa = false;
-        animacionAgarre.tiempo = 0;
-
-        const compra = {
-            objeto: producto,
-
-            nombre:
-                datos.nombre ??
-                producto.name ??
-                'Producto',
-
-            codigo: datos.codigo ?? '',
-
-            precio: numero(datos.precio, 0)
-        };
 
         let agregado = false;
 
         try {
-            if (config.carrito?.agregarProducto) {
-                agregado =
-                    config.carrito.agregarProducto(producto, {
-                        nombre: compra.nombre,
-                        precio: compra.precio,
-                        cantidad: 1
-                    }) === true;
-
-            } else if (config.carrito?.agregar) {
-                agregado =
-                    config.carrito.agregar(producto) === true;
+            if (config.carrito) {
+                if (
+                    typeof config.carrito.agregarProducto === 'function'
+                ) {
+                    agregado =
+                        config.carrito.agregarProducto(producto) !== false;
+                } else if (
+                    typeof config.carrito.agregar === 'function'
+                ) {
+                    agregado =
+                        config.carrito.agregar(producto) !== false;
+                }
             }
         } catch (error) {
             console.error(
-                `[CLIENTE ${id}] Error al agregar al carrito:`,
+                `[CLIENTE ${id}] Error agregando producto al carrito:`,
                 error
             );
         }
 
         if (!agregado) {
-            console.error(
-                `[CLIENTE ${id}] No se pudo agregar ${compra.nombre} al carrito.`
+            console.warn(
+                `[CLIENTE ${id}] No se pudo agregar el producto al carrito.`
             );
 
-            if (productoOriginal) {
-                animacionProducto.tipo = 'DEVOLVER';
-
-                devolverProductoAlEstante();
-
-                cambiarEstado(ESTADOS.DEVOLVIENDO);
-            } else {
-                productoEnMano = null;
-                productoOriginal = null;
-
-                liberarReserva();
-
-                cambiarEstado(ESTADOS.BUSCANDO);
-            }
-
+            prepararDevolucionOriginal();
             return;
         }
 
-        compras.push(compra);
-
+        producto.userData.enMano = false;
         producto.userData.enCarrito = true;
-        producto.userData.reservado = false;
 
-        delete producto.userData.reservadoPor;
+        delete producto.userData.clienteEnMano;
 
-        productoEnMano = null;
-        productoOriginal = null;
+        const registro = {
+            nombre: obtenerNombreProducto(producto),
+            codigo: producto.userData?.codigoProducto ?? null,
+            precio: numero(producto.userData?.precio, 0),
+            producto
+        };
 
-        animacionProducto.activa = false;
-        animacionProducto.tipo = null;
-
-        liberarReserva();
+        compras.push(registro);
 
         try {
             config.alComprar?.({
                 cliente: api,
-                producto: compra,
+                producto,
+                compra: registro,
                 totalProductos: compras.length
             });
         } catch (error) {
-            console.error(
-                `[CLIENTE ${id}] Error en alComprar:`,
-                error
-            );
+            console.error(error);
         }
 
-        console.log(
-            `[CLIENTE ${id}] Producto agregado: ${compra.nombre}`,
-            `| Total: ${config.carrito?.cantidadProductos ?? 'N/D'}`
-        );
+        productoEnMano = null;
+        productoObjetivo = null;
+        productoOriginal = null;
 
-        cambiarEstado(ESTADOS.BUSCANDO);
-    }
+        animacionAgarre.activa = false;
+        animacionProducto.activa = false;
 
-    // ========================================================
-    // DECIDIR COMPRA
-    // ========================================================
+        liberarReserva();
 
-    function decidirCompra() {
         if (compras.length >= config.maximoProductos) {
-            dirigirseACaja();
-            return;
-        }
-
-        const producto = buscarProducto();
-
-        if (!producto) {
-            if (compras.length > 0) {
-                dirigirseACaja();
-            } else {
-                cambiarEstado(ESTADOS.ESPERANDO);
-            }
-
-            return;
-        }
-
-        if (!acercarseAProducto(producto)) {
-            liberarReserva();
-            cambiarEstado(ESTADOS.ESPERANDO);
-        }
-    }
-
-    // ========================================================
-    // RECORRIDO INTERIOR
-    // ========================================================
-
-    const puntosRecorrido = [
-        { x: -25, z: 16 },
-        { x: -20, z: 10 },
-        { x: -15, z: 5 },
-        { x: -8, z: 5 },
-        { x: 0, z: 5 },
-        { x: 8, z: 5 },
-        { x: 15, z: 5 },
-        { x: 23, z: 10 },
-        { x: 25, z: 16 },
-        { x: 15, z: -5 },
-        { x: 5, z: -10 },
-        { x: -5, z: -10 },
-        { x: -15, z: -5 }
-    ];
-
-    let indiceRecorrido = 0;
-
-    function siguientePuntoRecorrido() {
-        for (
-            let i = 0;
-            i < puntosRecorrido.length;
-            i++
-        ) {
-            const indice =
-                (indiceRecorrido + i) %
-                puntosRecorrido.length;
-
-            const candidato = puntosRecorrido[indice];
-
-            if (
-                puntoLibre(candidato.x, candidato.z) &&
-                distanciaXZ(grupo.position, candidato) > 2
-            ) {
-                indiceRecorrido =
-                    (indice + 1) % puntosRecorrido.length;
-
-                return candidato;
-            }
-        }
-
-        return { x: 0, z: 10 };
-    }
-
-    function iniciarPaseo() {
-        if (
-            !establecerObjetivo(
-                siguientePuntoRecorrido(),
-                ESTADOS.RUTA
-            )
-        ) {
-            cambiarEstado(ESTADOS.ESPERANDO);
+            iniciarRutaCaja();
+        } else {
+            cambiarEstado(ESTADOS.BUSCANDO);
         }
     }
         // ========================================================
-    // CAJA Y PAGO
+    // CAJA Y COMPRA
     // ========================================================
 
-    function dirigirseACaja(
-        posicionCaja = config.posicionCaja,
-        callback = null
-    ) {
-        if (compras.length === 0) {
-            cambiarEstado(ESTADOS.FINALIZADO);
-            return false;
-        }
+    function iniciarRutaCaja() {
+        detenerMovimiento();
 
-        callbackPagoPendiente = callback;
-
-        const destino = {
-            x: numero(posicionCaja.x, config.posicionCaja.x),
-            z: numero(posicionCaja.z, config.posicionCaja.z)
+        const caja = {
+            x: numero(config.posicionCaja.x),
+            z: numero(config.posicionCaja.z)
         };
 
-        return establecerObjetivo(
-            destino,
-            ESTADOS.CAJA
+        if (!establecerRuta(caja)) {
+            cambiarEstado(ESTADOS.ESPERANDO);
+            return;
+        }
+
+        cambiarEstado(ESTADOS.CAJA);
+    }
+
+    function calcularTotal() {
+        return compras.reduce(
+            (total, compra) => total + numero(compra.precio),
+            0
         );
     }
 
-    function completarPago() {
-        const articulos = compras.map(compra => {
-            const objeto = compra.objeto ?? null;
-            const datos = objeto?.userData ?? {};
-
-            return {
-                nombre:
-                    compra.nombre ??
-                    datos.nombre ??
-                    objeto?.name ??
-                    'Producto',
-
-                codigo:
-                    compra.codigo ??
-                    datos.codigo ??
-                    '',
-
-                precio: numero(
-                    compra.precio,
-                    numero(datos.precio, 0)
-                ),
-
-                cantidad: 1
-            };
-        });
-
-        const total = articulos.reduce(
-            (suma, articulo) =>
-                suma + articulo.precio * articulo.cantidad,
-            0
-        );
-
-        const ticket = {
-            idTicket: `T-${id}-${Date.now()}`,
-            idCliente: id,
-            fecha: new Date().toLocaleString('es-MX'),
-
-            articulos,
-            productos: articulos,
-
-            totalProductos: articulos.length,
-            total
+    function generarTicket() {
+        return {
+            clienteId: id,
+            productos: compras.map(compra => ({
+                nombre: compra.nombre,
+                codigo: compra.codigo,
+                precio: compra.precio
+            })),
+            cantidad: compras.length,
+            subtotal: calcularTotal(),
+            total: calcularTotal(),
+            fecha: new Date()
         };
+    }
+
+    function iniciarPago() {
+        if (!compras.length) {
+            finalizarCompra();
+            return;
+        }
+
+        ticketPendiente = generarTicket();
+
+        detenerMovimiento();
+        cambiarEstado(ESTADOS.PAGANDO);
 
         try {
             config.alPagar?.({
                 cliente: api,
-                productos: compras,
-                articulos,
-                totalProductos: compras.length,
-                total,
-                ticket
+                ticket: ticketPendiente,
+                total: ticketPendiente.total,
+                productos: ticketPendiente.productos
             });
         } catch (error) {
             console.error(
-                `[CLIENTE ${id}] Error al notificar el pago:`,
+                `[CLIENTE ${id}] Error en callback de pago:`,
+                error
+            );
+        }
+    }
+
+    function confirmarPago(resultado = true) {
+        if (estado !== ESTADOS.PAGANDO) return false;
+
+        if (resultado === false) {
+            console.warn(
+                `[CLIENTE ${id}] El pago no fue aprobado.`
+            );
+
+            cambiarEstado(ESTADOS.ESPERANDO);
+            return false;
+        }
+
+        for (const compra of compras) {
+            if (compra.producto) {
+                compra.producto.userData.vendido = true;
+            }
+        }
+
+        finalizarCompra();
+
+        return true;
+    }
+
+    function finalizarCompra() {
+        const ticket = ticketPendiente || generarTicket();
+
+        try {
+            config.alFinalizar?.({
+                cliente: api,
+                ticket,
+                compras: [...compras],
+                total: ticket.total
+            });
+        } catch (error) {
+            console.error(
+                `[CLIENTE ${id}] Error al finalizar compra:`,
                 error
             );
         }
 
-        compras.forEach(compra => {
-            if (compra.objeto) {
-                compra.objeto.userData.vendido = true;
-                compra.objeto.userData.enCarrito = false;
-            }
-        });
+        ticketPendiente = null;
 
-        ticketPendiente = ticket;
-
-        cambiarEstado(ESTADOS.PAGANDO);
+        if (callbackRegreso) {
+            iniciarRegresoVehiculo();
+        } else {
+            cambiarEstado(ESTADOS.FINALIZADO);
+        }
     }
 
     // ========================================================
-    // RUTAS DE PUERTA
+    // ENTRADA Y SALIDA DEL SUPERMERCADO
     // ========================================================
 
-    function crearRutaPorPuerta(
-        destinoFinal,
-        tipo = 'salida'
-    ) {
-        const puertaInterior = {
+    function iniciarEntrada() {
+        const entrada = {
             x: config.puertaCentroX,
             z: config.puertaZInterior
         };
 
-        const puertaUmbral = {
-            x: config.puertaCentroX,
-            z: config.puertaZUmbral
-        };
-
-        const puertaExterior = {
-            x: config.puertaCentroX,
-            z: config.puertaZExterior
-        };
-
-        const puntos = tipo === 'entrada'
-            ? [
-                puertaExterior,
-                puertaUmbral,
-                puertaInterior,
-                {
-                    x: numero(destinoFinal.x),
-                    z: numero(destinoFinal.z)
-                }
-            ]
-            : [
-                puertaInterior,
-                puertaUmbral,
-                puertaExterior,
-                {
-                    x: numero(destinoFinal.x),
-                    z: numero(destinoFinal.z)
-                }
-            ];
-
-        const caminoCompleto = [];
-
-        let actual = {
-            x: grupo.position.x,
-            z: grupo.position.z
-        };
-
-        for (const punto of puntos) {
-            const tramo = encontrarCamino(actual, punto);
-
-            if (!tramo.length) {
-                console.warn(
-                    `[CLIENTE ${id}] No pudo calcular el tramo de puerta:`,
-                    punto
-                );
-
-                return [];
-            }
-
-            caminoCompleto.push(...tramo);
-
-            actual = tramo[tramo.length - 1];
-        }
-
-        return caminoCompleto;
-    }
-
-    // ========================================================
-    // ENTRADA DESDE VEHÍCULO
-    // ========================================================
-
-    function iniciarDesdeVehiculo(posicionEntrada, plaza) {
-        if (!posicionEntrada || !plaza) {
-            console.warn(
-                `[CLIENTE ${id}] Faltan datos del vehículo.`
-            );
-
+        if (!establecerRuta(entrada)) {
+            cambiarEstado(ESTADOS.ESPERANDO);
             return false;
         }
-
-        if ([
-            ESTADOS.ENTRANDO,
-            ESTADOS.BUSCANDO,
-            ESTADOS.ACERCANDO,
-            ESTADOS.RECOGIENDO,
-            ESTADOS.INSPECCIONANDO,
-            ESTADOS.DECIDIENDO,
-            ESTADOS.GUARDANDO,
-            ESTADOS.DEVOLVIENDO,
-            ESTADOS.RUTA,
-            ESTADOS.CAJA,
-            ESTADOS.PAGANDO,
-            ESTADOS.REGRESANDO
-        ].includes(estado)) {
-            console.warn(
-                `[CLIENTE ${id}] Ya está realizando una actividad.`
-            );
-
-            return false;
-        }
-
-        liberarReserva();
-
-        if (productoEnMano) {
-            finalizarDevolucionProducto();
-        }
-
-        animacionAgarre.activa = false;
-        animacionAgarre.tiempo = 0;
-
-        animacionProducto.activa = false;
-        animacionProducto.tipo = null;
-
-        compras = [];
-
-        productosExaminados.clear();
-        racksVisitados.clear();
-
-        callbackPagoPendiente = null;
-        ticketPendiente = null;
-        callbackRegreso = null;
-
-        entradaNotificada = false;
-
-        grupo.position.set(
-            numero(posicionEntrada.x, plaza.x),
-            numero(config.posicion.y),
-            numero(posicionEntrada.z, plaza.z)
-        );
-
-        actualizarColisiones();
-
-        const camino = crearRutaPorPuerta(
-            {
-                x: 0,
-                z: config.puertaZInterior
-            },
-            'entrada'
-        );
-
-        if (!camino.length) {
-            console.warn(
-                `[CLIENTE ${id}] No se encontró ruta de entrada por la puerta.`
-            );
-
-            return false;
-        }
-
-        ruta = camino;
-        indiceRuta = 0;
-        objetivo = camino[camino.length - 1];
 
         cambiarEstado(ESTADOS.ENTRANDO);
 
         return true;
     }
 
-    // ========================================================
-    // REGRESAR AL VEHÍCULO
-    // ========================================================
-
-    function iniciarRegresoVehiculo(plaza, callback) {
-        if (!plaza || eliminado) return false;
-
-        if (
-            estado === ESTADOS.REGRESANDO ||
-            estado === ESTADOS.FINALIZADO
-        ) {
-            return false;
-        }
-
-        liberarReserva();
-
-        if (productoEnMano) {
-            finalizarDevolucionProducto();
-        }
-
-        animacionAgarre.activa = false;
-        animacionAgarre.tiempo = 0;
-
-        actualizarColisiones();
-
-        const destino = {
-            x: numero(plaza.x),
-            z: numero(plaza.z)
-        };
-
-        const camino = crearRutaPorPuerta(
-            destino,
-            'salida'
-        );
-
-        if (!camino.length) {
-            console.warn(
-                `[CLIENTE ${id}] No hay ruta de regreso por la puerta.`,
-                {
-                    posicion: {
-                        x: grupo.position.x,
-                        z: grupo.position.z
-                    },
-                    plaza: destino
-                }
-            );
-
-            return false;
-        }
-
-        ruta = camino;
-        indiceRuta = 0;
-        objetivo = camino[camino.length - 1];
-
-        callbackRegreso =
-            typeof callback === 'function'
-                ? callback
-                : null;
-
-        cambiarEstado(ESTADOS.REGRESANDO);
-
-        console.log(
-            `[CLIENTE ${id}] Regresando a su vehículo.`
-        );
-
-        return true;
-    }
-
-    function finalizarRegreso() {
-        if (estado !== ESTADOS.REGRESANDO) return;
-
-        cambiarEstado(ESTADOS.FINALIZADO);
-
-        const callback = callbackRegreso;
-
-        callbackRegreso = null;
-
-        if (typeof callback === 'function') {
-            try {
-                callback(api);
-            } catch (error) {
-                console.error(
-                    `[CLIENTE ${id}] Error al finalizar el regreso:`,
-                    error
-                );
-            }
-        }
-
-        try {
-            config.alFinalizar?.(api);
-        } catch (error) {
-            console.error(
-                `[CLIENTE ${id}] Error en alFinalizar:`,
-                error
-            );
-        }
-    }
-
-    // ========================================================
-    // NOTIFICAR ENTRADA
-    // ========================================================
-
     function notificarEntrada() {
         if (entradaNotificada) return;
 
         entradaNotificada = true;
 
-        console.log(
-            `[CLIENTE ${id}] Entró al supermercado.`
-        );
-
         try {
             config.alEntrar?.({
                 cliente: api,
-                posicion: grupo.position.clone(),
                 id
             });
         } catch (error) {
             console.error(error);
         }
+    }
 
-        cambiarEstado(ESTADOS.BUSCANDO);
+    function iniciarDesdeVehiculo(posicion = null) {
+        if (eliminado) return false;
+
+        detenerMovimiento();
+        liberarReserva();
+
+        if (productoEnMano) {
+            const producto = productoEnMano;
+
+            if (productoOriginal?.parent) {
+                productoOriginal.parent.attach(producto);
+                producto.position.copy(productoOriginal.posicion);
+                producto.quaternion.copy(productoOriginal.quaternion);
+                producto.scale.copy(productoOriginal.escala);
+            } else {
+                scene.attach(producto);
+            }
+
+            producto.userData.enMano = false;
+            delete producto.userData.clienteEnMano;
+
+            productoEnMano = null;
+        }
+
+        animacionAgarre.activa = false;
+        animacionProducto.activa = false;
+
+        compras = [];
+        productosExaminados.clear();
+        racksVisitados.clear();
+
+        productoObjetivo = null;
+        productoOriginal = null;
+        productoEsInferior = false;
+
+        entradaNotificada = false;
+        tiempoEstado = 0;
+        intentosMovimiento = 0;
+        decisionCompra = true;
+
+        callbackRegreso = null;
+        callbackPagoPendiente = null;
+        ticketPendiente = null;
+
+        restaurarPoseCompleta();
+
+        if (posicion) {
+            grupo.position.set(
+                numero(posicion.x),
+                numero(posicion.y),
+                numero(posicion.z)
+            );
+        }
+
+        return iniciarEntrada();
+    }
+
+    function iniciarRegresoVehiculo(callback = null) {
+        if (eliminado) return false;
+
+        callbackRegreso = callback || callbackRegreso;
+
+        detenerMovimiento();
+
+        const salida = {
+            x: config.puertaCentroX,
+            z: config.puertaZExterior
+        };
+
+        if (!establecerRuta(salida)) {
+            cambiarEstado(ESTADOS.ESPERANDO);
+            return false;
+        }
+
+        cambiarEstado(ESTADOS.REGRESANDO);
+
+        return true;
+    }
+
+    function terminarRegresoVehiculo() {
+        cambiarEstado(ESTADOS.FINALIZADO);
+
+        if (typeof callbackRegreso === 'function') {
+            try {
+                callbackRegreso(api);
+            } catch (error) {
+                console.error(error);
+            }
+        }
+
+        callbackRegreso = null;
     }
 
     // ========================================================
-    // ACTUALIZACIÓN PRINCIPAL
+    // BUSCAR DE NUEVO SI NO ENCUENTRA PRODUCTOS
     // ========================================================
 
-    function actualizar(delta) {
-        if (eliminado || detenido) return;
+    function reintentarBusqueda(delta) {
+        if (tiempoEstado < config.tiempoReintento) {
+            return;
+        }
 
-        delta = limitar(numero(delta, 0), 0, 0.05);
+        tiempoEstado = 0;
 
+        // Después de varios intentos, permitir revisar
+        // productos que ya había examinado.
+        if (productosExaminados.size > 12) {
+            productosExaminados.clear();
+        }
+
+        const encontrado = buscarProductoDisponible();
+
+        if (encontrado) {
+            productoObjetivo = encontrado.producto;
+
+            productoOriginal = {
+                parent: encontrado.producto.parent,
+                posicion: encontrado.producto.position.clone(),
+                quaternion: encontrado.producto.quaternion.clone(),
+                escala: encontrado.producto.scale.clone()
+            };
+
+            objetivo = encontrado.frente;
+
+            if (establecerRuta(encontrado.frente)) {
+                cambiarEstado(ESTADOS.ACERCANDO);
+            }
+        }
+    }
+
+    // ========================================================
+    // CONTROL DE ESTADOS
+    // ========================================================
+
+    function actualizarEstados(delta) {
         tiempoEstado += delta;
-        tiempoActualizarObstaculos += delta;
-
-        // El temporizador de recuperación solo se usa cuando
-        // el movimiento encuentra un obstáculo.
-        tiempoRecalculoRuta += delta;
-
-        if (tiempoActualizarObstaculos >= 2) {
-            actualizarColisiones();
-        }
-
-        if (mixer) {
-            mixer.update(delta);
-        }
-
-        // No reiniciar las acciones GLB en cada fotograma.
-        // cambiarEstado() controla las transiciones.
-        if (accionCaminar?.isRunning()) {
-            accionCaminar.paused = ![
-                ESTADOS.ENTRANDO,
-                ESTADOS.ACERCANDO,
-                ESTADOS.RUTA,
-                ESTADOS.CAJA,
-                ESTADOS.REGRESANDO
-            ].includes(estado);
-        }
-
-        if (accionReposo?.isRunning()) {
-            accionReposo.paused = [
-                ESTADOS.ENTRANDO,
-                ESTADOS.ACERCANDO,
-                ESTADOS.RUTA,
-                ESTADOS.CAJA,
-                ESTADOS.REGRESANDO,
-                ESTADOS.RECOGIENDO,
-                ESTADOS.INSPECCIONANDO,
-                ESTADOS.GUARDANDO,
-                ESTADOS.DEVOLVIENDO,
-                ESTADOS.PAGANDO
-            ].includes(estado);
-        }
-
-        // Animación del producto independiente del estado.
-        if (animacionAgarre.activa) {
-            actualizarAnimacionAgarre(delta);
-        }
 
         switch (estado) {
-            case ESTADOS.INACTIVO:
+            case ESTADOS.INACTIVO: {
+                animarReposo(delta);
                 break;
+            }
 
-            // ------------------------------------------------
-            // MOVIMIENTO
-            // ------------------------------------------------
+            case ESTADOS.ENTRANDO: {
+                animarCaminar(delta);
 
-            case ESTADOS.ENTRANDO:
-            case ESTADOS.ACERCANDO:
-            case ESTADOS.RUTA:
-            case ESTADOS.CAJA:
-            case ESTADOS.REGRESANDO: {
-                const estadoActual = estado;
+                const llego = moverHaciaDestino(
+                    delta,
+                    {
+                        x: config.puertaCentroX,
+                        z: config.puertaZInterior
+                    },
+                    config.velocidadEntrada
+                );
 
-                const terminado = moverHaciaDestino(delta);
-
-                if (!terminado) break;
-
-                if (estadoActual === ESTADOS.ENTRANDO) {
+                if (llego) {
                     notificarEntrada();
-
-                } else if (estadoActual === ESTADOS.ACERCANDO) {
-                    // Al llegar, orientar la cara hacia el producto.
-                    if (productoObjetivo) {
-                        productoObjetivo.getWorldPosition(vectorTemporal);
-
-                        orientarHaciaPunto({
-                            x: vectorTemporal.x,
-                            z: vectorTemporal.z
-                        });
-                    }
-
-                    cambiarEstado(ESTADOS.RECOGIENDO);
-
-                } else if (estadoActual === ESTADOS.RUTA) {
-                    if (
-                        compras.length >= config.maximoProductos
-                    ) {
-                        dirigirseACaja();
-                    } else {
-                        cambiarEstado(ESTADOS.BUSCANDO);
-                    }
-
-                } else if (estadoActual === ESTADOS.CAJA) {
-                    completarPago();
-
-                } else if (estadoActual === ESTADOS.REGRESANDO) {
-                    finalizarRegreso();
+                    cambiarEstado(ESTADOS.BUSCANDO);
                 }
 
                 break;
             }
-
-            // ------------------------------------------------
-            // BUSCAR
-            // ------------------------------------------------
 
             case ESTADOS.BUSCANDO: {
-                if (
-                    tiempoEstado <
-                    config.tiempoEntreProductos
-                ) {
-                    break;
-                }
+                animarReposo(delta);
 
-                if (
-                    compras.length >=
-                    config.maximoProductos
-                ) {
-                    dirigirseACaja();
-                    break;
+                if (tiempoEstado >= config.tiempoEntreProductos) {
+                    tiempoEstado = 0;
+                    iniciarBusqueda();
                 }
-
-                decidirCompra();
 
                 break;
             }
 
-            // ------------------------------------------------
-            // RECOGER
-            // ------------------------------------------------
+            case ESTADOS.ACERCANDO: {
+                animarCaminar(delta);
+
+                if (!productoObjetivo || !productoDisponible(productoObjetivo)) {
+                    liberarReserva();
+                    cambiarEstado(ESTADOS.BUSCANDO);
+                    break;
+                }
+
+                const frente = obtenerPuntoFrenteProducto(
+                    productoObjetivo
+                );
+
+                if (!frente) {
+                    liberarReserva();
+                    cambiarEstado(ESTADOS.ESPERANDO);
+                    break;
+                }
+
+                const llego = moverHaciaDestino(
+                    delta,
+                    frente,
+                    config.velocidad
+                );
+
+                if (llego) {
+                    orientarHacia(
+                        productoObjetivo.getWorldPosition(
+                            new THREE.Vector3()
+                        ).x,
+                        productoObjetivo.getWorldPosition(
+                            new THREE.Vector3()
+                        ).z,
+                        12,
+                        delta
+                    );
+
+                    cambiarEstado(ESTADOS.RECOGIENDO);
+                }
+
+                break;
+            }
 
             case ESTADOS.RECOGIENDO: {
-                animarRecogerProcedural();
+                animarRecogida(delta);
 
                 if (tiempoEstado >= config.tiempoRecoger) {
                     tomarProducto();
@@ -3318,67 +2946,32 @@ export function crearClienteSupermercado(scene, opciones = {}) {
                 break;
             }
 
-            // ------------------------------------------------
-            // INSPECCIONAR
-            // ------------------------------------------------
-
             case ESTADOS.INSPECCIONANDO: {
-                animarInspeccionarProcedural();
+                animarInspeccion(delta);
 
-                if (
-                    tiempoEstado >=
-                    config.tiempoInspeccionar
-                ) {
+                // No iniciar la inspección mientras el producto
+                // todavía se está acomodando en la mano.
+                if (animacionAgarre.activa) break;
+
+                if (tiempoEstado >= config.tiempoInspeccionar) {
                     cambiarEstado(ESTADOS.DECIDIENDO);
                 }
 
                 break;
             }
 
-            // ------------------------------------------------
-            // DECIDIR
-            // ------------------------------------------------
-
             case ESTADOS.DECIDIENDO: {
-                if (tiempoEstado >= 0.5) {
-                    decisionCompra =
-                        Math.random() <
-                        config.probabilidadCompra;
+                animarInspeccion(delta);
 
-                    if (decisionCompra) {
-                        cambiarEstado(ESTADOS.GUARDANDO);
-
-                    } else {
-                        const quiereReubicar =
-                            Math.random() <
-                            config.probabilidadDejarEnOtroRack;
-
-                        let reubicado = false;
-
-                        if (quiereReubicar) {
-                            reubicado =
-                                prepararDevolucionEnOtroRack();
-                        }
-
-                        if (!reubicado) {
-                            animacionProducto.tipo = 'DEVOLVER';
-                        }
-
-                        devolverProductoAlEstante();
-
-                        cambiarEstado(ESTADOS.DEVOLVIENDO);
-                    }
+                if (tiempoEstado >= 0.45) {
+                    decidirCompra();
                 }
 
                 break;
             }
 
-            // ------------------------------------------------
-            // GUARDAR
-            // ------------------------------------------------
-
             case ESTADOS.GUARDANDO: {
-                animarGuardarProcedural();
+                animarGuardar(delta);
 
                 if (tiempoEstado >= config.tiempoGuardar) {
                     guardarProducto();
@@ -3387,18 +2980,61 @@ export function crearClienteSupermercado(scene, opciones = {}) {
                 break;
             }
 
-            // ------------------------------------------------
-            // DEVOLVER
-            // ------------------------------------------------
-
             case ESTADOS.DEVOLVIENDO: {
-                animarDevolverProcedural();
+                animarDevolucion(delta);
 
-                actualizarAnimacionProducto(delta);
+                if (tiempoEstado >= config.tiempoDevolver) {
+                    if (productoEnMano) {
+                        const destino =
+                            productoEnMano.userData.destinoDevolucion;
+
+                        if (
+                            destino &&
+                            productoOriginal?.parent &&
+                            Math.abs(
+                                destino.x -
+                                obtenerPosicionOriginalProducto().x
+                            ) < 0.05 &&
+                            Math.abs(
+                                destino.z -
+                                obtenerPosicionOriginalProducto().z
+                            ) < 0.05
+                        ) {
+                            devolverProductoAlEstante();
+                        } else {
+                            soltarProductoEnDestino();
+                        }
+                    }
+
+                    if (!animacionProducto.activa && !productoEnMano) {
+                        productoOriginal = null;
+                        cambiarEstado(ESTADOS.BUSCANDO);
+                    }
+                }
+
+                break;
+            }
+
+            case ESTADOS.ESPERANDO: {
+                animarReposo(delta);
+                reintentarBusqueda(delta);
+                break;
+            }
+
+            case ESTADOS.RUTA: {
+                animarCaminar(delta);
+
+                if (!objetivo) {
+                    cambiarEstado(ESTADOS.BUSCANDO);
+                    break;
+                }
 
                 if (
-                    tiempoEstado >= config.tiempoDevolver &&
-                    !animacionProducto.activa
+                    moverHaciaDestino(
+                        delta,
+                        objetivo,
+                        config.velocidad
+                    )
                 ) {
                     cambiarEstado(ESTADOS.BUSCANDO);
                 }
@@ -3406,74 +3042,145 @@ export function crearClienteSupermercado(scene, opciones = {}) {
                 break;
             }
 
-            // ------------------------------------------------
-            // ESPERAR
-            // ------------------------------------------------
+            case ESTADOS.CAJA: {
+                animarCaminar(delta);
 
-            case ESTADOS.ESPERANDO: {
-                if (
-                    tiempoEstado >= config.tiempoReintento
-                ) {
-                    if (
-                        compras.length >=
-                        config.maximoProductos
-                    ) {
-                        dirigirseACaja();
-                    } else {
-                        iniciarPaseo();
-                    }
+                const llego = moverHaciaDestino(
+                    delta,
+                    {
+                        x: config.posicionCaja.x,
+                        z: config.posicionCaja.z
+                    },
+                    config.velocidad
+                );
+
+                if (llego) {
+                    orientarHacia(
+                        config.posicionCaja.x,
+                        config.posicionCaja.z + 1,
+                        10,
+                        delta
+                    );
+
+                    iniciarPago();
                 }
 
                 break;
             }
-
-            // ------------------------------------------------
-            // PAGAR
-            // ------------------------------------------------
 
             case ESTADOS.PAGANDO: {
-                animarPagarProcedural();
+                animarPago(delta);
 
-                if (tiempoEstado >= 2.5) {
-                    const ticket = ticketPendiente;
-
-                    ticketPendiente = null;
-
-                    if (config.repetirRuta) {
-                        compras = [];
-
-                        productosExaminados.clear();
-                        racksVisitados.clear();
-
-                        cambiarEstado(ESTADOS.BUSCANDO);
-
-                    } else {
-                        const callback = callbackPagoPendiente;
-
-                        callbackPagoPendiente = null;
-
-                        if (typeof callback === 'function') {
-                            try {
-                                callback(ticket);
-                            } catch (error) {
-                                console.error(
-                                    `[CLIENTE ${id}] Error en callback de pago:`,
-                                    error
-                                );
-                            }
-                        }
-
-                        if (estado === ESTADOS.PAGANDO) {
-                            cambiarEstado(ESTADOS.FINALIZADO);
-                        }
-                    }
+                // El pago se confirma desde fuera mediante
+                // confirmarPago(), o automáticamente después
+                // de este tiempo si no hay callback externo.
+                if (
+                    !config.alPagar &&
+                    tiempoEstado >= 2.5
+                ) {
+                    confirmarPago(true);
                 }
 
                 break;
             }
 
-            case ESTADOS.FINALIZADO:
+            case ESTADOS.REGRESANDO: {
+                animarCaminar(delta);
+
+                const llego = moverHaciaDestino(
+                    delta,
+                    {
+                        x: config.puertaCentroX,
+                        z: config.puertaZExterior
+                    },
+                    config.velocidadRegreso
+                );
+
+                if (llego) {
+                    terminarRegresoVehiculo();
+                }
+
                 break;
+            }
+
+            case ESTADOS.FINALIZADO: {
+                animarReposo(delta);
+                break;
+            }
+        }
+    }
+
+    // ========================================================
+    // ACTUALIZACIÓN PRINCIPAL
+    // ========================================================
+
+    function actualizar(delta = 1 / 60) {
+        if (eliminado || detenido) return;
+
+        delta = limitar(
+            numero(delta, 1 / 60),
+            0,
+            0.05
+        );
+
+        if (!cargado) return;
+
+        tiempoActualizarObstaculos += delta;
+
+        if (tiempoActualizarObstaculos >= 1.2) {
+            actualizarColisiones();
+        }
+
+        if (mixer) {
+            mixer.update(delta);
+        }
+
+        if (animacionAgarre.activa) {
+            const agarreTerminado =
+                actualizarAnimacionAgarre(delta);
+
+            if (
+                agarreTerminado &&
+                estado === ESTADOS.INSPECCIONANDO
+            ) {
+                tiempoEstado = 0;
+            }
+        }
+
+        if (animacionProducto.activa) {
+            actualizarAnimacionProducto(delta);
+        }
+
+        actualizarEstados(delta);
+    }
+
+    // ========================================================
+    // CONTROL DE ANIMACIONES EXTERNO
+    // ========================================================
+
+    function detenerAnimacion() {
+        detenido = true;
+
+        detenerAccionesGLB();
+
+        if (mixer) {
+            mixer.timeScale = 0;
+        }
+    }
+
+    function reproducirAnimacion() {
+        detenido = false;
+
+        if (mixer) {
+            mixer.timeScale = 1;
+        }
+
+        if (estado === ESTADOS.BUSCANDO ||
+            estado === ESTADOS.ESPERANDO ||
+            estado === ESTADOS.INACTIVO) {
+            activarReposoGLB();
+        } else {
+            activarCaminarGLB();
         }
     }
 
@@ -3481,147 +3188,161 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     // CONFIGURAR COMPRAS
     // ========================================================
 
-    function configurarCompras(opcionesCompras = {}) {
-        if (
-            typeof opcionesCompras.probabilidadCompra === 'number'
-        ) {
-            config.probabilidadCompra = limitar(
-                opcionesCompras.probabilidadCompra,
-                0,
-                1
-            );
-        }
+    function configurarCompras(opciones = {}) {
+        Object.assign(config, opciones);
 
-        if (
-            typeof opcionesCompras.probabilidadDejarEnOtroRack ===
-            'number'
-        ) {
-            config.probabilidadDejarEnOtroRack = limitar(
-                opcionesCompras.probabilidadDejarEnOtroRack,
-                0,
-                1
-            );
-        }
+        config.tiempoRecoger = Math.max(
+            0.05,
+            numero(config.tiempoRecoger, 1.1)
+        );
 
-        if (
-            typeof opcionesCompras.maximoProductos === 'number'
-        ) {
-            config.maximoProductos = Math.max(
-                1,
-                Math.floor(opcionesCompras.maximoProductos)
-            );
-        }
+        config.tiempoInspeccionar = Math.max(
+            0.05,
+            numero(config.tiempoInspeccionar, 2.2)
+        );
 
-        if (
-            typeof opcionesCompras.tiempoEntreProductos === 'number'
-        ) {
-            config.tiempoEntreProductos = Math.max(
-                0,
-                opcionesCompras.tiempoEntreProductos
-            );
-        }
+        config.tiempoGuardar = Math.max(
+            0.05,
+            numero(config.tiempoGuardar, 1.4)
+        );
 
-        if (
-            typeof opcionesCompras.tiempoAnimacionAgarre === 'number'
-        ) {
-            config.tiempoAnimacionAgarre = Math.max(
-                0.05,
-                opcionesCompras.tiempoAnimacionAgarre
-            );
+        config.tiempoDevolver = Math.max(
+            0.05,
+            numero(config.tiempoDevolver, 1.4)
+        );
 
-            animacionAgarre.duracion =
-                config.tiempoAnimacionAgarre;
-        }
+        config.tiempoAnimacionAgarre = Math.max(
+            0.05,
+            numero(config.tiempoAnimacionAgarre, 0.38)
+        );
 
-        if (opcionesCompras.productos) {
-            config.productos = opcionesCompras.productos;
-        }
+        config.distanciaMaximaBusqueda = Math.max(
+            1,
+            numero(config.distanciaMaximaBusqueda, 40)
+        );
 
-        if (opcionesCompras.carrito) {
-            config.carrito = opcionesCompras.carrito;
-        }
+        config.probabilidadCompra = limitar(
+            numero(config.probabilidadCompra, 0.85),
+            0,
+            1
+        );
 
-        if (opcionesCompras.mobiliario) {
-            config.mobiliario = opcionesCompras.mobiliario;
-            actualizarColisiones();
-        }
+        config.probabilidadDejarEnOtroRack = limitar(
+            numero(config.probabilidadDejarEnOtroRack, 0.22),
+            0,
+            1
+        );
 
-        if (opcionesCompras.colisiones) {
-            config.colisiones = opcionesCompras.colisiones;
-            actualizarColisiones();
-        }
+        animacionAgarre.duracion =
+            config.tiempoAnimacionAgarre;
 
-        if (
-            typeof opcionesCompras.intervaloRecalculoRuta === 'number'
-        ) {
-            config.intervaloRecalculoRuta = Math.max(
-                0.1,
-                opcionesCompras.intervaloRecalculoRuta
-            );
-        }
+        return api;
     }
 
     // ========================================================
-    // DETENER / REANUDAR ANIMACIÓN
+    // OBTENER INFORMACIÓN
     // ========================================================
 
-    function detenerAnimacion() {
-        detenido = true;
-
-        accionCaminar?.fadeOut(0.2);
-        accionReposo?.fadeOut(0.2);
+    function obtenerObjetivo() {
+        return objetivo
+            ? { ...objetivo }
+            : null;
     }
 
-    function reproducirAnimacion() {
-        if (eliminado) return;
+    function obtenerCompras() {
+        return compras.map(compra => ({
+            nombre: compra.nombre,
+            codigo: compra.codigo,
+            precio: compra.precio
+        }));
+    }
 
-        detenido = false;
+    function obtenerResumen() {
+        return {
+            id,
+            estado,
+            cargado,
+            eliminado,
+            detenido,
+            productos: compras.length,
+            total: calcularTotal(),
+            posicion: {
+                x: grupo.position.x,
+                y: grupo.position.y,
+                z: grupo.position.z
+            },
+            productoEnMano: productoEnMano
+                ? obtenerNombreProducto(productoEnMano)
+                : null
+        };
+    }
 
-        if ([
-            ESTADOS.ENTRANDO,
-            ESTADOS.ACERCANDO,
-            ESTADOS.RUTA,
-            ESTADOS.CAJA,
-            ESTADOS.REGRESANDO
-        ].includes(estado)) {
-            activarCaminarGLB();
-        } else {
-            activarReposoGLB();
-        }
+    function obtenerEstado() {
+        return estado;
     }
 
     // ========================================================
-    // ELIMINAR
+    // ELIMINAR CLIENTE
     // ========================================================
 
     function eliminar() {
         if (eliminado) return;
 
+        eliminado = true;
+
+        detenerMovimiento();
+        liberarReserva();
+
         if (productoEnMano) {
-            finalizarDevolucionProducto();
+            const producto = productoEnMano;
+
+            if (productoOriginal?.parent) {
+                productoOriginal.parent.attach(producto);
+
+                producto.position.copy(productoOriginal.posicion);
+                producto.quaternion.copy(productoOriginal.quaternion);
+                producto.scale.copy(productoOriginal.escala);
+            } else {
+                scene.attach(producto);
+            }
+
+            producto.userData.enMano = false;
+            delete producto.userData.clienteEnMano;
+
+            productoEnMano = null;
         }
 
         animacionAgarre.activa = false;
         animacionProducto.activa = false;
 
-        liberarReserva();
+        if (mixer) {
+            mixer.stopAllAction();
+            mixer.uncacheRoot(modelo);
+        }
 
-        callbackPagoPendiente = null;
-        callbackRegreso = null;
-        ticketPendiente = null;
+        detenerAccionesGLB();
 
-        mixer?.stopAllAction();
-        mixer?.uncacheRoot(modelo);
+        if (grupo.parent) {
+            grupo.parent.remove(grupo);
+        }
 
-        mixer = null;
+        grupo.traverse(obj => {
+            if (!obj.isMesh) return;
 
-        grupo.parent?.remove(grupo);
+            if (obj.geometry) {
+                obj.geometry.dispose();
+            }
 
-        eliminado = true;
-        detenido = true;
+            if (Array.isArray(obj.material)) {
+                obj.material.forEach(material => {
+                    material?.dispose();
+                });
+            } else {
+                obj.material?.dispose();
+            }
+        });
 
-        ruta = [];
-        objetivo = null;
+        console.log(`[CLIENTE ${id}] Eliminado.`);
     }
 
     // ========================================================
@@ -3633,49 +3354,37 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         actualizar,
 
-        establecerRuta,
+        establecerRuta(destino) {
+            return establecerRuta(destino, true);
+        },
 
-        establecerPosicion,
+        establecerPosicion(x, y = 0, z = 0) {
+            grupo.position.set(
+                numero(x),
+                numero(y),
+                numero(z)
+            );
+
+            detenerMovimiento();
+
+            return api;
+        },
 
         configurarCompras,
 
         detenerAnimacion,
-
         reproducirAnimacion,
 
         iniciarDesdeVehiculo,
-
         iniciarRegresoVehiculo,
 
-        iniciarPago: dirigirseACaja,
+        iniciarPago,
+        confirmarPago,
 
-        obtenerObjetivo: () => {
-            return objetivo
-                ? { ...objetivo }
-                : null;
-        },
-
-        obtenerCompras: () => {
-            return compras.map(compra => ({
-                nombre: compra.nombre,
-                codigo: compra.codigo,
-                precio: compra.precio
-            }));
-        },
-
-        obtenerResumen: () => ({
-            id,
-            estado,
-
-            productos: compras.length,
-
-            posicion: {
-                x: grupo.position.x,
-                z: grupo.position.z
-            }
-        }),
-
-        obtenerEstado: () => estado,
+        obtenerObjetivo,
+        obtenerCompras,
+        obtenerResumen,
+        obtenerEstado,
 
         actualizarColisiones,
 
@@ -3707,6 +3416,18 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         get productoEnMano() {
             return productoEnMano;
+        },
+
+        get id() {
+            return id;
+        },
+
+        get ticket() {
+            return ticketPendiente;
+        },
+
+        get total() {
+            return calcularTotal();
         }
     };
 
