@@ -340,6 +340,9 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
     let decisionCompra = true;
     let faseAnimacion = Math.random() * Math.PI * 2;
+    let rotacionObjetivo = grupo.rotation.y;
+    let velocidadActual = 0;
+    let movimientoSuave = 0;
 
     const huesos = {};
     const huesosBase = new Map();
@@ -727,62 +730,57 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     // ========================================================
 
     function animarCaminarProcedural(delta) {
-        // Si hay animación GLB de caminar, no modificar sus huesos.
         if (config.usarAnimacionesGLB && accionCaminar) {
             return;
         }
 
-        faseAnimacion += delta * 8.5;
+        const ritmo = THREE.MathUtils.clamp(
+            velocidadActual / Math.max(config.velocidad, 0.1),
+            0.35,
+            1.25
+        );
 
-        const paso = Math.sin(faseAnimacion) * 0.32;
-        const rebote =
-            Math.abs(Math.sin(faseAnimacion)) * 0.025;
+        faseAnimacion += delta * 7.3 * ritmo;
 
-        aplicarRotacion(rig.piernaIzquierda, EJE_X, paso);
-        aplicarRotacion(rig.piernaDerecha, EJE_X, -paso);
+        const paso = Math.sin(faseAnimacion);
+        const contrapasado = Math.cos(faseAnimacion);
+        const apoyo = paso * 0.38;
+        const rebote = Math.abs(Math.sin(faseAnimacion * 2)) * 0.018;
+        const balanceo = contrapasado * 0.025;
+
+        aplicarRotacion(rig.piernaIzquierda, EJE_X, apoyo);
+        aplicarRotacion(rig.piernaDerecha, EJE_X, -apoyo);
 
         aplicarRotacion(
             rig.pantorrillaIzquierda,
             EJE_X,
-            Math.max(0, -paso) * 0.65
+            Math.max(0, -apoyo) * 0.9
         );
-
         aplicarRotacion(
             rig.pantorrillaDerecha,
             EJE_X,
-            Math.max(0, paso) * 0.65
+            Math.max(0, apoyo) * 0.9
         );
 
-        aplicarRotacion(
-            rig.brazoIzquierdo,
-            EJE_X,
-            -paso * 0.75
-        );
-
-        aplicarRotacion(
-            rig.brazoDerecho,
-            EJE_X,
-            paso * 0.75
-        );
+        aplicarRotacion(rig.brazoIzquierdo, EJE_X, -apoyo * 0.78);
+        aplicarRotacion(rig.brazoDerecho, EJE_X, apoyo * 0.78);
 
         aplicarRotacion(
             rig.antebrazoIzquierdo,
             EJE_X,
-            Math.max(0, paso) * 0.25
+            -0.08 + Math.max(0, apoyo) * 0.22
         );
-
         aplicarRotacion(
             rig.antebrazoDerecho,
             EJE_X,
-            Math.max(0, -paso) * 0.25
+            -0.08 + Math.max(0, -apoyo) * 0.22
         );
 
-        restaurarHueso(rig.torso, 0.12);
-        restaurarHueso(rig.cadera, 0.12);
-        restaurarHueso(rig.cabeza, 0.12);
+        aplicarRotacion(rig.cadera, EJE_X, balanceo * 0.35);
+        aplicarRotacion(rig.torso, EJE_X, -balanceo * 0.4);
+        aplicarRotacion(rig.cabeza, EJE_X, -balanceo * 0.55);
 
-        grupo.position.y =
-            numero(config.posicion.y) + rebote;
+        grupo.position.y = numero(config.posicion.y) + rebote * movimientoSuave;
     }
 
     // ========================================================
@@ -791,33 +789,17 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
     function animarAgacharse(intensidad = 1) {
         intensidad = limitar(intensidad, 0, 1);
+        const curva = suavizar(intensidad);
 
-        aplicarRotacion(rig.cadera, EJE_X, 0.30 * intensidad);
-        aplicarRotacion(rig.torso, EJE_X, 0.25 * intensidad);
+        aplicarRotacion(rig.cadera, EJE_X, 0.34 * curva);
+        aplicarRotacion(rig.torso, EJE_X, 0.28 * curva);
 
-        aplicarRotacion(
-            rig.piernaIzquierda,
-            EJE_X,
-            -0.65 * intensidad
-        );
+        aplicarRotacion(rig.piernaIzquierda, EJE_X, -0.72 * curva);
+        aplicarRotacion(rig.piernaDerecha, EJE_X, -0.72 * curva);
+        aplicarRotacion(rig.pantorrillaIzquierda, EJE_X, 0.38 * curva);
+        aplicarRotacion(rig.pantorrillaDerecha, EJE_X, 0.38 * curva);
 
-        aplicarRotacion(
-            rig.piernaDerecha,
-            EJE_X,
-            -0.65 * intensidad
-        );
-
-        aplicarRotacion(
-            rig.pantorrillaIzquierda,
-            EJE_X,
-            0.28 * intensidad
-        );
-
-        aplicarRotacion(
-            rig.pantorrillaDerecha,
-            EJE_X,
-            0.28 * intensidad
-        );
+        grupo.position.y = numero(config.posicion.y) - 0.16 * curva;
     }
 
     // ========================================================
@@ -828,45 +810,37 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         const t = suavizar(
             tiempoEstado / Math.max(config.tiempoRecoger, 0.01)
         );
-
+        const contacto = Math.min(1, Math.max(0, (t - 0.72) / 0.28));
         const agachado = productoEsInferior ? 1 : 0;
 
-        animarAgacharse(
-            agachado * suavizar(t * 1.5)
-        );
+        animarAgacharse(agachado * suavizar(t * 1.5));
 
         aplicarRotacion(
             rig.brazoDerecho,
             EJE_X,
-            THREE.MathUtils.lerp(-0.15, -0.85, t)
+            THREE.MathUtils.lerp(-0.12, -1.05 * (productoEsInferior ? 0.72 : 1), t)
         );
-
         aplicarRotacion(
             rig.antebrazoDerecho,
             EJE_X,
-            THREE.MathUtils.lerp(-0.1, -0.65, t)
+            THREE.MathUtils.lerp(-0.08, -0.72, suavizar(t))
         );
+        aplicarRotacion(rig.manoDerecha, EJE_X, -0.18 * contacto);
 
         aplicarRotacion(
             rig.brazoIzquierdo,
             EJE_X,
-            -0.2 * t
+            -0.12 + -0.18 * t
         );
-
-        aplicarRotacion(
-            rig.antebrazoIzquierdo,
-            EJE_X,
-            -0.15 * t
-        );
+        aplicarRotacion(rig.antebrazoIzquierdo, EJE_X, -0.12 - 0.18 * t);
 
         aplicarRotacion(
             rig.torso,
             EJE_X,
-            0.10 * t + 0.25 * agachado * t
+            0.08 * t + 0.28 * agachado * t
         );
-
-        aplicarRotacion(rig.cabeza, EJE_X, 0.18 * t);
-        aplicarRotacion(rig.cuello, EJE_X, 0.12 * t);
+        aplicarRotacion(rig.cabeza, EJE_X, 0.14 + 0.10 * t);
+        aplicarRotacion(rig.cuello, EJE_X, 0.08 + 0.08 * t);
     }
 
     // ========================================================
@@ -874,39 +848,25 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     // ========================================================
 
     function animarInspeccionarProcedural() {
-        const oscilacion =
-            Math.sin(tiempoEstado * 2.5) * 0.035;
+        const entrada = suavizar(Math.min(tiempoEstado / 0.55, 1));
+        const girarProducto = Math.sin(tiempoEstado * 1.15) * 0.025 * entrada;
+        const oscilarCabeza = Math.sin(tiempoEstado * 1.55) * 0.038;
+        const respiracion = Math.sin(tiempoEstado * 1.9) * 0.012;
 
-        const movimientoCabeza =
-            Math.sin(tiempoEstado * 1.4) * 0.045;
+        aplicarRotacion(rig.brazoDerecho, EJE_X, -1.08 * entrada + girarProducto);
+        aplicarRotacion(rig.antebrazoDerecho, EJE_X, -0.92 * entrada + girarProducto);
+        aplicarRotacion(rig.manoDerecha, EJE_X, -0.28 + girarProducto);
 
-        aplicarRotacion(
-            rig.brazoDerecho,
-            EJE_X,
-            -1.10 + oscilacion
-        );
+        aplicarRotacion(rig.brazoIzquierdo, EJE_X, -0.76 * entrada);
+        aplicarRotacion(rig.antebrazoIzquierdo, EJE_X, -0.82 * entrada);
+        aplicarRotacion(rig.manoIzquierda, EJE_X, -0.22);
 
-        aplicarRotacion(
-            rig.antebrazoDerecho,
-            EJE_X,
-            -1.0 + oscilacion
-        );
-
-        aplicarRotacion(rig.brazoIzquierdo, EJE_X, -0.72);
-        aplicarRotacion(rig.antebrazoIzquierdo, EJE_X, -0.85);
-
-        aplicarRotacion(
-            rig.cabeza,
-            EJE_X,
-            0.22 + movimientoCabeza
-        );
-
-        aplicarRotacion(rig.cuello, EJE_X, 0.10);
+        aplicarRotacion(rig.cabeza, EJE_X, 0.20 + oscilarCabeza);
+        aplicarRotacion(rig.cuello, EJE_X, 0.08 + respiracion);
+        aplicarRotacion(rig.torso, EJE_X, respiracion);
 
         if (productoEsInferior) {
-            animarAgacharse(
-                1 - suavizar(tiempoEstado * 1.5)
-            );
+            animarAgacharse(1 - suavizar(tiempoEstado * 1.5));
         }
     }
 
@@ -3713,4 +3673,4 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     actualizarColisiones();
 
     return api;
-} 
+}
