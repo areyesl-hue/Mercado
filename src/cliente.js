@@ -465,7 +465,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             'chest'
         );
 
-        rig.cuello = buscarHueso('neck', 'cuello);
+        rig.cuello = buscarHueso('neck', 'cuello');
         rig.cabeza = buscarHueso('head', 'cabeza');
 
         rig.brazoIzquierdo = buscarHueso(
