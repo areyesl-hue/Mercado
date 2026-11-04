@@ -88,24 +88,23 @@ const CONFIG_BASE = {
     maximoProductos: 8,
     distanciaMaximaBusqueda: 40,
 
-    // Filtro de productos por cliente.
-    // soloPlatanos activa el filtro exclusivo de plátanos.
+    // Filtros de productos.
     soloPlatanos: false,
     nombreProductoBuscado: '',
 
     separacionProductoRack: 0.06,
     alturaMovimientoProducto: 0.12,
 
-    // Recuperación de rutas
+    // Recuperación de rutas.
     intervaloRecalculoRuta: 0.55,
     maximosIntentosMovimiento: 5,
     distanciaRecalculo: 0.45,
 
-    // Movimiento
+    // Movimiento.
     distanciaLlegada: 0.16,
     distanciaWaypoint: 0.30,
 
-    // Animación
+    // Animación.
     usarAnimacionesGLB: true,
     velocidadAnimacionGLB: 1,
 
@@ -156,7 +155,6 @@ function distanciaXZ(a, b) {
     return Math.hypot(a.x - b.x, a.z - b.z);
 }
 
-// Normaliza acentos, mayúsculas y espacios.
 function normalizarNombre(nombre) {
     return String(nombre ?? '')
         .toLowerCase()
@@ -2094,16 +2092,9 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     function esProductoBuscado(producto) {
         if (!producto) return false;
 
-        // Si no hay filtro, el cliente puede comprar cualquier producto.
-        if (
-            !config.soloPlatanos &&
-            !config.nombreProductoBuscado
-        ) {
-            return true;
-        }
-
         const datos = producto.userData ?? {};
 
+        // Revisar todos los identificadores posibles del producto.
         const identificadores = [
             datos.nombre,
             datos.nombreProducto,
@@ -2111,15 +2102,24 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             datos.codigo,
             datos.tipo,
             datos.name,
-            producto.name
+            producto.name,
+            producto.producto?.name,
+            producto.producto?.nombre
         ];
 
         const nombresNormalizados = identificadores
-            .filter(valor => valor !== undefined && valor !== null)
+            .filter(valor =>
+                valor !== undefined &&
+                valor !== null &&
+                String(valor).trim() !== ''
+            )
             .map(valor => normalizarNombre(valor))
             .filter(Boolean);
 
-        // Filtro específico para plátanos.
+        // ----------------------------------------------------
+        // CLIENTE ESPECIALIZADO EN PLÁTANOS
+        // ----------------------------------------------------
+
         if (config.soloPlatanos) {
             const aliasPlatanos = [
                 'platano',
@@ -2129,27 +2129,33 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             ];
 
             const coincidePlatano = nombresNormalizados.some(nombre =>
-                aliasPlatanos.some(alias => nombre.includes(alias))
+                aliasPlatanos.some(alias =>
+                    nombre.includes(alias)
+                )
             );
 
-            if (!coincidePlatano) return false;
+            // Si está especializado en plátanos,
+            // no se aplica ningún otro filtro.
+            return coincidePlatano;
         }
 
-        // Filtro genérico opcional para otros clientes.
+        // ----------------------------------------------------
+        // FILTRO GENÉRICO PARA OTROS CLIENTES
+        // ----------------------------------------------------
+
         if (config.nombreProductoBuscado) {
             const buscado = normalizarNombre(
                 config.nombreProductoBuscado
             );
 
-            if (buscado) {
-                const coincide = nombresNormalizados.some(nombre =>
-                    nombre.includes(buscado)
-                );
+            if (!buscado) return true;
 
-                if (!coincide) return false;
-            }
+            return nombresNormalizados.some(nombre =>
+                nombre.includes(buscado)
+            );
         }
 
+        // Cliente normal: puede comprar cualquier producto.
         return true;
     }
 
