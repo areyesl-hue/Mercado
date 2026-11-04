@@ -29,14 +29,11 @@ const CONFIG_DEFAULT = {
 const CONFIG_CESTA = {
     anchoInterior: 0.48,
     profundidadInterior: 0.62,
-
     columnas: 2,
     filas: 3,
-
     maxAnchoProducto: 0.21,
     maxProfundidadProducto: 0.21,
     maxAlturaProducto: 0.28,
-
     alturaEntreNiveles: 0.18,
     margenBase: 0.015
 };
@@ -510,27 +507,49 @@ export function crearCarrito(scene, opciones = {}) {
                 candidatos.push({
                     objeto,
                     altura: caja.max.y,
+                    minY: caja.min.y,
+                    maxY: caja.max.y,
                     ancho: dimensiones.x,
                     profundidad: dimensiones.z
                 });
             }
         });
 
-        candidatos.sort((a, b) => a.altura - b.altura);
+        // IMPORTANTE:
+        // Se muestran todas las piezas candidatas para verificar
+        // cuál corresponde al fondo real de la cesta.
+        console.table(
+            candidatos.map(c => ({
+                nombre: c.objeto.name,
+                minY: Number(c.minY.toFixed(4)),
+                maxY: Number(c.maxY.toFixed(4)),
+                ancho: Number(c.ancho.toFixed(4)),
+                profundidad: Number(c.profundidad.toFixed(4))
+            }))
+        );
+
+        // Antes se seleccionaba el candidato más bajo.
+        // Eso podía elegir una placa inferior del chasis.
+        // Ahora se selecciona el candidato horizontal más alto.
+        candidatos.sort((a, b) => b.altura - a.altura);
 
         if (candidatos.length > 0) {
             estado.baseCestaLocal =
                 candidatos[0].altura + CONFIG_CESTA.margenBase;
+
+            console.info(
+                '[CARRITO] Fondo candidato seleccionado:',
+                candidatos[0].objeto.name,
+                'Altura:',
+                estado.baseCestaLocal
+            );
         } else {
             estado.baseCestaLocal = 0.66;
-        }
 
-        console.info(
-            '[CARRITO] Altura detectada de la base:',
-            estado.baseCestaLocal,
-            'Candidatos:',
-            candidatos
-        );
+            console.warn(
+                '[CARRITO] No se encontró una superficie candidata. Se utiliza 0.66 como respaldo.'
+            );
+        }
     }
 
     // ========================================================
@@ -1172,5 +1191,3 @@ export function crearCarrito(scene, opciones = {}) {
         }
     };
 }
-
-
