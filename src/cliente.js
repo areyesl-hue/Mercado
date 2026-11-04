@@ -106,6 +106,9 @@ const CONFIG_BASE = {
     repetirRuta: false,
     inactivo: false,
 
+    aceleracionMovimiento: 2.8,
+    suavizadoGiro: 7,
+
     productos: null,
     carrito: null,
     mobiliario: null,
@@ -343,6 +346,8 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     let rotacionObjetivo = grupo.rotation.y;
     let velocidadActual = 0;
     let movimientoSuave = 0;
+    let tiempoIdle = Math.random() * 8;
+    let inclinacionCabezaObjetivo = 0;
 
     const huesos = {};
     const huesosBase = new Map();
@@ -744,9 +749,9 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         const paso = Math.sin(faseAnimacion);
         const contrapasado = Math.cos(faseAnimacion);
-        const apoyo = paso * 0.38;
-        const rebote = Math.abs(Math.sin(faseAnimacion * 2)) * 0.018;
-        const balanceo = contrapasado * 0.025;
+        const apoyo = paso * 0.38 * movimientoSuave;
+        const rebote = Math.abs(Math.sin(faseAnimacion * 2)) * 0.018 * movimientoSuave;
+        const balanceo = contrapasado * 0.025 * movimientoSuave;
 
         aplicarRotacion(rig.piernaIzquierda, EJE_X, apoyo);
         aplicarRotacion(rig.piernaDerecha, EJE_X, -apoyo);
@@ -778,7 +783,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         aplicarRotacion(rig.cadera, EJE_X, balanceo * 0.35);
         aplicarRotacion(rig.torso, EJE_X, -balanceo * 0.4);
-        aplicarRotacion(rig.cabeza, EJE_X, -balanceo * 0.55);
+        aplicarRotacion(rig.cabeza, EJE_X, -balanceo * 0.55 + inclinacionCabezaObjetivo);
 
         grupo.position.y = numero(config.posicion.y) + rebote * movimientoSuave;
     }
@@ -849,8 +854,9 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
     function animarInspeccionarProcedural() {
         const entrada = suavizar(Math.min(tiempoEstado / 0.55, 1));
+        const giroLento = (1 - Math.cos(tiempoEstado * 0.9)) * 0.012;
         const girarProducto = Math.sin(tiempoEstado * 1.15) * 0.025 * entrada;
-        const oscilarCabeza = Math.sin(tiempoEstado * 1.55) * 0.038;
+        const oscilarCabeza = Math.sin(tiempoEstado * 1.55) * 0.038 + giroLento;
         const respiracion = Math.sin(tiempoEstado * 1.9) * 0.012;
 
         aplicarRotacion(rig.brazoDerecho, EJE_X, -1.08 * entrada + girarProducto);
@@ -867,6 +873,13 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         if (productoEsInferior) {
             animarAgacharse(1 - suavizar(tiempoEstado * 1.5));
+        }
+
+        // Microgestos naturales: cambia la inclinación del producto
+        // y la cabeza ligeramente mientras el cliente lo observa.
+        if (productoEnMano) {
+            const balance = Math.sin(tiempoEstado * 1.25) * entrada;
+            aplicarRotacion(rig.manoDerecha, EJE_X, -0.28 + balance * 0.05);
         }
     }
 
@@ -1680,9 +1693,20 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             return;
         }
 
-        grupo.rotation.y =
+        rotacionObjetivo =
             Math.atan2(dx, dz) +
             config.correccionRotacion;
+
+        let diferencia = rotacionObjetivo - grupo.rotation.y;
+
+        while (diferencia > Math.PI) diferencia -= Math.PI * 2;
+        while (diferencia < -Math.PI) diferencia += Math.PI * 2;
+
+        grupo.rotation.y += diferencia * limitar(
+            config.suavizadoGiro * numero(ultimaPosicionMovimiento.w, 0.016),
+            0,
+            1
+        );
     }
 
     function orientarHaciaPunto(punto) {
@@ -1808,9 +1832,24 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         orientarHacia(direccionX, direccionZ);
 
+        const distanciaFrenado = Math.min(1.5, velocidad * 0.9);
+        const factorDestino = limitar(distancia / distanciaFrenado, 0.18, 1);
+        const velocidadDeseada = velocidad * factorDestino;
+        const tasa = Math.max(1, config.aceleracionMovimiento);
+        velocidadActual = THREE.MathUtils.lerp(
+            velocidadActual,
+            velocidadDeseada,
+            1 - Math.exp(-tasa * delta)
+        );
+        movimientoSuave = THREE.MathUtils.lerp(
+            movimientoSuave,
+            limitar(velocidadActual / Math.max(velocidad, 0.1), 0, 1),
+            1 - Math.exp(-5 * delta)
+        );
+
         const avance = Math.min(
             distancia,
-            velocidad * delta
+            velocidadActual * delta
         );
 
         const nuevoX =
@@ -3153,6 +3192,33 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             mixer.update(delta);
         }
 
+        // Respira, mira alrededor y desvía la cabeza al esperar o decidir.
+        tiempoIdle += delta;
+        if (
+            ![
+                ESTADOS.ENTRANDO,
+                ESTADOS.ACERCANDO,
+                ESTADOS.RUTA,
+                ESTADOS.CAJA,
+                ESTADOS.REGRESANDO
+            ].includes(estado)
+        ) {
+            const respiracion = Math.sin(tiempoIdle * 1.35) * 0.012;
+            const mirarAlrededor = Math.sin(tiempoIdle * 0.31) * 0.035;
+            inclinacionCabezaObjetivo = mirarAlrededor;
+
+            if (!animacionProceduralActiva()) {
+                aplicarRotacion(rig.torso, EJE_X, respiracion);
+                aplicarRotacion(rig.cabeza, EJE_X, mirarAlrededor);
+            }
+        } else {
+            velocidadActual = THREE.MathUtils.lerp(
+                velocidadActual,
+                velocidadActual,
+                1
+            );
+        }
+
         // No reiniciar las acciones GLB en cada fotograma.
         // cambiarEstado() controla las transiciones.
         if (accionCaminar?.isRunning()) {
@@ -3440,6 +3506,16 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     // ========================================================
     // CONFIGURAR COMPRAS
     // ========================================================
+
+    function animacionProceduralActiva() {
+        return [
+            ESTADOS.RECOGIENDO,
+            ESTADOS.INSPECCIONANDO,
+            ESTADOS.GUARDANDO,
+            ESTADOS.DEVOLVIENDO,
+            ESTADOS.PAGANDO
+        ].includes(estado);
+    }
 
     function configurarCompras(opcionesCompras = {}) {
         if (
