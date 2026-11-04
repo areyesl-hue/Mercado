@@ -195,6 +195,9 @@ const CONFIG_LADRONES = [
 ];
 
 const INTERVALO_LADRONES = 25;
+const MAXIMO_LADRONES_ACTIVOS = 2;
+const MINIMO_INTERVALO_LADRONES = 18;
+const MAXIMO_INTERVALO_LADRONES = 32;
 
 let temporizadorLadrones = INTERVALO_LADRONES;
 let indiceSiguienteLadron = 0;
@@ -721,6 +724,20 @@ function crearLadrones() {
 function generarSiguienteLadron() {
     if (!productosLacteos) return;
 
+    const ladronesActivos =
+        ladronesSupermercado.filter(
+            ladron => ladron && !ladron.eliminado
+        ).length;
+
+    if (ladronesActivos >= MAXIMO_LADRONES_ACTIVOS) {
+        temporizadorLadrones =
+            MINIMO_INTERVALO_LADRONES +
+            Math.random() *
+            (MAXIMO_INTERVALO_LADRONES -
+                MINIMO_INTERVALO_LADRONES);
+        return;
+    }
+
     const config = CONFIG_LADRONES[
         indiceSiguienteLadron % CONFIG_LADRONES.length
     ];
@@ -742,6 +759,9 @@ function generarSiguienteLadron() {
 
                 alRobar: datos => {
                     console.info(`[LADRÓN] ${datos.id} robó un producto.`, datos);
+                    mostrarMensaje(
+                        `¡Robo detectado! ${datos.id} tomó ${datos.producto.nombre}.`
+                    );
                 },
 
                 alEscapar: datos => {
@@ -770,12 +790,23 @@ function generarSiguienteLadron() {
 
 function actualizarGeneradorLadrones(delta) {
     if (!productosLacteos) return;
+    if (
+        ladronesSupermercado.filter(
+            ladron => ladron && !ladron.eliminado
+        ).length >= MAXIMO_LADRONES_ACTIVOS
+    ) {
+        return;
+    }
 
     temporizadorLadrones -= delta;
 
     if (temporizadorLadrones <= 0) {
         generarSiguienteLadron();
-        temporizadorLadrones = INTERVALO_LADRONES;
+        temporizadorLadrones =
+            MINIMO_INTERVALO_LADRONES +
+            Math.random() *
+            (MAXIMO_INTERVALO_LADRONES -
+                MINIMO_INTERVALO_LADRONES);
     }
 }
 
