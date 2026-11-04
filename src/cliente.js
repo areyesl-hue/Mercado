@@ -59,6 +59,7 @@ const CONFIG_BASE = {
     distanciaFrenteProducto: 1.25,
 
     tiempoRecoger: 1.1,
+    progresoContactoProducto: 0.78,
     tiempoInspeccionar: 2.2,
     tiempoGuardar: 1.4,
     tiempoDevolver: 1.4,
@@ -813,40 +814,60 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     // ========================================================
 
     function animarRecogerProcedural() {
-        const t = suavizar(
-            tiempoEstado / Math.max(config.tiempoRecoger, 0.01)
+        const progreso = limitar(
+            tiempoEstado / Math.max(config.tiempoRecoger, 0.01),
+            0,
+            1
         );
-        const contacto = Math.min(1, Math.max(0, (t - 0.72) / 0.28));
+        const contactoObjetivo = limitar(
+            numero(config.progresoContactoProducto, 0.78),
+            0.55,
+            0.88
+        );
+        const alcance = suavizar(limitar(progreso / contactoObjetivo, 0, 1));
+        const contacto = suavizar(limitar(
+            (progreso - contactoObjetivo) / Math.max(1 - contactoObjetivo, 0.12),
+            0,
+            1
+        ));
+        const retirada = suavizar(limitar(
+            progreso / Math.max(contactoObjetivo, 0.55),
+            0,
+            1
+        ));
         const agachado = productoEsInferior ? 1 : 0;
 
-        animarAgacharse(agachado * suavizar(t * 1.5));
+        animarAgacharse(agachado * suavizar(progreso * 1.35));
 
+        // El brazo desacelera al llegar al estante; la mano solo se
+        // cierra alrededor del producto cuando el alcance está completo.
         aplicarRotacion(
             rig.brazoDerecho,
             EJE_X,
-            THREE.MathUtils.lerp(-0.12, -1.05 * (productoEsInferior ? 0.72 : 1), t)
+            THREE.MathUtils.lerp(-0.12, -1.05 * (productoEsInferior ? 0.72 : 1), alcance)
         );
         aplicarRotacion(
             rig.antebrazoDerecho,
             EJE_X,
-            THREE.MathUtils.lerp(-0.08, -0.72, suavizar(t))
+            THREE.MathUtils.lerp(-0.08, -0.72, alcance)
         );
-        aplicarRotacion(rig.manoDerecha, EJE_X, -0.18 * contacto);
+        aplicarRotacion(rig.manoDerecha, EJE_X, -0.18 + contacto * -0.52);
 
         aplicarRotacion(
             rig.brazoIzquierdo,
             EJE_X,
-            -0.12 + -0.18 * t
+            -0.12 - 0.20 * retirada
         );
-        aplicarRotacion(rig.antebrazoIzquierdo, EJE_X, -0.12 - 0.18 * t);
+        aplicarRotacion(rig.antebrazoIzquierdo, EJE_X, -0.12 - 0.22 * retirada);
+        aplicarRotacion(rig.manoIzquierda, EJE_X, -0.08 - contacto * 0.12);
 
         aplicarRotacion(
             rig.torso,
             EJE_X,
-            0.08 * t + 0.28 * agachado * t
+            0.08 * alcance + 0.28 * agachado * alcance
         );
-        aplicarRotacion(rig.cabeza, EJE_X, 0.14 + 0.10 * t);
-        aplicarRotacion(rig.cuello, EJE_X, 0.08 + 0.08 * t);
+        aplicarRotacion(rig.cabeza, EJE_X, 0.14 + 0.10 * alcance);
+        aplicarRotacion(rig.cuello, EJE_X, 0.08 + 0.08 * alcance);
     }
 
     // ========================================================
@@ -857,10 +878,12 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         const entrada = suavizar(Math.min(tiempoEstado / 0.55, 1));
         const salida = suavizar(Math.min((config.tiempoInspeccionar - tiempoEstado) / 0.45, 1));
         const mirarLento = (1 - Math.cos(tiempoEstado * 0.82)) * 0.018;
-        const girarProducto = Math.sin(tiempoEstado * 1.45) * 0.045 * entrada;
+        const giroSuave = Math.sin(tiempoEstado * 1.45) * 0.045;
+        const giroProducto = suavizar((1 - Math.cos(tiempoEstado * 1.45)) * 0.5) * giroSuave;
         const oscilarCabeza = Math.sin(tiempoEstado * 1.18) * 0.028 + mirarLento;
         const respiracion = Math.sin(tiempoEstado * 1.75) * 0.012;
         const levantar = entrada * salida;
+        const girarProducto = giroProducto;
 
         aplicarRotacion(rig.brazoDerecho, EJE_X, (-1.08 + girarProducto) * levantar);
         aplicarRotacion(rig.antebrazoDerecho, EJE_X, (-0.92 + girarProducto * 0.5) * levantar);
@@ -987,7 +1010,11 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             1
         );
 
-        const suave = suavizar(t);
+        // El producto permanece exactamente en el estante durante el
+        // contacto inicial. Solo después comienza a acompa–ar a la mano.
+        // Este retraso evita saltos y hace que la mano parezca la que agarra.
+        const inicioMovimiento = limitar((t - 0.22) / 0.78, 0, 1);
+        const suave = suavizar(inicioMovimiento);
 
         producto.position.lerpVectors(
             animacionAgarre.posicionInicial,
@@ -3351,7 +3378,17 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             case ESTADOS.RECOGIENDO: {
                 animarRecogerProcedural();
 
-                if (tiempoEstado >= config.tiempoRecoger) {
+                // La mano debe terminar la mayor parte de su alcance antes
+                // de cambiar el producto de estante a la mano. Así el objeto
+                // permanece quieto mientras el brazo se aproxima y no se mueve
+                // por sí solo ni antes de tiempo.
+                const momentoAgarre = limitar(
+                    numero(config.progresoContactoProducto, 0.78),
+                    0.55,
+                    0.88
+                );
+
+                if (tiempoEstado >= config.tiempoRecoger * momentoAgarre) {
                     tomarProducto();
                 }
 
