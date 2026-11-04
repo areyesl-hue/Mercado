@@ -34,9 +34,9 @@ const CONFIG_BASE = {
     altura: 1.75,
     escala: 1,
 
-    velocidad: 1.5,
-    velocidadEntrada: 1.8,
-    velocidadRegreso: 1.8,
+    velocidad: 1.75,
+    velocidadEntrada: 2.05,
+    velocidadRegreso: 2.05,
 
     limiteX: 29,
     limiteZMin: -27,
@@ -85,7 +85,7 @@ const CONFIG_BASE = {
     distanciaProductoInspeccion: 0.32,
     alturaEstanteInferior: 0.90,
 
-    maximoProductos: 4,
+    maximoProductos: 8,
     distanciaMaximaBusqueda: 40,
 
     separacionProductoRack: 0.06,
@@ -107,7 +107,7 @@ const CONFIG_BASE = {
     repetirRuta: false,
     inactivo: false,
 
-    aceleracionMovimiento: 2.8,
+    aceleracionMovimiento: 3.35,
     suavizadoGiro: 7,
 
     productos: null,
@@ -912,26 +912,83 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     // ========================================================
 
     function animarGuardarProcedural() {
-        const progreso = limitar(tiempoEstado / Math.max(config.tiempoGuardar, 0.01), 0, 1);
-        const bajar = suavizar(limitar(progreso / 0.72, 0, 1));
-        const subir = suavizar(limitar((progreso - 0.72) / 0.28, 0, 1));
-        const vacilar = Math.sin(tiempoEstado * 5) * 0.025;
+        const progreso = limitar(
+            tiempoEstado / Math.max(config.tiempoGuardar, 0.01),
+            0,
+            1
+        );
+
+        // Cuatro fases: levanta, acerca el producto al carrito,
+        // lo suelta y recupera la pose inicial.
+        const levantar = suavizar(limitar(progreso / 0.34, 0, 1));
+        const acercar = suavizar(limitar((progreso - 0.20) / 0.48, 0, 1));
+        const soltar = suavizar(limitar((progreso - 0.68) / 0.32, 0, 1));
+        const recuperar = suavizar(limitar((progreso - 0.82) / 0.18, 0, 1));
+        const temblor = Math.sin(tiempoEstado * 5.5) * 0.018;
+
+        const alCarrito = Math.sin(progreso * Math.PI) * 0.12;
+        const brazoX = THREE.MathUtils.lerp(-0.92, -1.42, levantar);
 
         aplicarRotacionEuler(rig.brazoDerecho,
-            THREE.MathUtils.lerp(-0.92, -0.36, subir) + vacilar,
-            -0.08, 0.08);
+            THREE.MathUtils.lerp(brazoX, -0.34, soltar * 0.52) + temblor,
+            THREE.MathUtils.lerp(-0.08, -0.22, acercar) + alCarrito,
+            THREE.MathUtils.lerp(0.08, -0.12, acercar));
         aplicarRotacionEuler(rig.antebrazoDerecho,
-            THREE.MathUtils.lerp(-0.88, -0.55, subir), 0, 0.05);
-        aplicarRotacionEuler(rig.manoDerecha, -0.25 + vacilar, 0, 0.10);
+            THREE.MathUtils.lerp(-0.88, -1.18, levantar) * (1 - soltar * 0.35),
+            -0.10 * levantar + temblor * 0.3,
+            THREE.MathUtils.lerp(0.05, -0.16, acercar));
+        aplicarRotacionEuler(rig.manoDerecha,
+            THREE.MathUtils.lerp(-0.25, -0.62, acercar) + temblor * 0.4,
+            acercar * 0.12,
+            THREE.MathUtils.lerp(0.10, 0.20, soltar));
 
-        aplicarRotacionEuler(rig.brazoIzquierdo, -0.50 + bajar * 0.18,
-            0.05, -0.08);
-        aplicarRotacionEuler(rig.antebrazoIzquierdo, -0.58 + subir * 0.12,
-            0, -0.04);
+        aplicarRotacionEuler(rig.brazoIzquierdo,
+            THREE.MathUtils.lerp(-0.50, -0.82, levantar) + acercar * 0.16,
+            -0.12 + acercar * 0.08,
+            -0.08 - acercar * 0.10);
+        aplicarRotacionEuler(rig.antebrazoIzquierdo,
+            THREE.MathUtils.lerp(-0.58, -0.72, levantar),
+            0,
+            THREE.MathUtils.lerp(-0.04, 0.10, acercar));
+        aplicarRotacionEuler(rig.manoIzquierda,
+            -0.18 * levantar,
+            acercar * 0.08,
+            -0.08);
 
-        aplicarRotacionEuler(rig.torso, 0.08 + bajar * 0.16, 0, -0.025);
-        aplicarRotacionEuler(rig.cabeza, 0.14 + bajar * 0.10,
-            -0.08, Math.sin(tiempoEstado * 2.3) * 0.02);
+        aplicarRotacionEuler(rig.torso,
+            0.08 + levantar * 0.18 + soltar * 0.05,
+            -0.06 * acercar,
+            THREE.MathUtils.lerp(-0.025, 0.06, acercar));
+        aplicarRotacionEuler(rig.cabeza,
+            0.14 + levantar * 0.16 - recuperar * 0.08,
+            THREE.MathUtils.lerp(-0.08, -0.28, acercar),
+            Math.sin(tiempoEstado * 2.3) * 0.025);
+
+        // Hace que el producto siga suavemente al movimiento del brazo
+        // hasta el momento exacto de soltarlo.
+        if (productoEnMano && !animacionAgarre.activa) {
+            const meter = suavizar(limitar((progreso - 0.24) / 0.46, 0, 1));
+            const salir = suavizar(limitar((progreso - 0.68) / 0.32, 0, 1));
+            const yArco = Math.sin(meter * Math.PI) * 0.10;
+
+            productoEnMano.position.x +=
+                (-0.06 * meter) * (1 - salir) * 0.035;
+            productoEnMano.position.z +=
+                (0.14 * meter) * (1 - salir) * 0.035;
+            productoEnMano.position.y +=
+                (yArco * (1 - salir) * 0.035);
+
+            productoEnMano.rotation.x +=
+                temblor * (1 - salir) * 0.45;
+            productoEnMano.rotation.z +=
+                temblor * (1 - salir) * 0.30;
+        }
+
+        if (progreso > 0.72 && productoEnMano) {
+            productoEnMano.scale.multiplyScalar(
+                Math.max(0.985, 1 - salir * 0.015)
+            );
+        }
     }
 
     // ========================================================
@@ -2726,6 +2783,14 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         producto.userData.reservado = false;
 
         delete producto.userData.reservadoPor;
+
+        // Pequeña última acción de soltar y retroceder la mano.
+        // Evita que el producto parezca desaparecer de golpe.
+        animacionAgarre.activa = false;
+        animacionAgarre.tiempo = 0;
+
+        producto.rotation.set(0, 0, 0);
+        producto.scale.multiplyScalar(0.96);
 
         productoEnMano = null;
         productoOriginal = null;
