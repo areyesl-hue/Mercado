@@ -96,24 +96,6 @@ const CONFIG_BASE = {
     maximosIntentosMovimiento: 5,
     distanciaRecalculo: 0.45,
 
-    // Comportamientos humanos independientes
-    mirarAntesAcercarse: true,
-    compararProductos: true,
-    cambiarOpinion: true,
-    evitarAglomeraciones: true,
-    radioAglomeracion: 1.8,
-    radioEsperaProducto: 1.1,
-    tiempoMiradaMin: 0.35,
-    tiempoMiradaMax: 1.15,
-    tiempoDudaMin: 0.45,
-    tiempoDudaMax: 1.8,
-
-    // Rendimiento
-    camara: null,
-    distanciaAnimacion: 18,
-    distanciaBox3: 30,
-    intervaloObstaculosEstaticos: 0,
-
     // Movimiento
     distanciaLlegada: 0.16,
     distanciaWaypoint: 0.30,
@@ -148,11 +130,6 @@ const loaderGLTF = new GLTFLoader();
 
 const reservasProductos = new WeakMap();
 const reservasRacks = new Map();
-const clientesActivos = new Set();
-
-// Cachés compartidos entre todos los clientes.
-const cacheColisionesMobiliario = new WeakMap();
-const cacheColisionesLista = new WeakMap();
 
 const TAMANO_ZONA_RACK = 3.5;
 
@@ -411,7 +388,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     const cajaTemporal = new THREE.Box3();
     const tamanoTemporal = new THREE.Vector3();
     const matrizTemporal = new THREE.Matrix4();
-    const vectorClienteTemporal = new THREE.Vector3();
 
     // ========================================================
     // ANIMACIÓN DE AGARRE
@@ -1402,8 +1378,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         const obstaculos = [];
 
         if (Array.isArray(config.colisiones)) {
-            const cacheLista = cacheColisionesLista.get(config.colisiones);
-            if (cacheLista) return cacheLista.slice();
             for (const colision of config.colisiones) {
                 if (!colision) continue;
 
@@ -1425,9 +1399,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         }
 
         if (config.mobiliario?.traverse) {
-            const cacheMobiliario = cacheColisionesMobiliario.get(config.mobiliario);
-            if (cacheMobiliario) return cacheMobiliario.slice();
-
             config.mobiliario.updateMatrixWorld(true);
 
             config.mobiliario.traverse(obj => {
@@ -1460,29 +1431,10 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             });
         }
 
-        if (Array.isArray(config.colisiones)) {
-            cacheColisionesLista.set(config.colisiones, obstaculos.slice());
-        }
-        if (config.mobiliario?.traverse) {
-            cacheColisionesMobiliario.set(config.mobiliario, obstaculos.slice());
-        }
-
         return obstaculos;
     }
 
-    function actualizarColisiones(forzar = false) {
-        if (!forzar) {
-            obstaculosCache = obtenerObstaculos();
-            tiempoActualizarObstaculos = 0;
-            return;
-        }
-
-        if (Array.isArray(config.colisiones)) {
-            cacheColisionesLista.delete(config.colisiones);
-        }
-        if (config.mobiliario) {
-            cacheColisionesMobiliario.delete(config.mobiliario);
-        }
+    function actualizarColisiones() {
         obstaculosCache = obtenerObstaculos();
         tiempoActualizarObstaculos = 0;
     }
@@ -1893,47 +1845,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         return false;
     }
 
-    function hayAglomeracion() {
-        if (!config.evitarAglomeraciones) return false;
-        let cercanos = 0;
-
-        for (const otroGrupo of clientesActivos) {
-            if (otroGrupo === grupo) continue;
-            if (distanciaXZ(grupo.position, otroGrupo.position) < config.radioAglomeracion) {
-                cercanos++;
-                if (cercanos >= 2) return true;
-            }
-        }
-        return false;
-    }
-
-    function dirigirSeparacion() {
-        if (!config.evitarAglomeraciones) return;
-        let empujeX = 0;
-        let empujeZ = 0;
-
-        for (const otroGrupo of clientesActivos) {
-            if (otroGrupo === grupo) continue;
-            const dx = grupo.position.x - otroGrupo.position.x;
-            const dz = grupo.position.z - otroGrupo.position.z;
-            const distancia = Math.hypot(dx, dz);
-            if (distancia > 0.01 && distancia < config.radioAglomeracion * 1.35) {
-                const fuerza = (config.radioAglomeracion * 1.35 - distancia) / distancia;
-                empujeX += dx * fuerza;
-                empujeZ += dz * fuerza;
-            }
-        }
-
-        if (Math.abs(empujeX) + Math.abs(empujeZ) > 0.01) {
-            const nuevoX = limitar(grupo.position.x + empujeX * 0.012, -config.limiteX, config.limiteX);
-            const nuevoZ = limitar(grupo.position.z + empujeZ * 0.012, config.limiteZMin, config.limiteZMax);
-            if (puntoLibre(nuevoX, nuevoZ)) {
-                grupo.position.x = nuevoX;
-                grupo.position.z = nuevoZ;
-            }
-        }
-    }
-
     function moverHaciaDestino(delta) {
         if (!ruta.length || indiceRuta >= ruta.length) {
             return true;
@@ -1962,30 +1873,18 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             return false;
         }
 
-        let velocidad = config.velocidad * personalidad.velocidadPersonal;
+        let velocidad = config.velocidad;
 
         if (estado === ESTADOS.ENTRANDO) {
-            velocidad = config.velocidadEntrada * personalidad.velocidadPersonal;
+            velocidad = config.velocidadEntrada;
         }
 
         if (estado === ESTADOS.REGRESANDO) {
-            velocidad = config.velocidadRegreso * personalidad.velocidadPersonal;
+            velocidad = config.velocidadRegreso;
         }
 
         const direccionX = dx / distancia;
         const direccionZ = dz / distancia;
-
-        if (hayAglomeracion()) {
-            comportamientos.tiempoEsperaAglomeracion += delta;
-            velocidadActual = THREE.MathUtils.lerp(velocidadActual, 0, 1 - Math.exp(-5 * delta));
-            movimientoSuave *= 0.92;
-            dirigirSeparacion();
-            if (comportamientos.tiempoEsperaAglomeracion < 0.8 * personalidad.paciente + 0.25) {
-                return false;
-            }
-        } else {
-            comportamientos.tiempoEsperaAglomeracion = 0;
-        }
 
         orientarHacia(direccionX, direccionZ, delta);
 
@@ -2862,19 +2761,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     // ========================================================
 
     function decidirCompra() {
-        if (personalidad.mirarAntes && !comportamientos.mirando) {
-            comportamientos.mirando = true;
-            comportamientos.tiempoMirar = 0;
-            const animacion = Math.sin(tiempoEstado * 1.1) * 0.14;
-            aplicarRotacionEuler(rig.cabeza, 0.04, animacion, animacion * 0.25);
-            return;
-        }
-
-        if (personalidad.mirarAntes && comportamientos.tiempoMirar < personalidad.tiempoMirada) {
-            comportamientos.tiempoMirar += Math.max(0, Number(document?.visibilityState === 'visible' ? 0.016 : 0));
-            return;
-        }
-
         if (compras.length >= config.maximoProductos) {
             dirigirseACaja();
             return;
@@ -3345,7 +3231,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     function actualizar(delta) {
         if (eliminado || detenido) return;
 
-        delta = limitar(numero(delta, 0), 0, 0.25);
+        delta = limitar(numero(delta, 0), 0, 0.05);
 
         tiempoEstado += delta;
         tiempoActualizarObstaculos += delta;
@@ -3354,20 +3240,11 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         // el movimiento encuentra un obstáculo.
         tiempoRecalculoRuta += delta;
 
-        // Los obstáculos estánticos ya están cacheados globalmente.
-        // Solo se recalculan al cambiar mobiliario o al solicitarlo explícitamente.
-        if (config.intervaloObstaculosEstaticos > 0 &&
-            tiempoActualizarObstaculos >= config.intervaloObstaculosEstaticos) {
-            actualizarColisiones(true);
+        if (tiempoActualizarObstaculos >= 2) {
+            actualizarColisiones();
         }
 
-        let visiblePorCamara = true;
-        if (config.camara?.position) {
-            grupo.getWorldPosition(vectorClienteTemporal);
-            visiblePorCamara = vectorClienteTemporal.distanceTo(config.camara.position) <= config.distanciaAnimacion;
-        }
-
-        if (mixer && visiblePorCamara) {
+        if (mixer) {
             mixer.update(delta);
         }
 
@@ -3573,28 +3450,15 @@ export function crearClienteSupermercado(scene, opciones = {}) {
                 aplicarRotacionEuler(rig.torso, 0.02,
                     -Math.sin(tiempoEstado * 0.85) * 0.04, 0);
 
-                if (tiempoEstado >= personalidad.tiempoDuda) {
-                    let probabilidad = config.probabilidadCompra;
-
-                    if (personalidad.indeciso && Math.random() < 0.38) {
-                        probabilidad *= 0.65;
-                        comportamientos.cambioOpinionPendiente = true;
-                    }
-
+                if (tiempoEstado >= 0.5) {
                     decisionCompra =
-                        Math.random() < probabilidad;
+                        Math.random() <
+                        config.probabilidadCompra;
 
                     if (decisionCompra) {
                         cambiarEstado(ESTADOS.GUARDANDO);
 
                     } else {
-                        if (personalidad.comparar && !comportamientos.compararRealizado && compras.length < config.maximoProductos) {
-                            comportamientos.compararRealizado = true;
-                            comportamientos.alternativaComparada = true;
-                            cambiarEstado(ESTADOS.BUSCANDO);
-                            return;
-                        }
-
                         const quiereReubicar =
                             Math.random() <
                             config.probabilidadDejarEnOtroRack;
@@ -3861,7 +3725,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
     function eliminar() {
         if (eliminado) return;
-        clientesActivos.delete(grupo);
 
         if (productoEnMano) {
             finalizarDevolucionProducto();
