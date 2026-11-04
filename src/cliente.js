@@ -3620,22 +3620,55 @@ export function crearClienteSupermercado(scene, opciones = {}) {
                 config.tiempoAnimacionAgarre;
         }
 
-        if (opcionesCompras.productos) {
+        if (opcionesCompras.productos !== undefined) {
             config.productos = opcionesCompras.productos;
         }
 
-        if (opcionesCompras.carrito) {
+        if (opcionesCompras.carrito !== undefined) {
             config.carrito = opcionesCompras.carrito;
         }
 
-        if (opcionesCompras.mobiliario) {
+        if (opcionesCompras.mobiliario !== undefined) {
             config.mobiliario = opcionesCompras.mobiliario;
             actualizarColisiones();
         }
 
-        if (opcionesCompras.colisiones) {
+        if (opcionesCompras.colisiones !== undefined) {
             config.colisiones = opcionesCompras.colisiones;
             actualizarColisiones();
+        }
+
+        if (
+            typeof opcionesCompras.distanciaMaximaBusqueda === 'number'
+        ) {
+            config.distanciaMaximaBusqueda = Math.max(
+                1,
+                opcionesCompras.distanciaMaximaBusqueda
+            );
+        }
+
+        if (
+            typeof opcionesCompras.velocidad === 'number'
+        ) {
+            config.velocidad = Math.max(
+                0.05,
+                opcionesCompras.velocidad
+            );
+        }
+
+        if (
+            typeof opcionesCompras.velocidadAnimacionGLB === 'number'
+        ) {
+            config.velocidadAnimacionGLB = Math.max(
+                0,
+                opcionesCompras.velocidadAnimacionGLB
+            );
+
+            if (accionCaminar) {
+                accionCaminar.setEffectiveTimeScale(
+                    config.velocidadAnimacionGLB
+                );
+            }
         }
 
         if (
@@ -3660,9 +3693,11 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     }
 
     function reproducirAnimacion() {
-        if (eliminado) return;
+        if (eliminado) return false;
 
         detenido = false;
+
+        let activada = false;
 
         if ([
             ESTADOS.ENTRANDO,
@@ -3671,10 +3706,18 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             ESTADOS.CAJA,
             ESTADOS.REGRESANDO
         ].includes(estado)) {
-            activarCaminarGLB();
+            activada = activarCaminarGLB();
         } else {
-            activarReposoGLB();
+            activada = activarReposoGLB();
         }
+
+        if (!activada && cargado) {
+            if (estado === ESTADOS.INACTIVO) {
+                restaurarPoseCompleta();
+            }
+        }
+
+        return true;
     }
 
     // ========================================================
@@ -3701,6 +3744,22 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         mixer?.uncacheRoot(modelo);
 
         mixer = null;
+
+        const geometrias = new Set();
+        const materiales = new Set();
+
+        modelo?.traverse(objeto => {
+            if (objeto.geometry) geometrias.add(objeto.geometry);
+
+            if (Array.isArray(objeto.material)) {
+                objeto.material.forEach(material => materiales.add(material));
+            } else if (objeto.material) {
+                materiales.add(objeto.material);
+            }
+        });
+
+        geometrias.forEach(geometria => geometria.dispose());
+        materiales.forEach(material => material.dispose());
 
         grupo.parent?.remove(grupo);
 
