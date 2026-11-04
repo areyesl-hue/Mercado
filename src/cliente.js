@@ -348,6 +348,10 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     let movimientoSuave = 0;
     let tiempoIdle = Math.random() * 8;
     let inclinacionCabezaObjetivo = 0;
+    let inclinacionTorsoObjetivo = 0;
+    let giroCabezaObjetivo = 0;
+    let intensidadGiro = 0;
+    let apoyandoPieDerecho = true;
 
     const huesos = {};
     const huesosBase = new Map();
@@ -736,6 +740,12 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
     function animarCaminarProcedural(delta) {
         if (config.usarAnimacionesGLB && accionCaminar) {
+            if (accionCaminar.isRunning()) {
+                accionCaminar.setEffectiveTimeScale(
+                    config.velocidadAnimacionGLB *
+                    THREE.MathUtils.lerp(0.65, 1.15, movimientoSuave)
+                );
+            }
             return;
         }
 
@@ -745,45 +755,36 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             1.25
         );
 
-        faseAnimacion += delta * 7.3 * ritmo;
+        faseAnimacion += delta * (7.0 + ritmo * 0.75);
 
         const paso = Math.sin(faseAnimacion);
         const contrapasado = Math.cos(faseAnimacion);
         const apoyo = paso * 0.38 * movimientoSuave;
         const rebote = Math.abs(Math.sin(faseAnimacion * 2)) * 0.018 * movimientoSuave;
-        const balanceo = contrapasado * 0.025 * movimientoSuave;
+        const balanceo = contrapasado * 0.022 * movimientoSuave;
+        const peso = Math.sin(faseAnimacion) >= 0 ? 0.018 : -0.018;
+        const contraGiro = limitar(intensidadGiro * 0.08, -0.08, 0.08);
 
         aplicarRotacion(rig.piernaIzquierda, EJE_X, apoyo);
         aplicarRotacion(rig.piernaDerecha, EJE_X, -apoyo);
 
-        aplicarRotacion(
-            rig.pantorrillaIzquierda,
-            EJE_X,
-            Math.max(0, -apoyo) * 0.9
-        );
-        aplicarRotacion(
-            rig.pantorrillaDerecha,
-            EJE_X,
-            Math.max(0, apoyo) * 0.9
-        );
+        aplicarRotacion(rig.pantorrillaIzquierda, EJE_X,
+            Math.max(0, -apoyo) * 0.82 + Math.max(0, apoyo) * 0.12);
+        aplicarRotacion(rig.pantorrillaDerecha, EJE_X,
+            Math.max(0, apoyo) * 0.82 + Math.max(0, -apoyo) * 0.12);
 
-        aplicarRotacion(rig.brazoIzquierdo, EJE_X, -apoyo * 0.78);
-        aplicarRotacion(rig.brazoDerecho, EJE_X, apoyo * 0.78);
+        aplicarRotacion(rig.brazoIzquierdo, EJE_X, -apoyo * 0.72);
+        aplicarRotacion(rig.brazoDerecho, EJE_X, apoyo * 0.72);
+        aplicarRotacion(rig.antebrazoIzquierdo, EJE_X,
+            -0.08 + Math.max(0, apoyo) * 0.18);
+        aplicarRotacion(rig.antebrazoDerecho, EJE_X,
+            -0.08 + Math.max(0, -apoyo) * 0.18);
 
-        aplicarRotacion(
-            rig.antebrazoIzquierdo,
-            EJE_X,
-            -0.08 + Math.max(0, apoyo) * 0.22
-        );
-        aplicarRotacion(
-            rig.antebrazoDerecho,
-            EJE_X,
-            -0.08 + Math.max(0, -apoyo) * 0.22
-        );
-
-        aplicarRotacion(rig.cadera, EJE_X, balanceo * 0.35);
-        aplicarRotacion(rig.torso, EJE_X, -balanceo * 0.4);
-        aplicarRotacion(rig.cabeza, EJE_X, -balanceo * 0.55 + inclinacionCabezaObjetivo);
+        aplicarRotacion(rig.cadera, EJE_X, balanceo * 0.35 + peso);
+        aplicarRotacion(rig.torso, EJE_X,
+            -balanceo * 0.35 + inclinacionTorsoObjetivo + contraGiro);
+        aplicarRotacion(rig.cabeza, EJE_X,
+            -balanceo * 0.48 + inclinacionCabezaObjetivo);
 
         grupo.position.y = numero(config.posicion.y) + rebote * movimientoSuave;
     }
@@ -854,32 +855,27 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
     function animarInspeccionarProcedural() {
         const entrada = suavizar(Math.min(tiempoEstado / 0.55, 1));
-        const giroLento = (1 - Math.cos(tiempoEstado * 0.9)) * 0.012;
-        const girarProducto = Math.sin(tiempoEstado * 1.15) * 0.025 * entrada;
-        const oscilarCabeza = Math.sin(tiempoEstado * 1.55) * 0.038 + giroLento;
-        const respiracion = Math.sin(tiempoEstado * 1.9) * 0.012;
+        const salida = suavizar(Math.min((config.tiempoInspeccionar - tiempoEstado) / 0.45, 1));
+        const mirarLento = (1 - Math.cos(tiempoEstado * 0.82)) * 0.018;
+        const girarProducto = Math.sin(tiempoEstado * 1.45) * 0.045 * entrada;
+        const oscilarCabeza = Math.sin(tiempoEstado * 1.18) * 0.028 + mirarLento;
+        const respiracion = Math.sin(tiempoEstado * 1.75) * 0.012;
+        const levantar = entrada * salida;
 
-        aplicarRotacion(rig.brazoDerecho, EJE_X, -1.08 * entrada + girarProducto);
-        aplicarRotacion(rig.antebrazoDerecho, EJE_X, -0.92 * entrada + girarProducto);
+        aplicarRotacion(rig.brazoDerecho, EJE_X, (-1.08 + girarProducto) * levantar);
+        aplicarRotacion(rig.antebrazoDerecho, EJE_X, (-0.92 + girarProducto * 0.5) * levantar);
         aplicarRotacion(rig.manoDerecha, EJE_X, -0.28 + girarProducto);
 
-        aplicarRotacion(rig.brazoIzquierdo, EJE_X, -0.76 * entrada);
-        aplicarRotacion(rig.antebrazoIzquierdo, EJE_X, -0.82 * entrada);
-        aplicarRotacion(rig.manoIzquierda, EJE_X, -0.22);
+        aplicarRotacion(rig.brazoIzquierdo, EJE_X, -0.76 * levantar);
+        aplicarRotacion(rig.antebrazoIzquierdo, EJE_X, -0.82 * levantar);
+        aplicarRotacion(rig.manoIzquierda, EJE_X, -0.22 + girarProducto * 0.35);
 
         aplicarRotacion(rig.cabeza, EJE_X, 0.20 + oscilarCabeza);
         aplicarRotacion(rig.cuello, EJE_X, 0.08 + respiracion);
-        aplicarRotacion(rig.torso, EJE_X, respiracion);
+        aplicarRotacion(rig.torso, EJE_X, respiracion * 0.8);
 
         if (productoEsInferior) {
-            animarAgacharse(1 - suavizar(tiempoEstado * 1.5));
-        }
-
-        // Microgestos naturales: cambia la inclinación del producto
-        // y la cabeza ligeramente mientras el cliente lo observa.
-        if (productoEnMano) {
-            const balance = Math.sin(tiempoEstado * 1.25) * entrada;
-            aplicarRotacion(rig.manoDerecha, EJE_X, -0.28 + balance * 0.05);
+            animarAgacharse((1 - suavizar(tiempoEstado * 1.5)) * levantar);
         }
     }
 
@@ -948,15 +944,23 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     // ========================================================
 
     function animarPagarProcedural() {
-        const t = Math.sin(tiempoEstado * 3) * 0.08;
+        const entrada = suavizar(Math.min(tiempoEstado / 0.65, 1));
+        const mirarCaja = Math.sin(tiempoEstado * 0.9) * 0.035;
+        const respiracion = Math.sin(tiempoEstado * 1.8) * 0.012;
+        const movimientoPago = Math.sin(tiempoEstado * 2.4) * 0.035;
 
-        aplicarRotacion(rig.brazoDerecho, EJE_X, -0.9 + t);
-        aplicarRotacion(rig.antebrazoDerecho, EJE_X, -0.6);
+        aplicarRotacion(rig.brazoDerecho, EJE_X, (-0.88 + movimientoPago) * entrada);
+        aplicarRotacion(rig.antebrazoDerecho, EJE_X, -0.58 * entrada);
+        aplicarRotacion(rig.manoDerecha, EJE_X, movimientoPago * 0.35);
 
-        aplicarRotacion(rig.brazoIzquierdo, EJE_X, -0.7);
-        aplicarRotacion(rig.antebrazoIzquierdo, EJE_X, -0.4);
+        aplicarRotacion(rig.brazoIzquierdo, EJE_X, -0.68 * entrada);
+        aplicarRotacion(rig.antebrazoIzquierdo, EJE_X, -0.42 * entrada);
+        aplicarRotacion(rig.manoIzquierda, EJE_X, movimientoPago * -0.2);
 
-        aplicarRotacion(rig.cabeza, EJE_X, 0.08);
+        aplicarRotacion(rig.cabeza, EJE_X, 0.08 + mirarCaja);
+        aplicarRotacion(rig.cuello, EJE_X, respiracion);
+        aplicarRotacion(rig.torso, EJE_X, respiracion * 0.7);
+        aplicarRotacion(rig.cadera, EJE_X, respiracion * 0.3);
     }
 
     // ========================================================
@@ -1688,8 +1692,9 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     // MOVIMIENTO Y RECUPERACIÓN
     // ========================================================
 
-    function orientarHacia(dx, dz) {
+    function orientarHacia(dx, dz, delta = 0.016) {
         if (Math.abs(dx) + Math.abs(dz) < 0.0001) {
+            intensidadGiro = THREE.MathUtils.lerp(intensidadGiro, 0, 0.12);
             return;
         }
 
@@ -1702,10 +1707,19 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         while (diferencia > Math.PI) diferencia -= Math.PI * 2;
         while (diferencia < -Math.PI) diferencia += Math.PI * 2;
 
-        grupo.rotation.y += diferencia * limitar(
-            config.suavizadoGiro * numero(ultimaPosicionMovimiento.w, 0.016),
-            0,
-            1
+        const velocidadGiro = 1 - Math.exp(-config.suavizadoGiro * Math.max(delta, 0.001));
+        grupo.rotation.y += diferencia * velocidadGiro;
+
+        intensidadGiro = THREE.MathUtils.lerp(
+            intensidadGiro,
+            limitar(Math.abs(diferencia) / 0.6, 0, 1),
+            1 - Math.exp(-8 * Math.max(delta, 0.001))
+        );
+
+        inclinacionTorsoObjetivo = THREE.MathUtils.lerp(
+            inclinacionTorsoObjetivo,
+            limitar(diferencia * -0.12, -0.08, 0.08) * movimientoSuave,
+            0.12
         );
     }
 
@@ -1830,7 +1844,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         const direccionX = dx / distancia;
         const direccionZ = dz / distancia;
 
-        orientarHacia(direccionX, direccionZ);
+        orientarHacia(direccionX, direccionZ, delta);
 
         const distanciaFrenado = Math.min(1.5, velocidad * 0.9);
         const factorDestino = limitar(distancia / distanciaFrenado, 0.18, 1);
