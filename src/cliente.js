@@ -3620,55 +3620,22 @@ export function crearClienteSupermercado(scene, opciones = {}) {
                 config.tiempoAnimacionAgarre;
         }
 
-        if (opcionesCompras.productos !== undefined) {
+        if (opcionesCompras.productos) {
             config.productos = opcionesCompras.productos;
         }
 
-        if (opcionesCompras.carrito !== undefined) {
+        if (opcionesCompras.carrito) {
             config.carrito = opcionesCompras.carrito;
         }
 
-        if (opcionesCompras.mobiliario !== undefined) {
+        if (opcionesCompras.mobiliario) {
             config.mobiliario = opcionesCompras.mobiliario;
             actualizarColisiones();
         }
 
-        if (opcionesCompras.colisiones !== undefined) {
+        if (opcionesCompras.colisiones) {
             config.colisiones = opcionesCompras.colisiones;
             actualizarColisiones();
-        }
-
-        if (
-            typeof opcionesCompras.distanciaMaximaBusqueda === 'number'
-        ) {
-            config.distanciaMaximaBusqueda = Math.max(
-                1,
-                opcionesCompras.distanciaMaximaBusqueda
-            );
-        }
-
-        if (
-            typeof opcionesCompras.velocidad === 'number'
-        ) {
-            config.velocidad = Math.max(
-                0.05,
-                opcionesCompras.velocidad
-            );
-        }
-
-        if (
-            typeof opcionesCompras.velocidadAnimacionGLB === 'number'
-        ) {
-            config.velocidadAnimacionGLB = Math.max(
-                0,
-                opcionesCompras.velocidadAnimacionGLB
-            );
-
-            if (accionCaminar) {
-                accionCaminar.setEffectiveTimeScale(
-                    config.velocidadAnimacionGLB
-                );
-            }
         }
 
         if (
@@ -3693,11 +3660,9 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     }
 
     function reproducirAnimacion() {
-        if (eliminado) return false;
+        if (eliminado) return;
 
         detenido = false;
-
-        let activada = false;
 
         if ([
             ESTADOS.ENTRANDO,
@@ -3706,18 +3671,10 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             ESTADOS.CAJA,
             ESTADOS.REGRESANDO
         ].includes(estado)) {
-            activada = activarCaminarGLB();
+            activarCaminarGLB();
         } else {
-            activada = activarReposoGLB();
+            activarReposoGLB();
         }
-
-        if (!activada && cargado) {
-            if (estado === ESTADOS.INACTIVO) {
-                restaurarPoseCompleta();
-            }
-        }
-
-        return true;
     }
 
     // ========================================================
@@ -3745,22 +3702,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         mixer = null;
 
-        const geometrias = new Set();
-        const materiales = new Set();
-
-        modelo?.traverse(objeto => {
-            if (objeto.geometry) geometrias.add(objeto.geometry);
-
-            if (Array.isArray(objeto.material)) {
-                objeto.material.forEach(material => materiales.add(material));
-            } else if (objeto.material) {
-                materiales.add(objeto.material);
-            }
-        });
-
-        geometrias.forEach(geometria => geometria.dispose());
-        materiales.forEach(material => material.dispose());
-
         grupo.parent?.remove(grupo);
 
         eliminado = true;
@@ -3776,32 +3717,45 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
     const api = {
         grupo,
+
         actualizar,
+
         establecerRuta,
+
         establecerPosicion,
+
         configurarCompras,
+
         detenerAnimacion,
+
         reproducirAnimacion,
+
         iniciarDesdeVehiculo,
+
         iniciarRegresoVehiculo,
+
         iniciarPago: dirigirseACaja,
-        actualizarColisiones,
-        eliminar,
 
-        obtenerObjetivo: () => objetivo
-            ? { ...objetivo }
-            : null,
+        obtenerObjetivo: () => {
+            return objetivo
+                ? { ...objetivo }
+                : null;
+        },
 
-        obtenerCompras: () => compras.map(compra => ({
-            nombre: compra.nombre,
-            codigo: compra.codigo,
-            precio: compra.precio
-        })),
+        obtenerCompras: () => {
+            return compras.map(compra => ({
+                nombre: compra.nombre,
+                codigo: compra.codigo,
+                precio: compra.precio
+            }));
+        },
 
         obtenerResumen: () => ({
             id,
             estado,
+
             productos: compras.length,
+
             posicion: {
                 x: grupo.position.x,
                 z: grupo.position.z
@@ -3809,6 +3763,10 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         }),
 
         obtenerEstado: () => estado,
+
+        actualizarColisiones,
+
+        eliminar,
 
         get cargado() {
             return cargado;
@@ -3841,5 +3799,5 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
     actualizarColisiones();
 
-    return Object.freeze(api);
+    return api;
 }
