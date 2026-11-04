@@ -84,26 +84,47 @@ export function crearProductosLacteos(scene) {
     };
 
     // ========================================================
-    // ALTURAS REALES DE LAS SUPERFICIES
+    // ALTURAS DE LAS SUPERFICIES
     // ========================================================
 
     const nivelesGondola = [
-        0.4625, 0.8925, 1.3225, 1.7525
+        0.4625,
+        0.8925,
+        1.3225,
+        1.7525
     ];
 
     const nivelesRefrigerador = [
-        0.5225, 0.9525, 1.3825, 1.8125
+        0.5225,
+        0.9525,
+        1.3825,
+        1.8125
     ];
 
     const nivelesLimpieza = [
-        0.4575, 0.8075, 1.1575, 1.5075, 1.8575
+        0.4575,
+        0.8075,
+        1.1575,
+        1.5075,
+        1.8575
     ];
 
+    // Seis posiciones a lo largo de cada góndola.
     const posicionesGondola = [
-        -1.95, -0.65, 0.65, 1.95
+        -2.5,
+        -1.5,
+        -0.5,
+        0.5,
+        1.5,
+        2.5
     ];
 
-    const posicionesRefrigerador = [-0.48, 0.48];
+    // Tres posiciones horizontales por nivel del refrigerador.
+    const posicionesRefrigerador = [
+        -0.95,
+        0,
+        0.95
+    ];
 
     const GIRO_FRENTE = Math.PI / 2;
 
@@ -135,6 +156,7 @@ export function crearProductosLacteos(scene) {
             } else {
                 existente.callbacks.push(callback);
             }
+
             return;
         }
 
@@ -147,6 +169,7 @@ export function crearProductosLacteos(scene) {
 
         loader.load(
             archivo,
+
             (gltf) => {
                 const original = gltf.scene;
                 original.name = nombre;
@@ -171,18 +194,26 @@ export function crearProductosLacteos(scene) {
                     try {
                         fn(original);
                     } catch (error) {
-                        console.error(`Error colocando ${nombre}:`, error);
+                        console.error(
+                            `Error colocando ${nombre}:`,
+                            error
+                        );
                     }
                 });
 
                 console.info(`Modelo cargado: ${nombre}`);
             },
+
             undefined,
+
             (error) => {
                 modelosFallidos++;
                 cacheModelos.delete(archivo);
 
-                console.error(`No se pudo cargar ${archivo}.`, error);
+                console.error(
+                    `No se pudo cargar ${archivo}.`,
+                    error
+                );
             }
         );
     }
@@ -195,7 +226,9 @@ export function crearProductosLacteos(scene) {
         let encontrado = false;
 
         objeto.traverse((hijo) => {
-            if (hijo.isMesh) encontrado = true;
+            if (hijo.isMesh) {
+                encontrado = true;
+            }
         });
 
         return encontrado;
@@ -213,7 +246,9 @@ export function crearProductosLacteos(scene) {
                 return hijo.isGroup && contieneMallas(hijo);
             });
 
-            if (gruposHijos.length >= 2) return gruposHijos;
+            if (gruposHijos.length >= 2) {
+                return gruposHijos;
+            }
 
             for (const hijo of padre.children) {
                 const resultado = buscarContenedor(hijo);
@@ -254,7 +289,10 @@ export function crearProductosLacteos(scene) {
             grupo.updateWorldMatrix(true, true);
 
             const matrizRelativa = new THREE.Matrix4()
-                .multiplyMatrices(inversaRaiz, grupo.matrixWorld);
+                .multiplyMatrices(
+                    inversaRaiz,
+                    grupo.matrixWorld
+                );
 
             const copia = grupo.clone(true);
 
@@ -285,6 +323,7 @@ export function crearProductosLacteos(scene) {
             }
 
             const centro = new THREE.Vector3();
+
             caja.getCenter(centro);
 
             fuente.position.sub(centro);
@@ -311,9 +350,14 @@ export function crearProductosLacteos(scene) {
     function obtenerPrecio(codigo) {
         const precio = PRECIOS[codigo];
 
-        if (Number.isFinite(precio)) return precio;
+        if (Number.isFinite(precio)) {
+            return precio;
+        }
 
-        console.warn(`No hay precio para ${codigo}. Se asignará $0.00 MXN.`);
+        console.warn(
+            `No hay precio para ${codigo}. Se asignará $0.00 MXN.`
+        );
+
         return 0;
     }
 
@@ -324,13 +368,17 @@ export function crearProductosLacteos(scene) {
     function obtenerDimensionesFuente(fuente) {
         let dimensiones = cacheDimensiones.get(fuente);
 
-        if (dimensiones) return dimensiones;
+        if (dimensiones) {
+            return dimensiones;
+        }
 
         fuente.updateMatrixWorld(true);
 
         const caja = new THREE.Box3().setFromObject(fuente);
 
-        if (caja.isEmpty()) return null;
+        if (caja.isEmpty()) {
+            return null;
+        }
 
         const centro = new THREE.Vector3();
         const tamano = new THREE.Vector3();
@@ -338,7 +386,10 @@ export function crearProductosLacteos(scene) {
         caja.getCenter(centro);
         caja.getSize(tamano);
 
-        dimensiones = { centro, tamano };
+        dimensiones = {
+            centro,
+            tamano
+        };
 
         cacheDimensiones.set(fuente, dimensiones);
 
@@ -347,8 +398,6 @@ export function crearProductosLacteos(scene) {
 
     // ========================================================
     // CREAR UNIDAD DE PRODUCTO
-    // La rotación se aplica antes de medir el modelo.
-    // Se centra y se apoya sobre la superficie indicada.
     // ========================================================
 
     function crearCopia(
@@ -371,6 +420,8 @@ export function crearProductosLacteos(scene) {
             return null;
         }
 
+        // clone(true) conserva las mallas y comparte
+        // geometrías y materiales con el modelo original.
         const modelo = fuente.clone(true);
 
         modelo.name = nombre;
@@ -409,7 +460,8 @@ export function crearProductosLacteos(scene) {
 
         const escalaAltura = altura / dimensionesRotadas.y;
         const escalaAncho = anchoMaximo / dimensionesRotadas.x;
-        const escalaProfundidad = profundidadMaxima / dimensionesRotadas.z;
+        const escalaProfundidad =
+            profundidadMaxima / dimensionesRotadas.z;
 
         const escala = Math.min(
             escalaAltura,
@@ -422,7 +474,9 @@ export function crearProductosLacteos(scene) {
 
         const cajaFinal = new THREE.Box3().setFromObject(modelo);
 
-        if (cajaFinal.isEmpty()) return null;
+        if (cajaFinal.isEmpty()) {
+            return null;
+        }
 
         const centroFinal = new THREE.Vector3();
         const dimensionesFinales = new THREE.Vector3();
@@ -430,6 +484,7 @@ export function crearProductosLacteos(scene) {
         cajaFinal.getCenter(centroFinal);
         cajaFinal.getSize(dimensionesFinales);
 
+        // Centrar horizontalmente y apoyar en la superficie.
         modelo.position.set(
             x - centroFinal.x,
             y - cajaFinal.min.y,
@@ -438,7 +493,8 @@ export function crearProductosLacteos(scene) {
 
         modelo.updateMatrixWorld(true);
 
-        const idUnidad = `UNIDAD_${String(siguienteIdUnidad++).padStart(5, '0')}`;
+        const idUnidad =
+            `UNIDAD_${String(siguienteIdUnidad++).padStart(5, '0')}`;
 
         const codigoCatalogo = obtenerCodigoCatalogo(nombre);
         const precio = obtenerPrecio(codigoCatalogo);
@@ -466,7 +522,11 @@ export function crearProductosLacteos(scene) {
         modelo.userData.enCarrito = false;
         modelo.userData.disponible = true;
 
-        modelo.userData.posicionEstante = { x, y, z };
+        modelo.userData.posicionEstante = {
+            x,
+            y,
+            z
+        };
 
         modelo.userData.rotacionEstante = {
             x: modelo.rotation.x,
@@ -510,7 +570,10 @@ export function crearProductosLacteos(scene) {
     // ROTACIÓN DE GÓNDOLAS
     // ========================================================
 
-    function obtenerRotacionGondola(lado, rotacionExtra = 0) {
+    function obtenerRotacionGondola(
+        lado,
+        rotacionExtra = 0
+    ) {
         const giroLado = lado === -1 ? Math.PI : 0;
 
         return GIRO_FRENTE + giroLado + rotacionExtra;
@@ -518,53 +581,71 @@ export function crearProductosLacteos(scene) {
 
     // ========================================================
     // 1. GÓNDOLAS CENTRALES
+    // 6 PRODUCTOS POR NIVEL
     // ========================================================
 
     function colocarEnGondola(config) {
-        cargarModelo(config.archivo, config.nombre, (original) => {
-            const fuentes = crearFuentesIndependientes(original);
+        cargarModelo(
+            config.archivo,
+            config.nombre,
+            (original) => {
+                const fuentes = crearFuentesIndependientes(original);
 
-            if (!fuentes.length) return;
+                if (!fuentes.length) return;
 
-            const espaciosPorNivel = config.cantidadPorNivel ?? 4;
+                const desplazamientos =
+                    config.desplazamientos ?? posicionesGondola;
 
-            const desplazamientos = espaciosPorNivel === 3
-                ? [-1.55, 0, 1.55]
-                : posicionesGondola;
+                let colocados = 0;
 
-            nivelesGondola.forEach((nivel, nivelIndex) => {
-                desplazamientos.forEach((desplazamiento, indice) => {
-                    const fuente = fuentes[indice % fuentes.length];
+                nivelesGondola.forEach((nivel, nivelIndex) => {
+                    desplazamientos.forEach(
+                        (desplazamiento, indice) => {
+                            const fuente = fuentes[
+                                (
+                                    nivelIndex * desplazamientos.length +
+                                    indice
+                                ) % fuentes.length
+                            ];
 
-                    const x = config.rackX + config.lado * 0.30;
-                    const z = config.rackZ + desplazamiento;
+                            const x =
+                                config.rackX + config.lado * 0.30;
 
-                    const rotacion = obtenerRotacionGondola(
-                        config.lado,
-                        config.rotacionY ?? 0
-                    );
+                            const z =
+                                config.rackZ + desplazamiento;
 
-                    crearCopia(
-                        fuente,
-                        `${config.codigo}_N${nivelIndex + 1}_${indice + 1}`,
-                        x,
-                        nivel,
-                        z,
-                        config.altura,
-                        rotacion,
-                        config.categoria,
-                        {
-                            ancho: 0.44,
-                            profundidad: 0.90
+                            const rotacion = obtenerRotacionGondola(
+                                config.lado,
+                                config.rotacionY ?? 0
+                            );
+
+                            const unidad = crearCopia(
+                                fuente,
+                                `${config.codigo}_N${nivelIndex + 1}_${indice + 1}`,
+                                x,
+                                nivel,
+                                z,
+                                config.altura,
+                                rotacion,
+                                config.categoria,
+                                {
+                                    ancho: 0.44,
+                                    profundidad: 0.90
+                                }
+                            );
+
+                            if (unidad) {
+                                colocados++;
+                            }
                         }
                     );
                 });
-            });
 
-            console.info(
-                `${config.nombre}: ${nivelesGondola.length * espaciosPorNivel} unidades colocadas.`
-            );
-        });
+                console.info(
+                    `${config.nombre}: ${colocados} unidades colocadas en góndola.`
+                );
+            }
+        );
     }
 
     // ========================================================
@@ -778,6 +859,7 @@ export function crearProductosLacteos(scene) {
 
     // ========================================================
     // 2. REFRIGERADORES
+    // 3 PRODUCTOS POR NIVEL
     // ========================================================
 
     const catalogoRefrigeradores = [
@@ -840,37 +922,52 @@ export function crearProductosLacteos(scene) {
     ];
 
     catalogoRefrigeradores.forEach((config) => {
-        cargarModelo(config.archivo, config.nombre, (original) => {
-            const fuentes = crearFuentesIndependientes(original);
+        cargarModelo(
+            config.archivo,
+            config.nombre,
+            (original) => {
+                const fuentes = crearFuentesIndependientes(original);
 
-            if (!fuentes.length) return;
+                if (!fuentes.length) return;
 
-            nivelesRefrigerador.forEach((nivel, nivelIndex) => {
-                posicionesRefrigerador.forEach((dx, indice) => {
-                    const fuente = fuentes[
-                        (
-                            nivelIndex * posicionesRefrigerador.length +
-                            indice
-                        ) % fuentes.length
-                    ];
+                let colocados = 0;
 
-                    crearCopia(
-                        fuente,
-                        `${config.codigo}_N${nivelIndex + 1}_${indice + 1}`,
-                        config.x + dx,
-                        nivel,
-                        -26.5,
-                        config.altura,
-                        GIRO_FRENTE,
-                        config.categoria,
-                        {
-                            ancho: 0.85,
-                            profundidad: 0.65
+                nivelesRefrigerador.forEach((nivel, nivelIndex) => {
+                    posicionesRefrigerador.forEach((dx, indice) => {
+                        const fuente = fuentes[
+                            (
+                                nivelIndex *
+                                posicionesRefrigerador.length +
+                                indice
+                            ) % fuentes.length
+                        ];
+
+                        const unidad = crearCopia(
+                            fuente,
+                            `${config.codigo}_N${nivelIndex + 1}_${indice + 1}`,
+                            config.x + dx,
+                            nivel,
+                            -26.5,
+                            config.altura,
+                            GIRO_FRENTE,
+                            config.categoria,
+                            {
+                                ancho: 0.85,
+                                profundidad: 0.65
+                            }
+                        );
+
+                        if (unidad) {
+                            colocados++;
                         }
-                    );
+                    });
                 });
-            });
-        });
+
+                console.info(
+                    `${config.nombre}: ${colocados} unidades colocadas en refrigerador.`
+                );
+            }
+        );
     });
 
     // ========================================================
@@ -879,10 +976,22 @@ export function crearProductosLacteos(scene) {
     // ========================================================
 
     const mesasFrescos = {
-        Mesa_frescos_01: { x: -25.5, z: 15 },
-        Mesa_frescos_02: { x: -21.7, z: 15 },
-        Mesa_frescos_03: { x: -25.5, z: 10.8 },
-        Mesa_frescos_04: { x: -21.7, z: 10.8 }
+        Mesa_frescos_01: {
+            x: -25.5,
+            z: 15
+        },
+        Mesa_frescos_02: {
+            x: -21.7,
+            z: 15
+        },
+        Mesa_frescos_03: {
+            x: -25.5,
+            z: 10.8
+        },
+        Mesa_frescos_04: {
+            x: -21.7,
+            z: 10.8
+        }
     };
 
     function colocarEnMesa(config) {
@@ -893,30 +1002,34 @@ export function crearProductosLacteos(scene) {
             return;
         }
 
-        cargarModelo(config.archivo, config.nombre, (original) => {
-            const fuentes = crearFuentesIndependientes(original);
+        cargarModelo(
+            config.archivo,
+            config.nombre,
+            (original) => {
+                const fuentes = crearFuentesIndependientes(original);
 
-            if (!fuentes.length) return;
+                if (!fuentes.length) return;
 
-            config.posiciones.forEach(([dx, dz], indice) => {
-                const fuente = fuentes[indice % fuentes.length];
+                config.posiciones.forEach(([dx, dz], indice) => {
+                    const fuente = fuentes[indice % fuentes.length];
 
-                crearCopia(
-                    fuente,
-                    `${config.codigo}_${String(indice + 1).padStart(2, '0')}`,
-                    mesa.x + dx,
-                    1.00,
-                    mesa.z + dz,
-                    config.altura,
-                    config.rotacionY ?? 0,
-                    'Frutas y verduras',
-                    {
-                        ancho: 0.42,
-                        profundidad: 0.42
-                    }
-                );
-            });
-        });
+                    crearCopia(
+                        fuente,
+                        `${config.codigo}_${String(indice + 1).padStart(2, '0')}`,
+                        mesa.x + dx,
+                        1.00,
+                        mesa.z + dz,
+                        config.altura,
+                        config.rotacionY ?? 0,
+                        'Frutas y verduras',
+                        {
+                            ancho: 0.42,
+                            profundidad: 0.42
+                        }
+                    );
+                });
+            }
+        );
     }
 
     colocarEnMesa({
@@ -1020,30 +1133,34 @@ export function crearProductosLacteos(scene) {
     // ========================================================
 
     function colocarEnMostrador(config) {
-        cargarModelo(config.archivo, config.nombre, (original) => {
-            const fuentes = crearFuentesIndependientes(original);
+        cargarModelo(
+            config.archivo,
+            config.nombre,
+            (original) => {
+                const fuentes = crearFuentesIndependientes(original);
 
-            if (!fuentes.length) return;
+                if (!fuentes.length) return;
 
-            config.posiciones.forEach(([dx, dz], indice) => {
-                const fuente = fuentes[indice % fuentes.length];
+                config.posiciones.forEach(([dx, dz], indice) => {
+                    const fuente = fuentes[indice % fuentes.length];
 
-                crearCopia(
-                    fuente,
-                    `${config.codigo}_${indice + 1}`,
-                    25.1 + dx,
-                    1.22,
-                    -7.3 + dz,
-                    config.altura,
-                    config.rotacionY ?? 0,
-                    'Carnicería',
-                    {
-                        ancho: 0.42,
-                        profundidad: 0.42
-                    }
-                );
-            });
-        });
+                    crearCopia(
+                        fuente,
+                        `${config.codigo}_${indice + 1}`,
+                        25.1 + dx,
+                        1.22,
+                        -7.3 + dz,
+                        config.altura,
+                        config.rotacionY ?? 0,
+                        'Carnicería',
+                        {
+                            ancho: 0.42,
+                            profundidad: 0.42
+                        }
+                    );
+                });
+            }
+        );
     }
 
     colocarEnMostrador({
@@ -1095,129 +1212,136 @@ export function crearProductosLacteos(scene) {
         }
     ];
 
-    const columnasLimpieza = [-0.90, -0.30, 0.30, 0.90];
+    const columnasLimpieza = [
+        -0.90,
+        -0.30,
+        0.30,
+        0.90
+    ];
 
     productosLimpieza.forEach((config, productoIndex) => {
-        cargarModelo(config.archivo, config.nombre, (original) => {
-            const fuentes = crearFuentesIndependientes(original);
-            const fuente = fuentes[0];
+        cargarModelo(
+            config.archivo,
+            config.nombre,
+            (original) => {
+                const fuentes = crearFuentesIndependientes(original);
+                const fuente = fuentes[0];
 
-            if (!fuente) return;
+                if (!fuente) return;
 
-            nivelesLimpieza.forEach((nivel, nivelIndex) => {
+                nivelesLimpieza.forEach((nivel, nivelIndex) => {
+                    crearCopia(
+                        fuente,
+                        `${config.codigo}_N${nivelIndex + 1}_1`,
+                        28.3 + columnasLimpieza[productoIndex],
+                        nivel,
+                        8.15,
+                        0.32,
+                        GIRO_FRENTE,
+                        'Higiene y limpieza',
+                        {
+                            ancho: 0.48,
+                            profundidad: 0.42
+                        }
+                    );
+                });
+            }
+        );
+    });
+
+    // ========================================================
+    // 6. DEPARTAMENTO DE ROPA
+    // ========================================================
+
+    const ALTURA_TUBO_ROPA = 1.75;
+    const BASE_PRENDA = 0.90;
+    const ALTURA_PRENDA = 1.60;
+
+    const prendas = [
+        {
+            nombre: 'Blusa',
+            archivo: '/modelos/Blusa.glb',
+            codigo: 'BLUSA',
+            x: -26.35,
+            z: -4,
+            ancho: 1.40,
+            profundidad: 1.55
+        },
+        {
+            nombre: 'Sudadera negra',
+            archivo: '/modelos/SudaderaNegra.glb',
+            codigo: 'SUDADERA_NEGRA',
+            x: -25.05,
+            z: -4,
+            ancho: 1.40,
+            profundidad: 1.00
+        },
+        {
+            nombre: 'Sudadera roja',
+            archivo: '/modelos/sudaderaroja.glb',
+            codigo: 'SUDADERA_ROJA',
+            x: -26.35,
+            z: 2,
+            ancho: 1.20,
+            profundidad: 1.00
+        },
+        {
+            nombre: 'Chamarra negra',
+            archivo: '/modelos/chamarranegra.glb',
+            codigo: 'CHAMARRA_NEGRA',
+            x: -25.05,
+            z: 2,
+            ancho: 1.20,
+            profundidad: 1.00
+        },
+        {
+            nombre: 'Pantalón de mezclilla',
+            archivo: '/modelos/pantalomezclilla.glb',
+            codigo: 'PANTALON_MEZCLILLA',
+            x: -26.35,
+            z: 8,
+            ancho: 1.15,
+            profundidad: 0.35
+        },
+        {
+            nombre: 'Vestido',
+            archivo: '/modelos/vesitdo.glb',
+            codigo: 'VESTIDO',
+            x: -25.05,
+            z: 8,
+            ancho: 1.20,
+            profundidad: 0.50
+        }
+    ];
+
+    prendas.forEach((prenda) => {
+        cargarModelo(
+            prenda.archivo,
+            prenda.nombre,
+            (original) => {
+                const fuentes = crearFuentesIndependientes(original);
+                const fuente = fuentes[0];
+
+                if (!fuente) return;
+
                 crearCopia(
                     fuente,
-                    `${config.codigo}_N${nivelIndex + 1}_1`,
-                    28.3 + columnasLimpieza[productoIndex],
-                    nivel,
-                    8.15,
-                    0.32,
+                    prenda.codigo,
+                    prenda.x,
+                    BASE_PRENDA,
+                    prenda.z,
+                    ALTURA_PRENDA,
                     GIRO_FRENTE,
-                    'Higiene y limpieza',
+                    'Ropa',
                     {
-                        ancho: 0.48,
-                        profundidad: 0.42
+                        ancho: prenda.ancho,
+                        profundidad: prenda.profundidad
                     }
                 );
-            });
-        });
+            }
+        );
     });
-// ========================================================
-// 6. DEPARTAMENTO DE ROPA
-// Prendas levantadas hasta el tubo del perchero.
-// ========================================================
-// ========================================================
-// 6. DEPARTAMENTO DE ROPA
-// ========================================================
-const ALTURA_TUBO_ROPA = 1.75;
 
-const BASE_PRENDA = 0.90;
-const ALTURA_PRENDA = 1.60;
-
-const prendas = [
-    {
-        nombre: 'Blusa',
-        archivo: '/modelos/Blusa.glb',
-        codigo: 'BLUSA',
-        x: -26.35,
-        z: -4,
-        ancho: 1.40,
-        profundidad: 1.55
-    },
-    {
-        nombre: 'Sudadera negra',
-        archivo: '/modelos/SudaderaNegra.glb',
-        codigo: 'SUDADERA_NEGRA',
-        x: -25.05,
-        z: -4,
-        ancho: 1.40,
-        profundidad: 1.00
-    },
-    {
-        nombre: 'Sudadera roja',
-        archivo: '/modelos/sudaderaroja.glb',
-        codigo: 'SUDADERA_ROJA',
-        x: -26.35,
-        z: 2,
-        ancho: 1.20,
-        profundidad: 1.00
-    },
-    {
-        nombre: 'Chamarra negra',
-        archivo: '/modelos/chamarranegra.glb',
-        codigo: 'CHAMARRA_NEGRA',
-        x: -25.05,
-        z: 2,
-        ancho: 1.20,
-        profundidad: 1.00
-    },
-    {
-        nombre: 'Pantalón de mezclilla',
-        archivo: '/modelos/pantalomezclilla.glb',
-        codigo: 'PANTALON_MEZCLILLA',
-        x: -26.35,
-        z: 8,
-        ancho: 1.15,
-        profundidad: 0.35
-    },
-    {
-        nombre: 'Vestido',
-        archivo: '/modelos/vesitdo.glb',
-        codigo: 'VESTIDO',
-        x: -25.05,
-        z: 8,
-        ancho: 1.20,
-        profundidad: 0.50
-    }
-];
-
-prendas.forEach((prenda) => {
-    cargarModelo(
-        prenda.archivo,
-        prenda.nombre,
-        (original) => {
-            const fuentes = crearFuentesIndependientes(original);
-            const fuente = fuentes[0];
-
-            if (!fuente) return;
-
-            crearCopia(
-                fuente,
-                prenda.codigo,
-                prenda.x,
-                BASE_PRENDA,
-                prenda.z,
-                ALTURA_PRENDA,
-                GIRO_FRENTE,
-                'Ropa',
-                {
-                    ancho: prenda.ancho,
-                    profundidad: prenda.profundidad
-                }
-            );
-        }
-    );
-});
     // ========================================================
     // 7. CONSULTAS PARA CLIENTES Y VENTAS
     // ========================================================
@@ -1303,7 +1427,8 @@ prendas.forEach((prenda) => {
 
     console.info(
         'Catálogo de productos iniciado. ' +
-        'Modelos independientes, prendas ampliadas y precios provisionales MXN.'
+        'Góndolas ampliadas, refrigeradores surtidos, ' +
+        'modelos independientes y precios provisionales MXN.'
     );
 
     return productos;
