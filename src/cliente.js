@@ -461,6 +461,35 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     // IDENTIFICAR RACKS
     // ========================================================
 
+    function esProductoDeClienteDos(producto) {
+        if (id !== 2 || !producto) return true;
+
+        const datos = producto.userData ?? {};
+        const textos = [
+            datos.nombre,
+            datos.codigo,
+            datos.categoria,
+            datos.departamento,
+            datos.tipo,
+            producto.name
+        ];
+
+        let actual = producto;
+        while (actual && textos.length < 12) {
+            textos.push(actual.name);
+            actual = actual.parent;
+        }
+
+        const texto = textos
+            .filter(valor => valor !== undefined && valor !== null)
+            .join(' ')
+            .normalize('NFD')
+            .replace(/[00-6f]/g, '')
+            .toLowerCase();
+
+        return /\b(platanos?|bananas?|bananos?)\b/.test(texto);
+    }
+
     function obtenerClaveRack(producto) {
         const datos = producto.userData ?? {};
 
@@ -2097,6 +2126,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         for (const producto of productos) {
             if (!productoDisponible(producto)) continue;
+            if (!esProductoDeClienteDos(producto)) continue;
             if (productosExaminados.has(producto)) continue;
 
             const claveRack = obtenerClaveRack(producto);
@@ -3842,4 +3872,4 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     actualizarColisiones();
 
     return api;
-}
+};
