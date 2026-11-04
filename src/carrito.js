@@ -38,6 +38,9 @@ const CONFIG_CESTA = {
     margenBase: 0.015
 };
 
+// Altura utilizada cuando no se detecta el fondo del carrito.
+const ALTURA_BASE_RESPALDO = 0.72;
+
 // ============================================================
 // CREAR CARRITO
 // ============================================================
@@ -515,9 +518,6 @@ export function crearCarrito(scene, opciones = {}) {
             }
         });
 
-        // IMPORTANTE:
-        // Se muestran todas las piezas candidatas para verificar
-        // cuál corresponde al fondo real de la cesta.
         console.table(
             candidatos.map(c => ({
                 nombre: c.objeto.name,
@@ -528,9 +528,6 @@ export function crearCarrito(scene, opciones = {}) {
             }))
         );
 
-        // Antes se seleccionaba el candidato más bajo.
-        // Eso podía elegir una placa inferior del chasis.
-        // Ahora se selecciona el candidato horizontal más alto.
         candidatos.sort((a, b) => b.altura - a.altura);
 
         if (candidatos.length > 0) {
@@ -544,10 +541,12 @@ export function crearCarrito(scene, opciones = {}) {
                 estado.baseCestaLocal
             );
         } else {
-            estado.baseCestaLocal = 0.66;
+            estado.baseCestaLocal = ALTURA_BASE_RESPALDO;
 
             console.warn(
-                '[CARRITO] No se encontró una superficie candidata. Se utiliza 0.66 como respaldo.'
+                '[CARRITO] No se encontró una superficie candidata. Se utiliza',
+                ALTURA_BASE_RESPALDO,
+                'como respaldo.'
             );
         }
     }
@@ -766,7 +765,7 @@ export function crearCarrito(scene, opciones = {}) {
 
         return new THREE.Vector3(
             x,
-            (estado.baseCestaLocal ?? 0.66) +
+            (estado.baseCestaLocal ?? ALTURA_BASE_RESPALDO) +
                 nivel * CONFIG_CESTA.alturaEntreNiveles,
             z
         );
@@ -834,7 +833,7 @@ export function crearCarrito(scene, opciones = {}) {
         if (!caja || caja.isEmpty()) return false;
 
         const alturaBase =
-            (estado.baseCestaLocal ?? 0.66) +
+            (estado.baseCestaLocal ?? ALTURA_BASE_RESPALDO) +
             Math.floor(
                 indice /
                 (CONFIG_CESTA.columnas * CONFIG_CESTA.filas)
