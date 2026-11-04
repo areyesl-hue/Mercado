@@ -1,3 +1,4 @@
+
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
@@ -59,7 +60,6 @@ export function crearProductosLacteos(scene) {
         REFRESCOS_SURTIDOS: 22,
 
         UVAS: 35,
-        PERA: 12,
         LIMON: 5,
         BROCOLI: 18,
         PEPINO: 12,
@@ -971,21 +971,8 @@ export function crearProductosLacteos(scene) {
         ]
     });
 
-    colocarEnMesa({
-        nombre: 'Pera',
-        archivo: '/modelos/Pera.glb',
-        codigo: 'PERA',
-        mesa: 'Mesa_frescos_02',
-        altura: 0.25,
-        posiciones: [
-            [-0.65, -0.30],
-            [0, -0.30],
-            [0.65, -0.30],
-            [-0.65, 0.30],
-            [0, 0.30],
-            [0.65, 0.30]
-        ]
-    });
+    // Mesa 2 dedicada a plátanos.
+    // Las peras fueron retiradas para dejar espacio a este producto.
 
     colocarEnMesa({
         nombre: 'Limón',
@@ -1315,6 +1302,30 @@ export function crearProductosLacteos(scene) {
         });
     };
 
+    // Buscar productos por código de catálogo.
+    // Ejemplo: obtenerPorCodigo('PLATANO')
+    productos.userData.obtenerPorCodigo = (codigo) => {
+        return unidades.filter((objeto) => {
+            return objeto.userData.codigoCatalogo === codigo;
+        });
+    };
+
+    // Obtener plátanos que todavía pueden recogerse.
+    productos.userData.obtenerPlatanosDisponibles = () => {
+        return unidades.filter((objeto) => {
+            const datos = objeto.userData;
+
+            return (
+                datos.codigoCatalogo === 'PLATANO' &&
+                datos.disponible &&
+                !datos.recogido &&
+                !datos.vendido &&
+                !datos.reservado &&
+                !datos.enCarrito
+            );
+        });
+    };
+
     productos.userData.buscarPorId = (idUnidad) => {
         return unidadesPorId.get(idUnidad) ?? null;
     };
@@ -1348,7 +1359,9 @@ export function crearProductosLacteos(scene) {
             vendidos,
             reservados,
             modelosCargados,
-            modelosFallidos
+            modelosFallidos,
+            platanosDisponibles:
+                productos.userData.obtenerPlatanosDisponibles().length
         };
     };
 
