@@ -109,7 +109,6 @@ export function crearProductosLacteos(scene) {
         1.8575
     ];
 
-    // Seis posiciones a lo largo de cada góndola.
     const posicionesGondola = [
         -2.5,
         -1.5,
@@ -119,7 +118,6 @@ export function crearProductosLacteos(scene) {
         2.5
     ];
 
-    // Tres posiciones horizontales por nivel del refrigerador.
     const posicionesRefrigerador = [
         -0.95,
         0,
@@ -169,7 +167,6 @@ export function crearProductosLacteos(scene) {
 
         loader.load(
             archivo,
-
             (gltf) => {
                 const original = gltf.scene;
                 original.name = nombre;
@@ -203,9 +200,7 @@ export function crearProductosLacteos(scene) {
 
                 console.info(`Modelo cargado: ${nombre}`);
             },
-
             undefined,
-
             (error) => {
                 modelosFallidos++;
                 cacheModelos.delete(archivo);
@@ -226,9 +221,7 @@ export function crearProductosLacteos(scene) {
         let encontrado = false;
 
         objeto.traverse((hijo) => {
-            if (hijo.isMesh) {
-                encontrado = true;
-            }
+            if (hijo.isMesh) encontrado = true;
         });
 
         return encontrado;
@@ -246,9 +239,7 @@ export function crearProductosLacteos(scene) {
                 return hijo.isGroup && contieneMallas(hijo);
             });
 
-            if (gruposHijos.length >= 2) {
-                return gruposHijos;
-            }
+            if (gruposHijos.length >= 2) return gruposHijos;
 
             for (const hijo of padre.children) {
                 const resultado = buscarContenedor(hijo);
@@ -289,10 +280,7 @@ export function crearProductosLacteos(scene) {
             grupo.updateWorldMatrix(true, true);
 
             const matrizRelativa = new THREE.Matrix4()
-                .multiplyMatrices(
-                    inversaRaiz,
-                    grupo.matrixWorld
-                );
+                .multiplyMatrices(inversaRaiz, grupo.matrixWorld);
 
             const copia = grupo.clone(true);
 
@@ -323,7 +311,6 @@ export function crearProductosLacteos(scene) {
             }
 
             const centro = new THREE.Vector3();
-
             caja.getCenter(centro);
 
             fuente.position.sub(centro);
@@ -350,9 +337,7 @@ export function crearProductosLacteos(scene) {
     function obtenerPrecio(codigo) {
         const precio = PRECIOS[codigo];
 
-        if (Number.isFinite(precio)) {
-            return precio;
-        }
+        if (Number.isFinite(precio)) return precio;
 
         console.warn(
             `No hay precio para ${codigo}. Se asignará $0.00 MXN.`
@@ -368,17 +353,13 @@ export function crearProductosLacteos(scene) {
     function obtenerDimensionesFuente(fuente) {
         let dimensiones = cacheDimensiones.get(fuente);
 
-        if (dimensiones) {
-            return dimensiones;
-        }
+        if (dimensiones) return dimensiones;
 
         fuente.updateMatrixWorld(true);
 
         const caja = new THREE.Box3().setFromObject(fuente);
 
-        if (caja.isEmpty()) {
-            return null;
-        }
+        if (caja.isEmpty()) return null;
 
         const centro = new THREE.Vector3();
         const tamano = new THREE.Vector3();
@@ -386,10 +367,7 @@ export function crearProductosLacteos(scene) {
         caja.getCenter(centro);
         caja.getSize(tamano);
 
-        dimensiones = {
-            centro,
-            tamano
-        };
+        dimensiones = { centro, tamano };
 
         cacheDimensiones.set(fuente, dimensiones);
 
@@ -420,8 +398,6 @@ export function crearProductosLacteos(scene) {
             return null;
         }
 
-        // clone(true) conserva las mallas y comparte
-        // geometrías y materiales con el modelo original.
         const modelo = fuente.clone(true);
 
         modelo.name = nombre;
@@ -433,10 +409,7 @@ export function crearProductosLacteos(scene) {
 
         const cajaRotada = new THREE.Box3().setFromObject(modelo);
 
-        if (cajaRotada.isEmpty()) {
-            console.warn(`Modelo vacío: ${nombre}`);
-            return null;
-        }
+        if (cajaRotada.isEmpty()) return null;
 
         const dimensionesRotadas = new THREE.Vector3();
         const centroRotado = new THREE.Vector3();
@@ -474,9 +447,7 @@ export function crearProductosLacteos(scene) {
 
         const cajaFinal = new THREE.Box3().setFromObject(modelo);
 
-        if (cajaFinal.isEmpty()) {
-            return null;
-        }
+        if (cajaFinal.isEmpty()) return null;
 
         const centroFinal = new THREE.Vector3();
         const dimensionesFinales = new THREE.Vector3();
@@ -484,7 +455,6 @@ export function crearProductosLacteos(scene) {
         cajaFinal.getCenter(centroFinal);
         cajaFinal.getSize(dimensionesFinales);
 
-        // Centrar horizontalmente y apoyar en la superficie.
         modelo.position.set(
             x - centroFinal.x,
             y - cajaFinal.min.y,
@@ -522,11 +492,7 @@ export function crearProductosLacteos(scene) {
         modelo.userData.enCarrito = false;
         modelo.userData.disponible = true;
 
-        modelo.userData.posicionEstante = {
-            x,
-            y,
-            z
-        };
+        modelo.userData.posicionEstante = { x, y, z };
 
         modelo.userData.rotacionEstante = {
             x: modelo.rotation.x,
@@ -570,10 +536,7 @@ export function crearProductosLacteos(scene) {
     // ROTACIÓN DE GÓNDOLAS
     // ========================================================
 
-    function obtenerRotacionGondola(
-        lado,
-        rotacionExtra = 0
-    ) {
+    function obtenerRotacionGondola(lado, rotacionExtra = 0) {
         const giroLado = lado === -1 ? Math.PI : 0;
 
         return GIRO_FRENTE + giroLado + rotacionExtra;
@@ -581,71 +544,57 @@ export function crearProductosLacteos(scene) {
 
     // ========================================================
     // 1. GÓNDOLAS CENTRALES
-    // 6 PRODUCTOS POR NIVEL
     // ========================================================
 
     function colocarEnGondola(config) {
-        cargarModelo(
-            config.archivo,
-            config.nombre,
-            (original) => {
-                const fuentes = crearFuentesIndependientes(original);
+        cargarModelo(config.archivo, config.nombre, (original) => {
+            const fuentes = crearFuentesIndependientes(original);
 
-                if (!fuentes.length) return;
+            if (!fuentes.length) return;
 
-                const desplazamientos =
-                    config.desplazamientos ?? posicionesGondola;
+            const desplazamientos =
+                config.desplazamientos ?? posicionesGondola;
 
-                let colocados = 0;
+            let colocados = 0;
 
-                nivelesGondola.forEach((nivel, nivelIndex) => {
-                    desplazamientos.forEach(
-                        (desplazamiento, indice) => {
-                            const fuente = fuentes[
-                                (
-                                    nivelIndex * desplazamientos.length +
-                                    indice
-                                ) % fuentes.length
-                            ];
+            nivelesGondola.forEach((nivel, nivelIndex) => {
+                desplazamientos.forEach((desplazamiento, indice) => {
+                    const fuente = fuentes[
+                        (nivelIndex * desplazamientos.length + indice) %
+                        fuentes.length
+                    ];
 
-                            const x =
-                                config.rackX + config.lado * 0.30;
+                    const x = config.rackX + config.lado * 0.30;
+                    const z = config.rackZ + desplazamiento;
 
-                            const z =
-                                config.rackZ + desplazamiento;
+                    const rotacion = obtenerRotacionGondola(
+                        config.lado,
+                        config.rotacionY ?? 0
+                    );
 
-                            const rotacion = obtenerRotacionGondola(
-                                config.lado,
-                                config.rotacionY ?? 0
-                            );
-
-                            const unidad = crearCopia(
-                                fuente,
-                                `${config.codigo}_N${nivelIndex + 1}_${indice + 1}`,
-                                x,
-                                nivel,
-                                z,
-                                config.altura,
-                                rotacion,
-                                config.categoria,
-                                {
-                                    ancho: 0.44,
-                                    profundidad: 0.90
-                                }
-                            );
-
-                            if (unidad) {
-                                colocados++;
-                            }
+                    const unidad = crearCopia(
+                        fuente,
+                        `${config.codigo}_N${nivelIndex + 1}_${indice + 1}`,
+                        x,
+                        nivel,
+                        z,
+                        config.altura,
+                        rotacion,
+                        config.categoria,
+                        {
+                            ancho: 0.44,
+                            profundidad: 0.90
                         }
                     );
-                });
 
-                console.info(
-                    `${config.nombre}: ${colocados} unidades colocadas en góndola.`
-                );
-            }
-        );
+                    if (unidad) colocados++;
+                });
+            });
+
+            console.info(
+                `${config.nombre}: ${colocados} unidades colocadas.`
+            );
+        });
     }
 
     // ========================================================
@@ -859,7 +808,6 @@ export function crearProductosLacteos(scene) {
 
     // ========================================================
     // 2. REFRIGERADORES
-    // 3 PRODUCTOS POR NIVEL
     // ========================================================
 
     const catalogoRefrigeradores = [
@@ -922,52 +870,45 @@ export function crearProductosLacteos(scene) {
     ];
 
     catalogoRefrigeradores.forEach((config) => {
-        cargarModelo(
-            config.archivo,
-            config.nombre,
-            (original) => {
-                const fuentes = crearFuentesIndependientes(original);
+        cargarModelo(config.archivo, config.nombre, (original) => {
+            const fuentes = crearFuentesIndependientes(original);
 
-                if (!fuentes.length) return;
+            if (!fuentes.length) return;
 
-                let colocados = 0;
+            let colocados = 0;
 
-                nivelesRefrigerador.forEach((nivel, nivelIndex) => {
-                    posicionesRefrigerador.forEach((dx, indice) => {
-                        const fuente = fuentes[
-                            (
-                                nivelIndex *
-                                posicionesRefrigerador.length +
-                                indice
-                            ) % fuentes.length
-                        ];
+            nivelesRefrigerador.forEach((nivel, nivelIndex) => {
+                posicionesRefrigerador.forEach((dx, indice) => {
+                    const fuente = fuentes[
+                        (
+                            nivelIndex * posicionesRefrigerador.length +
+                            indice
+                        ) % fuentes.length
+                    ];
 
-                        const unidad = crearCopia(
-                            fuente,
-                            `${config.codigo}_N${nivelIndex + 1}_${indice + 1}`,
-                            config.x + dx,
-                            nivel,
-                            -26.5,
-                            config.altura,
-                            GIRO_FRENTE,
-                            config.categoria,
-                            {
-                                ancho: 0.85,
-                                profundidad: 0.65
-                            }
-                        );
-
-                        if (unidad) {
-                            colocados++;
+                    const unidad = crearCopia(
+                        fuente,
+                        `${config.codigo}_N${nivelIndex + 1}_${indice + 1}`,
+                        config.x + dx,
+                        nivel,
+                        -26.5,
+                        config.altura,
+                        GIRO_FRENTE,
+                        config.categoria,
+                        {
+                            ancho: 0.85,
+                            profundidad: 0.65
                         }
-                    });
-                });
+                    );
 
-                console.info(
-                    `${config.nombre}: ${colocados} unidades colocadas en refrigerador.`
-                );
-            }
-        );
+                    if (unidad) colocados++;
+                });
+            });
+
+            console.info(
+                `${config.nombre}: ${colocados} unidades colocadas.`
+            );
+        });
     });
 
     // ========================================================
@@ -976,22 +917,10 @@ export function crearProductosLacteos(scene) {
     // ========================================================
 
     const mesasFrescos = {
-        Mesa_frescos_01: {
-            x: -25.5,
-            z: 15
-        },
-        Mesa_frescos_02: {
-            x: -21.7,
-            z: 15
-        },
-        Mesa_frescos_03: {
-            x: -25.5,
-            z: 10.8
-        },
-        Mesa_frescos_04: {
-            x: -21.7,
-            z: 10.8
-        }
+        Mesa_frescos_01: { x: -25.5, z: 15 },
+        Mesa_frescos_02: { x: -21.7, z: 15 },
+        Mesa_frescos_03: { x: -25.5, z: 10.8 },
+        Mesa_frescos_04: { x: -21.7, z: 10.8 }
     };
 
     function colocarEnMesa(config) {
@@ -1002,34 +931,30 @@ export function crearProductosLacteos(scene) {
             return;
         }
 
-        cargarModelo(
-            config.archivo,
-            config.nombre,
-            (original) => {
-                const fuentes = crearFuentesIndependientes(original);
+        cargarModelo(config.archivo, config.nombre, (original) => {
+            const fuentes = crearFuentesIndependientes(original);
 
-                if (!fuentes.length) return;
+            if (!fuentes.length) return;
 
-                config.posiciones.forEach(([dx, dz], indice) => {
-                    const fuente = fuentes[indice % fuentes.length];
+            config.posiciones.forEach(([dx, dz], indice) => {
+                const fuente = fuentes[indice % fuentes.length];
 
-                    crearCopia(
-                        fuente,
-                        `${config.codigo}_${String(indice + 1).padStart(2, '0')}`,
-                        mesa.x + dx,
-                        1.00,
-                        mesa.z + dz,
-                        config.altura,
-                        config.rotacionY ?? 0,
-                        'Frutas y verduras',
-                        {
-                            ancho: 0.42,
-                            profundidad: 0.42
-                        }
-                    );
-                });
-            }
-        );
+                crearCopia(
+                    fuente,
+                    `${config.codigo}_${String(indice + 1).padStart(2, '0')}`,
+                    mesa.x + dx,
+                    1.00,
+                    mesa.z + dz,
+                    config.altura,
+                    config.rotacionY ?? 0,
+                    'Frutas y verduras',
+                    {
+                        ancho: 0.42,
+                        profundidad: 0.42
+                    }
+                );
+            });
+        });
     }
 
     colocarEnMesa({
@@ -1115,6 +1040,11 @@ export function crearProductosLacteos(scene) {
         ]
     });
 
+    // ========================================================
+    // PLÁTANOS
+    // 15 UNIDADES EN LA MESA 2
+    // ========================================================
+
     colocarEnMesa({
         nombre: 'Plátano',
         archivo: '/modelos/Platano.glb',
@@ -1122,9 +1052,26 @@ export function crearProductosLacteos(scene) {
         mesa: 'Mesa_frescos_02',
         altura: 0.25,
         posiciones: [
-            [-0.55, 0.52],
-            [0.55, 0.52]
-        ]
+            [-0.75, -0.55],
+            [-0.25, -0.55],
+            [0.25, -0.55],
+            [0.75, -0.55],
+
+            [-0.75, -0.15],
+            [-0.25, -0.15],
+            [0.25, -0.15],
+            [0.75, -0.15],
+
+            [-0.75, 0.25],
+            [-0.25, 0.25],
+            [0.25, 0.25],
+            [0.75, 0.25],
+
+            [-0.50, 0.55],
+            [0, 0.55],
+            [0.50, 0.55]
+        ],
+        rotacionY: Math.PI / 2
     });
 
     // ========================================================
@@ -1133,34 +1080,30 @@ export function crearProductosLacteos(scene) {
     // ========================================================
 
     function colocarEnMostrador(config) {
-        cargarModelo(
-            config.archivo,
-            config.nombre,
-            (original) => {
-                const fuentes = crearFuentesIndependientes(original);
+        cargarModelo(config.archivo, config.nombre, (original) => {
+            const fuentes = crearFuentesIndependientes(original);
 
-                if (!fuentes.length) return;
+            if (!fuentes.length) return;
 
-                config.posiciones.forEach(([dx, dz], indice) => {
-                    const fuente = fuentes[indice % fuentes.length];
+            config.posiciones.forEach(([dx, dz], indice) => {
+                const fuente = fuentes[indice % fuentes.length];
 
-                    crearCopia(
-                        fuente,
-                        `${config.codigo}_${indice + 1}`,
-                        25.1 + dx,
-                        1.22,
-                        -7.3 + dz,
-                        config.altura,
-                        config.rotacionY ?? 0,
-                        'Carnicería',
-                        {
-                            ancho: 0.42,
-                            profundidad: 0.42
-                        }
-                    );
-                });
-            }
-        );
+                crearCopia(
+                    fuente,
+                    `${config.codigo}_${indice + 1}`,
+                    25.1 + dx,
+                    1.22,
+                    -7.3 + dz,
+                    config.altura,
+                    config.rotacionY ?? 0,
+                    'Carnicería',
+                    {
+                        ancho: 0.42,
+                        profundidad: 0.42
+                    }
+                );
+            });
+        });
     }
 
     colocarEnMostrador({
@@ -1220,33 +1163,29 @@ export function crearProductosLacteos(scene) {
     ];
 
     productosLimpieza.forEach((config, productoIndex) => {
-        cargarModelo(
-            config.archivo,
-            config.nombre,
-            (original) => {
-                const fuentes = crearFuentesIndependientes(original);
-                const fuente = fuentes[0];
+        cargarModelo(config.archivo, config.nombre, (original) => {
+            const fuentes = crearFuentesIndependientes(original);
+            const fuente = fuentes[0];
 
-                if (!fuente) return;
+            if (!fuente) return;
 
-                nivelesLimpieza.forEach((nivel, nivelIndex) => {
-                    crearCopia(
-                        fuente,
-                        `${config.codigo}_N${nivelIndex + 1}_1`,
-                        28.3 + columnasLimpieza[productoIndex],
-                        nivel,
-                        8.15,
-                        0.32,
-                        GIRO_FRENTE,
-                        'Higiene y limpieza',
-                        {
-                            ancho: 0.48,
-                            profundidad: 0.42
-                        }
-                    );
-                });
-            }
-        );
+            nivelesLimpieza.forEach((nivel, nivelIndex) => {
+                crearCopia(
+                    fuente,
+                    `${config.codigo}_N${nivelIndex + 1}_1`,
+                    28.3 + columnasLimpieza[productoIndex],
+                    nivel,
+                    8.15,
+                    0.32,
+                    GIRO_FRENTE,
+                    'Higiene y limpieza',
+                    {
+                        ancho: 0.48,
+                        profundidad: 0.42
+                    }
+                );
+            });
+        });
     });
 
     // ========================================================
@@ -1428,7 +1367,7 @@ export function crearProductosLacteos(scene) {
     console.info(
         'Catálogo de productos iniciado. ' +
         'Góndolas ampliadas, refrigeradores surtidos, ' +
-        'modelos independientes y precios provisionales MXN.'
+        '15 plátanos y precios provisionales MXN.'
     );
 
     return productos;
