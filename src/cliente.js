@@ -3776,45 +3776,32 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
     const api = {
         grupo,
-
         actualizar,
-
         establecerRuta,
-
         establecerPosicion,
-
         configurarCompras,
-
         detenerAnimacion,
-
         reproducirAnimacion,
-
         iniciarDesdeVehiculo,
-
         iniciarRegresoVehiculo,
-
         iniciarPago: dirigirseACaja,
+        actualizarColisiones,
+        eliminar,
 
-        obtenerObjetivo: () => {
-            return objetivo
-                ? { ...objetivo }
-                : null;
-        },
+        obtenerObjetivo: () => objetivo
+            ? { ...objetivo }
+            : null,
 
-        obtenerCompras: () => {
-            return compras.map(compra => ({
-                nombre: compra.nombre,
-                codigo: compra.codigo,
-                precio: compra.precio
-            }));
-        },
+        obtenerCompras: () => compras.map(compra => ({
+            nombre: compra.nombre,
+            codigo: compra.codigo,
+            precio: compra.precio
+        })),
 
         obtenerResumen: () => ({
             id,
             estado,
-
             productos: compras.length,
-
             posicion: {
                 x: grupo.position.x,
                 z: grupo.position.z
@@ -3822,10 +3809,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         }),
 
         obtenerEstado: () => estado,
-
-        actualizarColisiones,
-
-        eliminar,
 
         get cargado() {
             return cargado;
@@ -3858,5 +3841,5 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
     actualizarColisiones();
 
-    return api;
+    return Object.freeze(api);
 }
