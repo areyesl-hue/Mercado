@@ -329,6 +329,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     let tiempoRecalculoRuta = 0;
     let intentosMovimiento = 0;
     let ultimaPosicionMovimiento = new THREE.Vector3();
+    let tiempoSinMovimiento = 0;
 
     let productoObjetivo = null;
     let productoEnMano = null;
@@ -1317,6 +1318,12 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         intentosMovimiento = 0;
         tiempoRecalculoRuta = 0;
+        tiempoSinMovimiento = 0;
+        ultimaPosicionMovimiento.set(
+            grupo.position.x,
+            grupo.position.y,
+            grupo.position.z
+        );
 
         const caminando = [
             ESTADOS.ENTRANDO,
@@ -1839,6 +1846,42 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         }
 
         return false;
+    }
+
+    function resolverClienteAtascado() {
+        console.warn(
+            `[CLIENTE ${id}] Se detectó movimiento detenido por 5 segundos.`
+        );
+
+        liberarReserva();
+        ruta = [];
+        objetivo = null;
+        intentosMovimiento = 0;
+        tiempoSinMovimiento = 0;
+
+        if (estado === ESTADOS.REGRESANDO) {
+            cambiarEstado(ESTADOS.ESPERANDO);
+            return;
+        }
+
+        if (estado === ESTADOS.ENTRANDO) {
+            cambiarEstado(ESTADOS.ESPERANDO);
+            return;
+        }
+
+        if (estado === ESTADOS.CAJA) {
+            cambiarEstado(ESTADOS.ESPERANDO);
+            return;
+        }
+
+        if (compras.length >= config.maximoProductos) {
+            if (!dirigirseACaja()) {
+                cambiarEstado(ESTADOS.ESPERANDO);
+            }
+            return;
+        }
+
+        iniciarPaseo();
     }
 
     function moverHaciaDestino(delta) {
@@ -3311,6 +3354,38 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         tiempoActualizarObstaculos += delta;
 
         tiempoRecalculoRuta += delta;
+
+        const moviendo = [
+            ESTADOS.ENTRANDO,
+            ESTADOS.ACERCANDO,
+            ESTADOS.RUTA,
+            ESTADOS.CAJA,
+            ESTADOS.REGRESANDO
+        ].includes(estado);
+
+        if (moviendo) {
+            const desplazamiento = distanciaXZ(
+                ultimaPosicionMovimiento,
+                grupo.position
+            );
+
+            if (desplazamiento > 0.04) {
+                ultimaPosicionMovimiento.set(
+                    grupo.position.x,
+                    grupo.position.y,
+                    grupo.position.z
+                );
+                tiempoSinMovimiento = 0;
+            } else {
+                tiempoSinMovimiento += delta;
+            }
+
+            if (tiempoSinMovimiento >= 5) {
+                resolverClienteAtascado();
+            }
+        } else {
+            tiempoSinMovimiento = 0;
+        }
 
         if (tiempoActualizarObstaculos >= 2) {
             actualizarColisiones();
