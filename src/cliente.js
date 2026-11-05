@@ -2319,6 +2319,49 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         return true;
     }
 
+    function palmaAlcanzaProducto(producto) {
+        if (!producto || !producto.visible) return false;
+
+        const mano =
+            rig.manoDerecha ||
+            rig.brazoDerecho;
+
+        if (!mano) return false;
+
+        grupo.updateMatrixWorld(true);
+        mano.updateWorldMatrix(true, true);
+        producto.updateMatrixWorld(true);
+
+        const offset = config.offsetProductoMano;
+        const palma = mano.localToWorld(
+            new THREE.Vector3(
+                numero(offset.x),
+                numero(offset.y),
+                numero(offset.z)
+            )
+        );
+
+        cajaTemporal.setFromObject(producto);
+
+        if (cajaTemporal.isEmpty()) return false;
+
+        const tamano = new THREE.Vector3();
+        cajaTemporal.getSize(tamano);
+
+        const radioContacto = Math.max(
+            0.08,
+            Math.min(tamano.x, tamano.y, tamano.z) * 0.45
+        );
+
+        const puntoMasCercano = palma.clone().clamp(
+            cajaTemporal.min,
+            cajaTemporal.max
+        );
+
+        return palma.distanceToSquared(puntoMasCercano) <=
+            radioContacto * radioContacto;
+    }
+
     // ========================================================
     // TOMAR PRODUCTO
     // ========================================================
@@ -2335,6 +2378,10 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         const producto = productoObjetivo;
 
+        if (!palmaAlcanzaProducto(producto)) {
+            return;
+        }
+
         producto.updateMatrixWorld(true);
 
         productoEsInferior =
@@ -2343,8 +2390,10 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         cajaTemporal.setFromObject(producto);
 
         const tamanoProducto = new THREE.Vector3();
+        const centroProductoMundo = new THREE.Vector3();
 
         cajaTemporal.getSize(tamanoProducto);
+        cajaTemporal.getCenter(centroProductoMundo);
 
         productoOriginal = {
             parent: producto.parent,
@@ -2385,8 +2434,53 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         mano.updateMatrixWorld(true);
         producto.updateMatrixWorld(true);
 
+        const posicionProductoMundo = producto.getWorldPosition(
+            new THREE.Vector3()
+        );
+        const quaternionProductoMundo = producto.getWorldQuaternion(
+            new THREE.Quaternion()
+        );
+        const escalaProductoMundo = producto.getWorldScale(
+            new THREE.Vector3()
+        );
+
         mano.attach(producto);
 
+        producto.updateMatrixWorld(true);
+
+        const offset = config.offsetProductoMano;
+        const posicionPalmaMundo = mano.localToWorld(
+            new THREE.Vector3(
+                numero(offset.x),
+                numero(offset.y),
+                numero(offset.z)
+            )
+        );
+
+        const desplazamientoCentro =
+            posicionPalmaMundo.clone().sub(centroProductoMundo);
+
+        const posicionOrigenPalma = posicionProductoMundo
+            .clone()
+            .add(desplazamientoCentro);
+
+        const matrizProductoPalma = new THREE.Matrix4();
+        matrizProductoPalma.compose(
+            posicionOrigenPalma,
+            quaternionProductoMundo,
+            escalaProductoMundo
+        );
+
+        const matrizLocalPalma = new THREE.Matrix4()
+            .copy(mano.matrixWorld)
+            .invert()
+            .multiply(matrizProductoPalma);
+
+        matrizLocalPalma.decompose(
+            producto.position,
+            producto.quaternion,
+            producto.scale
+        );
         producto.updateMatrixWorld(true);
 
         animacionAgarre.posicionInicial.copy(producto.position);
@@ -3503,8 +3597,26 @@ export function crearClienteSupermercado(scene, opciones = {}) {
                     0.88
                 );
 
-                if (tiempoEstado >= config.tiempoRecoger * momentoAgarre) {
+                const alcanceTiempo =
+                    tiempoEstado >=
+                    config.tiempoRecoger * momentoAgarre;
+
+                if (
+                    alcanceTiempo &&
+                    productoObjetivo &&
+                    palmaAlcanzaProducto(productoObjetivo)
+                ) {
                     tomarProducto();
+                }
+
+                if (
+                    tiempoEstado >= config.tiempoRecoger &&
+                    estado === ESTADOS.RECOGIENDO &&
+                    !productoEnMano
+                ) {
+                    liberarReserva();
+                    productoObjetivo = null;
+                    cambiarEstado(ESTADOS.BUSCANDO);
                 }
 
                 break;
