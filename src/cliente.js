@@ -1040,94 +1040,19 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             return false;
         }
 
-        animacionAgarre.tiempo += delta;
-
-        const duracion = Math.max(
-            animacionAgarre.duracion,
-            0.01
-        );
-
-        const t = limitar(
-            animacionAgarre.tiempo / duracion,
-            0,
-            1
-        );
-
-        const inicioMovimiento = limitar((t - 0.22) / 0.78, 0, 1);
-        const suave = suavizar(inicioMovimiento);
-
         grupo.updateMatrixWorld(true);
         mano.updateWorldMatrix(true, true);
         producto.updateMatrixWorld(true);
 
-        const offset = config.offsetProductoMano;
-        const posicionFinal = mano.localToWorld(
-            new THREE.Vector3(
-                numero(offset.x),
-                numero(offset.y),
-                numero(offset.z)
-            )
-        );
-        animacionAgarre.posicionMundoObjetivoTemporal.copy(posicionFinal);
-
-        const quaternionMano = mano.getWorldQuaternion(
-            animacionAgarre.quaternionManoTemporal
-        );
-        const quaternionFinal =
-            animacionAgarre.quaternionFinalTemporal
-                .copy(animacionAgarre.quaternionFinal)
-                .premultiply(quaternionMano);
-
-        const posicionFinalTemporal =
-            animacionAgarre.posicionMundoTemporal;
-
-        const posicionMundo =
-            posicionFinalTemporal.lerpVectors(
-                animacionAgarre.posicionMundoInicial,
-                animacionAgarre.posicionMundoObjetivoTemporal,
-                suave
-            );
-
-        const quaternionMundo =
-            animacionAgarre.quaternionMundoTemporal
-                .copy(animacionAgarre.quaternionMundoInicial)
-                .slerp(quaternionFinal, suave);
-
-        const escalaMundo =
-            animacionAgarre.escalaMundoTemporal.lerpVectors(
-                animacionAgarre.escalaMundoInicial,
-                animacionAgarre.escalaFinal,
-                suave
-            );
-
-        establecerTransformacionMundial(
-            producto,
-            posicionMundo,
-            quaternionMundo,
-            escalaMundo
-        );
-
-        if (t >= 1) {
-            establecerTransformacionMundial(
-                producto,
-                mano.localToWorld(
-                    new THREE.Vector3(
-                        numero(offset.x),
-                        numero(offset.y),
-                        numero(offset.z)
-                    )
-                ),
-                quaternionFinal,
-                animacionAgarre.escalaFinal
-            );
-
-            animacionAgarre.activa = false;
-            animacionAgarre.tiempo = 0;
-
-            return true;
+        if (producto.parent !== mano) {
+            mano.attach(producto);
+            producto.updateMatrixWorld(true);
         }
 
-        return false;
+        animacionAgarre.activa = false;
+        animacionAgarre.tiempo = 0;
+
+        return true;
     }
 
     function establecerTransformacionMundial(
@@ -2530,13 +2455,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         animacionAgarre.quaternionInicial.copy(producto.quaternion);
         animacionAgarre.escalaInicial.copy(producto.scale);
 
-        const offset = config.offsetProductoMano;
-
-        animacionAgarre.posicionFinal.set(
-            numero(offset.x),
-            numero(offset.y),
-            numero(offset.z)
-        );
+        animacionAgarre.posicionFinal.copy(producto.position);
 
         const rotacion = config.rotacionProductoMano;
 
@@ -2548,9 +2467,9 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         animacionAgarre.quaternionFinal.setFromEuler(eulerFinal);
 
-        animacionAgarre.escalaFinal
-            .copy(animacionAgarre.escalaMundoInicial)
-            .multiplyScalar(config.escalaProductoMano);
+        animacionAgarre.escalaFinal.copy(
+            escalaMundoInicial
+        );
 
         animacionAgarre.tiempo = 0;
 
@@ -2559,7 +2478,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             0.05
         );
 
-        animacionAgarre.activa = true;
+        animacionAgarre.activa = false;
 
         producto.visible = true;
         productoEnMano = producto;
