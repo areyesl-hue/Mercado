@@ -855,11 +855,40 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         animarAgacharse(agachado * suavizar(progreso * 1.35));
 
-        const hombro = THREE.MathUtils.lerp(-0.08, -1.08 * (productoEsInferior ? 0.72 : 1), acercarse);
-        const antebrazo = THREE.MathUtils.lerp(-0.08, -0.78, acercarse);
+        let cercaniaReal = acercarse;
 
-        aplicarRotacionEuler(rig.brazoDerecho, hombro, -0.06 * acercarse, 0.08 * acercarse);
-        aplicarRotacionEuler(rig.antebrazoDerecho, antebrazo, -0.12 * acercarse, 0.06);
+        if (productoObjetivo && rig.manoDerecha) {
+            grupo.updateMatrixWorld(true);
+            rig.manoDerecha.updateWorldMatrix(true, true);
+            productoObjetivo.updateMatrixWorld(true);
+
+            const palma = rig.manoDerecha.localToWorld(
+                new THREE.Vector3(
+                    numero(config.offsetProductoMano.x),
+                    numero(config.offsetProductoMano.y),
+                    numero(config.offsetProductoMano.z)
+                )
+            );
+            const productoCentro = new THREE.Vector3();
+            cajaTemporal.setFromObject(productoObjetivo);
+
+            if (!cajaTemporal.isEmpty()) {
+                cajaTemporal.getCenter(productoCentro);
+                cercaniaReal = THREE.MathUtils.lerp(
+                    acercarse,
+                    1 - limitar(palma.distanceTo(productoCentro) / 1.5, 0, 1),
+                    0.35
+                );
+            }
+        }
+
+        cercaniaReal = suavizar(limitar(cercaniaReal, 0, 1));
+
+        const hombro = THREE.MathUtils.lerp(-0.08, -1.08 * (productoEsInferior ? 0.72 : 1), cercaniaReal);
+        const antebrazo = THREE.MathUtils.lerp(-0.08, -0.78, cercaniaReal);
+
+        aplicarRotacionEuler(rig.brazoDerecho, hombro, -0.06 * cercaniaReal, 0.08 * cercaniaReal);
+        aplicarRotacionEuler(rig.antebrazoDerecho, antebrazo, -0.12 * cercaniaReal, 0.06);
         aplicarRotacionEuler(rig.manoDerecha, -0.18 - contacto * 0.58, contacto * 0.08, -0.18 * contacto);
 
         aplicarRotacionEuler(rig.brazoIzquierdo,
@@ -2340,6 +2369,9 @@ export function crearClienteSupermercado(scene, opciones = {}) {
                 numero(offset.z)
             )
         );
+        const origenMano = mano.getWorldPosition(
+            new THREE.Vector3()
+        );
 
         cajaTemporal.setFromObject(producto);
 
@@ -2357,9 +2389,16 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             cajaTemporal.min,
             cajaTemporal.max
         );
+        const puntoMasCercanoDesdeOrigen = origenMano.clone().clamp(
+            cajaTemporal.min,
+            cajaTemporal.max
+        );
 
         return palma.distanceToSquared(puntoMasCercano) <=
-            radioContacto * radioContacto;
+            radioContacto * radioContacto ||
+            origenMano.distanceToSquared(
+                puntoMasCercanoDesdeOrigen
+            ) <= radioContacto * radioContacto;
     }
 
     // ========================================================
@@ -2390,10 +2429,8 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         cajaTemporal.setFromObject(producto);
 
         const tamanoProducto = new THREE.Vector3();
-        const centroProductoMundo = new THREE.Vector3();
 
         cajaTemporal.getSize(tamanoProducto);
-        cajaTemporal.getCenter(centroProductoMundo);
 
         productoOriginal = {
             parent: producto.parent,
@@ -2434,53 +2471,8 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         mano.updateMatrixWorld(true);
         producto.updateMatrixWorld(true);
 
-        const posicionProductoMundo = producto.getWorldPosition(
-            new THREE.Vector3()
-        );
-        const quaternionProductoMundo = producto.getWorldQuaternion(
-            new THREE.Quaternion()
-        );
-        const escalaProductoMundo = producto.getWorldScale(
-            new THREE.Vector3()
-        );
-
         mano.attach(producto);
-
         producto.updateMatrixWorld(true);
-
-        const offset = config.offsetProductoMano;
-        const posicionPalmaMundo = mano.localToWorld(
-            new THREE.Vector3(
-                numero(offset.x),
-                numero(offset.y),
-                numero(offset.z)
-            )
-        );
-
-        const desplazamientoCentro =
-            posicionPalmaMundo.clone().sub(centroProductoMundo);
-
-        const posicionOrigenPalma = posicionProductoMundo
-            .clone()
-            .add(desplazamientoCentro);
-
-        const matrizProductoPalma = new THREE.Matrix4();
-        matrizProductoPalma.compose(
-            posicionOrigenPalma,
-            quaternionProductoMundo,
-            escalaProductoMundo
-        );
-
-        const matrizLocalPalma = new THREE.Matrix4()
-            .copy(mano.matrixWorld)
-            .invert()
-            .multiply(matrizProductoPalma);
-
-        matrizLocalPalma.decompose(
-            producto.position,
-            producto.quaternion,
-            producto.scale
-        );
         producto.updateMatrixWorld(true);
 
         animacionAgarre.posicionInicial.copy(producto.position);
