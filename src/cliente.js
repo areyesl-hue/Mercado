@@ -34,10 +34,13 @@ const CONFIG_BASE = {
     altura: 1.75,
     escala: 1,
 
-    velocidad: 2.75,
-    velocidadEntrada: 2.85,
-    velocidadRegreso: 2.85,
+velocidad: 2.9,
+velocidadEntrada: 2.5,
+velocidadRegreso: 2.7,
 
+// Movimiento más ágil
+aceleracion: 5.5,
+suavizadoGiro: 9.0,
     limiteX: 29,
     limiteZMin: -27,
     limiteZMax: 55,
