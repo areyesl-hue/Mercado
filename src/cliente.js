@@ -34,9 +34,9 @@ const CONFIG_BASE = {
     altura: 1.75,
     escala: 1,
 
-    velocidad: 1.75,
-    velocidadEntrada: 2.05,
-    velocidadRegreso: 2.05,
+    velocidad: 2.75,
+    velocidadEntrada: 2.85,
+    velocidadRegreso: 2.85,
 
     limiteX: 29,
     limiteZMin: -27,
@@ -106,7 +106,7 @@ const CONFIG_BASE = {
 
     // Animación.
     usarAnimacionesGLB: true,
-    velocidadAnimacionGLB: 1,
+    velocidadAnimacionGLB: 1.5,
 
     repetirRuta: false,
     inactivo: false,
