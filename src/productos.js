@@ -5,6 +5,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 // ============================================================
 // PRODUCTOS DEL SUPERMERCADO
 // Three.js | GLB | Unidades independientes
+// CATÁLOGO: ÚNICAMENTE PLÁTANOS
 // ============================================================
 
 export function crearProductosLacteos(scene) {
@@ -19,112 +20,12 @@ export function crearProductosLacteos(scene) {
     scene.add(productos);
 
     // ========================================================
-    // PRECIOS PROVISIONALES MXN
+    // PRECIO DEL ÚNICO PRODUCTO
     // ========================================================
 
     const PRECIOS = {
-        GALLETAS: 23,
-        CEREAL: 58,
-        CEREAL_2: 58,
-        NESQUIK: 55,
-        NESQUIK_EXTRA: 55,
-
-        DORITO: 22,
-        DORITO_DINAMITA: 22,
-        DORITO_ICONIG: 22,
-        DORITO_PIZZEROLA: 22,
-
-        SABRITAS: 18,
-        SABRITAS_ADOBADAS: 18,
-        SABRITAS_LIMON: 18,
-
-        FRIJOLES: 24,
-        ELOTE: 22,
-        JALAPENO: 23,
-        ACEITE: 42,
-        ATUN: 28,
-
-        PAPEL: 35,
-        PAPEL_HOGAR: 35,
-        HIGIENE_PERSONAL: 45,
-        HIGIENE_SURTIDA: 45,
-        TOALLITAS_BEBE: 42,
-        BEBE_SURTIDO: 42,
-
-        SANTA_CLARA: 30,
-        LALA: 29,
-        AGUA: 15,
-        AGUA_FRIA: 15,
-        PEPSI: 20,
-        PEPSI_EXTRA: 20,
-        REFRESCOS_SURTIDOS: 22,
-
-        UVAS: 35,
-        LIMON: 5,
-        BROCOLI: 18,
-        PEPINO: 12,
-        MANZANA: 10,
-        PLATANO: 8,
-
-        POLLO: 45,
-        FILETE: 55,
-
-        CLORO: 24,
-        DETERGENTE: 48,
-        DETERGENTE_2: 48,
-        SUAVIZANTE: 42,
-        LIMPIADOR: 35,
-
-        BLUSA: 180,
-        SUDADERA_NEGRA: 350,
-        SUDADERA_ROJA: 350,
-        CHAMARRA_NEGRA: 550,
-        PANTALON_MEZCLILLA: 420,
-        VESTIDO: 380
+        PLATANO: 8
     };
-
-    // ========================================================
-    // ALTURAS DE LAS SUPERFICIES
-    // ========================================================
-
-    const nivelesGondola = [
-        0.4625,
-        0.8925,
-        1.3225,
-        1.7525
-    ];
-
-    const nivelesRefrigerador = [
-        0.5225,
-        0.9525,
-        1.3825,
-        1.8125
-    ];
-
-    const nivelesLimpieza = [
-        0.4575,
-        0.8075,
-        1.1575,
-        1.5075,
-        1.8575
-    ];
-
-    const posicionesGondola = [
-        -2.5,
-        -1.5,
-        -0.5,
-        0.5,
-        1.5,
-        2.5
-    ];
-
-    const posicionesRefrigerador = [
-        -0.95,
-        0,
-        0.95
-    ];
-
-    const GIRO_FRENTE = Math.PI / 2;
 
     // ========================================================
     // REGISTROS
@@ -533,420 +434,59 @@ export function crearProductosLacteos(scene) {
     }
 
     // ========================================================
-    // ROTACIÓN DE GÓNDOLAS
+    // ÚNICO PRODUCTO: PLÁTANO
+    // 15 unidades en Mesa_frescos_02
     // ========================================================
 
-    function obtenerRotacionGondola(lado, rotacionExtra = 0) {
-        const giroLado = lado === -1 ? Math.PI : 0;
+    const posicionesPlatanos = [
+        [-0.75, -0.55],
+        [-0.25, -0.55],
+        [ 0.25, -0.55],
+        [ 0.75, -0.55],
 
-        return GIRO_FRENTE + giroLado + rotacionExtra;
-    }
+        [-0.75, -0.15],
+        [-0.25, -0.15],
+        [ 0.25, -0.15],
+        [ 0.75, -0.15],
 
-    // ========================================================
-    // 1. GÓNDOLAS CENTRALES
-    // ========================================================
+        [-0.75,  0.25],
+        [-0.25,  0.25],
+        [ 0.25,  0.25],
+        [ 0.75,  0.25],
 
-    function colocarEnGondola(config) {
-        cargarModelo(config.archivo, config.nombre, (original) => {
-            const fuentes = crearFuentesIndependientes(original);
-
-            if (!fuentes.length) return;
-
-            const desplazamientos =
-                config.desplazamientos ?? posicionesGondola;
-
-            let colocados = 0;
-
-            nivelesGondola.forEach((nivel, nivelIndex) => {
-                desplazamientos.forEach((desplazamiento, indice) => {
-                    const fuente = fuentes[
-                        (nivelIndex * desplazamientos.length + indice) %
-                        fuentes.length
-                    ];
-
-                    const x = config.rackX + config.lado * 0.30;
-                    const z = config.rackZ + desplazamiento;
-
-                    const rotacion = obtenerRotacionGondola(
-                        config.lado,
-                        config.rotacionY ?? 0
-                    );
-
-                    const unidad = crearCopia(
-                        fuente,
-                        `${config.codigo}_N${nivelIndex + 1}_${indice + 1}`,
-                        x,
-                        nivel,
-                        z,
-                        config.altura,
-                        rotacion,
-                        config.categoria,
-                        {
-                            ancho: 0.44,
-                            profundidad: 0.90
-                        }
-                    );
-
-                    if (unidad) colocados++;
-                });
-            });
-
-            console.info(
-                `${config.nombre}: ${colocados} unidades colocadas.`
-            );
-        });
-    }
-
-    // ========================================================
-    // CATÁLOGO DE GÓNDOLAS
-    // ========================================================
-
-    const catalogoGondolas = [
-        {
-            nombre: 'Nesquik',
-            archivo: '/modelos/nesquik.glb',
-            codigo: 'NESQUIK',
-            categoria: 'Cereales',
-            rackX: -17,
-            rackZ: -13,
-            lado: 1,
-            altura: 0.30
-        },
-        {
-            nombre: 'Cereal',
-            archivo: '/modelos/cereal.glb',
-            codigo: 'CEREAL',
-            categoria: 'Cereales',
-            rackX: -17,
-            rackZ: 0,
-            lado: 1,
-            altura: 0.30
-        },
-        {
-            nombre: 'Cereal 2',
-            archivo: '/modelos/cereal2.glb',
-            codigo: 'CEREAL_2',
-            categoria: 'Cereales',
-            rackX: -17,
-            rackZ: 0,
-            lado: -1,
-            altura: 0.30
-        },
-        {
-            nombre: 'Dorito',
-            archivo: '/modelos/Dorito.glb',
-            codigo: 'DORITO',
-            categoria: 'Botanas',
-            rackX: 9,
-            rackZ: -13,
-            lado: -1,
-            altura: 0.40
-        },
-        {
-            nombre: 'Dorito Dinamita',
-            archivo: '/modelos/DoritoDinamita.glb',
-            codigo: 'DORITO_DINAMITA',
-            categoria: 'Botanas',
-            rackX: 9,
-            rackZ: -13,
-            lado: 1,
-            altura: 0.40
-        },
-        {
-            nombre: 'Dorito Iconig',
-            archivo: '/modelos/DoritoIconig.glb',
-            codigo: 'DORITO_ICONIG',
-            categoria: 'Botanas',
-            rackX: -9,
-            rackZ: 13,
-            lado: -1,
-            altura: 0.40
-        },
-        {
-            nombre: 'Dorito Pizzerola',
-            archivo: '/modelos/DoritoPizeerola.glb',
-            codigo: 'DORITO_PIZZEROLA',
-            categoria: 'Botanas',
-            rackX: -9,
-            rackZ: 13,
-            lado: 1,
-            altura: 0.40
-        },
-        {
-            nombre: 'Sabritas',
-            archivo: '/modelos/Sabritas.glb',
-            codigo: 'SABRITAS',
-            categoria: 'Botanas',
-            rackX: 17,
-            rackZ: -13,
-            lado: -1,
-            altura: 0.35
-        },
-        {
-            nombre: 'Sabritas Adobadas',
-            archivo: '/modelos/SabritasAdobadas.glb',
-            codigo: 'SABRITAS_ADOBADAS',
-            categoria: 'Botanas',
-            rackX: 17,
-            rackZ: -13,
-            lado: 1,
-            altura: 0.35
-        },
-        {
-            nombre: 'Sabritas Limón',
-            archivo: '/modelos/SabritasLimon.glb',
-            codigo: 'SABRITAS_LIMON',
-            categoria: 'Botanas',
-            rackX: 9,
-            rackZ: 13,
-            lado: -1,
-            altura: 0.35
-        },
-        {
-            nombre: 'Frijoles',
-            archivo: '/modelos/Frijoles.glb',
-            codigo: 'FRIJOLES',
-            categoria: 'Enlatados',
-            rackX: -9,
-            rackZ: -13,
-            lado: -1,
-            altura: 0.30
-        },
-        {
-            nombre: 'Elote',
-            archivo: '/modelos/Elote.glb',
-            codigo: 'ELOTE',
-            categoria: 'Enlatados',
-            rackX: -9,
-            rackZ: -13,
-            lado: 1,
-            altura: 0.30
-        },
-        {
-            nombre: 'Jalapeño',
-            archivo: '/modelos/Jalapeño.glb',
-            codigo: 'JALAPENO',
-            categoria: 'Enlatados',
-            rackX: -17,
-            rackZ: 13,
-            lado: -1,
-            altura: 0.30
-        },
-        {
-            nombre: 'Atún',
-            archivo: '/modelos/Atun.glb',
-            codigo: 'ATUN',
-            categoria: 'Enlatados',
-            rackX: -17,
-            rackZ: 13,
-            lado: 1,
-            altura: 0.30
-        },
-        {
-            nombre: 'Aceite',
-            archivo: '/modelos/Aceite.glb',
-            codigo: 'ACEITE',
-            categoria: 'Aceites y abarrotes',
-            rackX: 17,
-            rackZ: 0,
-            lado: -1,
-            altura: 0.42
-        },
-        {
-            nombre: 'Papel higiénico',
-            archivo: '/modelos/papel.glb',
-            codigo: 'PAPEL',
-            categoria: 'Hogar',
-            rackX: -9,
-            rackZ: 0,
-            lado: -1,
-            altura: 0.30
-        },
-        {
-            nombre: 'Toallitas para bebé',
-            archivo: '/modelos/toallitas_bebe.glb',
-            codigo: 'TOALLITAS_BEBE',
-            categoria: 'Bebé',
-            rackX: 9,
-            rackZ: 0,
-            lado: -1,
-            altura: 0.38
-        },
-        {
-            nombre: 'Cereal Nesquik',
-            archivo: '/modelos/nesquik.glb',
-            codigo: 'NESQUIK_EXTRA',
-            categoria: 'Cereales',
-            rackX: 17,
-            rackZ: -13,
-            lado: 1,
-            altura: 0.30
-        },
-        {
-            nombre: 'Papel para el hogar',
-            archivo: '/modelos/papel.glb',
-            codigo: 'PAPEL_HOGAR',
-            categoria: 'Hogar',
-            rackX: 9,
-            rackZ: 13,
-            lado: 1,
-            altura: 0.30
-        },
-        {
-            nombre: 'Toallitas de bebé',
-            archivo: '/modelos/toallitas_bebe.glb',
-            codigo: 'BEBE_SURTIDO',
-            categoria: 'Bebé',
-            rackX: 17,
-            rackZ: 0,
-            lado: 1,
-            altura: 0.38
-        }
+        [-0.50,  0.55],
+        [ 0.00,  0.55],
+        [ 0.50,  0.55]
     ];
 
-    catalogoGondolas.forEach(colocarEnGondola);
-
-    // ========================================================
-    // 2. REFRIGERADORES
-    // ========================================================
-
-    const catalogoRefrigeradores = [
-        {
-            nombre: 'Leche Santa Clara',
-            archivo: '/modelos/SantaClara.glb',
-            codigo: 'SANTA_CLARA',
-            x: -27,
-            altura: 0.30,
-            categoria: 'Lácteos'
-        },
-        {
-            nombre: 'Leche Lala',
-            archivo: '/modelos/Lala.glb',
-            codigo: 'LALA',
-            x: -23.5,
-            altura: 0.30,
-            categoria: 'Lácteos'
-        },
-        {
-            nombre: 'Agua embotellada',
-            archivo: '/modelos/Agua.glb',
-            codigo: 'AGUA',
-            x: -20,
-            altura: 0.38,
-            categoria: 'Bebidas'
-        },
-        {
-            nombre: 'Pepsi',
-            archivo: '/modelos/Pepsi.glb',
-            codigo: 'PEPSI',
-            x: -16.5,
-            altura: 0.30,
-            categoria: 'Refrescos'
-        },
-        {
-            nombre: 'Pepsi y Coca-Cola',
-            archivo: '/modelos/Pepsi. y coca.glb',
-            codigo: 'REFRESCOS_SURTIDOS',
-            x: 16.5,
-            altura: 0.30,
-            categoria: 'Refrescos'
-        },
-        {
-            nombre: 'Agua fría',
-            archivo: '/modelos/Agua.glb',
-            codigo: 'AGUA_FRIA',
-            x: 20,
-            altura: 0.38,
-            categoria: 'Bebidas'
-        },
-        {
-            nombre: 'Refrescos Pepsi',
-            archivo: '/modelos/Pepsi.glb',
-            codigo: 'PEPSI_EXTRA',
-            x: 27,
-            altura: 0.30,
-            categoria: 'Refrescos'
-        }
-    ];
-
-    catalogoRefrigeradores.forEach((config) => {
-        cargarModelo(config.archivo, config.nombre, (original) => {
-            const fuentes = crearFuentesIndependientes(original);
-
-            if (!fuentes.length) return;
-
-            let colocados = 0;
-
-            nivelesRefrigerador.forEach((nivel, nivelIndex) => {
-                posicionesRefrigerador.forEach((dx, indice) => {
-                    const fuente = fuentes[
-                        (
-                            nivelIndex * posicionesRefrigerador.length +
-                            indice
-                        ) % fuentes.length
-                    ];
-
-                    const unidad = crearCopia(
-                        fuente,
-                        `${config.codigo}_N${nivelIndex + 1}_${indice + 1}`,
-                        config.x + dx,
-                        nivel,
-                        -26.5,
-                        config.altura,
-                        GIRO_FRENTE,
-                        config.categoria,
-                        {
-                            ancho: 0.85,
-                            profundidad: 0.65
-                        }
-                    );
-
-                    if (unidad) colocados++;
-                });
-            });
-
-            console.info(
-                `${config.nombre}: ${colocados} unidades colocadas.`
-            );
-        });
-    });
-
-    // ========================================================
-    // 3. FRUTAS Y VERDURAS
-    // Superficie de las mesas: Y = 1.00
-    // ========================================================
-
-    const mesasFrescos = {
-        Mesa_frescos_01: { x: -25.5, z: 15 },
-        Mesa_frescos_02: { x: -21.7, z: 15 },
-        Mesa_frescos_03: { x: -25.5, z: 10.8 },
-        Mesa_frescos_04: { x: -21.7, z: 10.8 }
+    const MESA_PLATANOS = {
+        x: -21.7,
+        z: 15,
+        y: 1.00
     };
 
-    function colocarEnMesa(config) {
-        const mesa = mesasFrescos[config.mesa];
-
-        if (!mesa) {
-            console.error(`Mesa no encontrada: ${config.mesa}`);
-            return;
-        }
-
-        cargarModelo(config.archivo, config.nombre, (original) => {
+    cargarModelo(
+        '/modelos/Platano.glb',
+        'Plátano',
+        (original) => {
             const fuentes = crearFuentesIndependientes(original);
 
-            if (!fuentes.length) return;
+            if (!fuentes.length) {
+                console.error('El modelo de plátano no contiene geometría.');
+                return;
+            }
 
-            config.posiciones.forEach(([dx, dz], indice) => {
+            posicionesPlatanos.forEach(([dx, dz], indice) => {
                 const fuente = fuentes[indice % fuentes.length];
 
                 crearCopia(
                     fuente,
-                    `${config.codigo}_${String(indice + 1).padStart(2, '0')}`,
-                    mesa.x + dx,
-                    1.00,
-                    mesa.z + dz,
-                    config.altura,
-                    config.rotacionY ?? 0,
+                    `PLATANO_N1_${indice + 1}`,
+                    MESA_PLATANOS.x + dx,
+                    MESA_PLATANOS.y,
+                    MESA_PLATANOS.z + dz,
+                    0.25,
+                    Math.PI / 2,
                     'Frutas y verduras',
                     {
                         ancho: 0.42,
@@ -954,322 +494,15 @@ export function crearProductosLacteos(scene) {
                     }
                 );
             });
-        });
-    }
 
-    colocarEnMesa({
-        nombre: 'Uvas',
-        archivo: '/modelos/Uvas.glb',
-        codigo: 'UVAS',
-        mesa: 'Mesa_frescos_01',
-        altura: 0.25,
-        posiciones: [
-            [-0.55, -0.30],
-            [0.55, -0.30],
-            [-0.55, 0.30],
-            [0.55, 0.30]
-        ]
-    });
-
-    // Mesa 2 dedicada a plátanos.
-    // Las peras fueron retiradas para dejar espacio a este producto.
-
-    colocarEnMesa({
-        nombre: 'Limón',
-        archivo: '/modelos/Limon.glb',
-        codigo: 'LIMON',
-        mesa: 'Mesa_frescos_03',
-        altura: 0.18,
-        posiciones: [
-            [-0.55, -0.30],
-            [0.55, -0.30]
-        ]
-    });
-
-    colocarEnMesa({
-        nombre: 'Brócoli',
-        archivo: '/modelos/Brocoli.glb',
-        codigo: 'BROCOLI',
-        mesa: 'Mesa_frescos_03',
-        altura: 0.28,
-        posiciones: [
-            [-0.55, 0.30],
-            [0.55, 0.30]
-        ]
-    });
-
-    colocarEnMesa({
-        nombre: 'Pepino',
-        archivo: '/modelos/Pepino.glb',
-        codigo: 'PEPINO',
-        mesa: 'Mesa_frescos_03',
-        altura: 0.28,
-        posiciones: [
-            [-0.55, 0],
-            [0.55, 0]
-        ],
-        rotacionY: Math.PI / 2
-    });
-
-    colocarEnMesa({
-        nombre: 'Manzana',
-        archivo: '/modelos/Mazana.glb',
-        codigo: 'MANZANA',
-        mesa: 'Mesa_frescos_04',
-        altura: 0.25,
-        posiciones: [
-            [-0.65, -0.30],
-            [0, -0.30],
-            [0.65, -0.30],
-            [-0.65, 0.30],
-            [0, 0.30],
-            [0.65, 0.30]
-        ]
-    });
-
-    // ========================================================
-    // PLÁTANOS
-    // 15 UNIDADES EN LA MESA 2
-    // ========================================================
-
-    colocarEnMesa({
-        nombre: 'Plátano',
-        archivo: '/modelos/Platano.glb',
-        codigo: 'PLATANO',
-        mesa: 'Mesa_frescos_02',
-        altura: 0.25,
-        posiciones: [
-            [-0.75, -0.55],
-            [-0.25, -0.55],
-            [0.25, -0.55],
-            [0.75, -0.55],
-
-            [-0.75, -0.15],
-            [-0.25, -0.15],
-            [0.25, -0.15],
-            [0.75, -0.15],
-
-            [-0.75, 0.25],
-            [-0.25, 0.25],
-            [0.25, 0.25],
-            [0.75, 0.25],
-
-            [-0.50, 0.55],
-            [0, 0.55],
-            [0.50, 0.55]
-        ],
-        rotacionY: Math.PI / 2
-    });
-
-    // ========================================================
-    // 4. CARNICERÍA
-    // Bandeja superior: Y = 1.22
-    // ========================================================
-
-    function colocarEnMostrador(config) {
-        cargarModelo(config.archivo, config.nombre, (original) => {
-            const fuentes = crearFuentesIndependientes(original);
-
-            if (!fuentes.length) return;
-
-            config.posiciones.forEach(([dx, dz], indice) => {
-                const fuente = fuentes[indice % fuentes.length];
-
-                crearCopia(
-                    fuente,
-                    `${config.codigo}_${indice + 1}`,
-                    25.1 + dx,
-                    1.22,
-                    -7.3 + dz,
-                    config.altura,
-                    config.rotacionY ?? 0,
-                    'Carnicería',
-                    {
-                        ancho: 0.42,
-                        profundidad: 0.42
-                    }
-                );
-            });
-        });
-    }
-
-    colocarEnMostrador({
-        nombre: 'Pollo',
-        archivo: '/modelos/Pollo.glb',
-        codigo: 'POLLO',
-        altura: 0.22,
-        posiciones: [
-            [-0.55, -0.30],
-            [0.55, -0.30]
-        ]
-    });
-
-    colocarEnMostrador({
-        nombre: 'Filete',
-        archivo: '/modelos/Filete.glb',
-        codigo: 'FILETE',
-        altura: 0.14,
-        posiciones: [
-            [-0.55, 0.30],
-            [0.55, 0.30]
-        ]
-    });
-
-    // ========================================================
-    // 5. HIGIENE Y LIMPIEZA
-    // ========================================================
-
-    const productosLimpieza = [
-        {
-            nombre: 'Cloro líquido',
-            archivo: '/modelos/cloro_liquido.glb',
-            codigo: 'CLORO'
-        },
-        {
-            nombre: 'Detergente líquido',
-            archivo: '/modelos/detergente_liquido.glb',
-            codigo: 'DETERGENTE'
-        },
-        {
-            nombre: 'Suavizante líquido',
-            archivo: '/modelos/suavizante_liquido.glb',
-            codigo: 'SUAVIZANTE'
-        },
-        {
-            nombre: 'Limpiador multiusos',
-            archivo: '/modelos/limpiador_multiusos.glb',
-            codigo: 'LIMPIADOR'
+            console.info(
+                `🍌 Se colocaron ${posicionesPlatanos.length} plátanos.`
+            );
         }
-    ];
-
-    const columnasLimpieza = [
-        -0.90,
-        -0.30,
-        0.30,
-        0.90
-    ];
-
-    productosLimpieza.forEach((config, productoIndex) => {
-        cargarModelo(config.archivo, config.nombre, (original) => {
-            const fuentes = crearFuentesIndependientes(original);
-            const fuente = fuentes[0];
-
-            if (!fuente) return;
-
-            nivelesLimpieza.forEach((nivel, nivelIndex) => {
-                crearCopia(
-                    fuente,
-                    `${config.codigo}_N${nivelIndex + 1}_1`,
-                    28.3 + columnasLimpieza[productoIndex],
-                    nivel,
-                    8.15,
-                    0.32,
-                    GIRO_FRENTE,
-                    'Higiene y limpieza',
-                    {
-                        ancho: 0.48,
-                        profundidad: 0.42
-                    }
-                );
-            });
-        });
-    });
+    );
 
     // ========================================================
-    // 6. DEPARTAMENTO DE ROPA
-    // ========================================================
-
-    const ALTURA_TUBO_ROPA = 1.75;
-    const BASE_PRENDA = 0.90;
-    const ALTURA_PRENDA = 1.60;
-
-    const prendas = [
-        {
-            nombre: 'Blusa',
-            archivo: '/modelos/Blusa.glb',
-            codigo: 'BLUSA',
-            x: -26.35,
-            z: -4,
-            ancho: 1.40,
-            profundidad: 1.55
-        },
-        {
-            nombre: 'Sudadera negra',
-            archivo: '/modelos/SudaderaNegra.glb',
-            codigo: 'SUDADERA_NEGRA',
-            x: -25.05,
-            z: -4,
-            ancho: 1.40,
-            profundidad: 1.00
-        },
-        {
-            nombre: 'Sudadera roja',
-            archivo: '/modelos/sudaderaroja.glb',
-            codigo: 'SUDADERA_ROJA',
-            x: -26.35,
-            z: 2,
-            ancho: 1.20,
-            profundidad: 1.00
-        },
-        {
-            nombre: 'Chamarra negra',
-            archivo: '/modelos/chamarranegra.glb',
-            codigo: 'CHAMARRA_NEGRA',
-            x: -25.05,
-            z: 2,
-            ancho: 1.20,
-            profundidad: 1.00
-        },
-        {
-            nombre: 'Pantalón de mezclilla',
-            archivo: '/modelos/pantalomezclilla.glb',
-            codigo: 'PANTALON_MEZCLILLA',
-            x: -26.35,
-            z: 8,
-            ancho: 1.15,
-            profundidad: 0.35
-        },
-        {
-            nombre: 'Vestido',
-            archivo: '/modelos/vesitdo.glb',
-            codigo: 'VESTIDO',
-            x: -25.05,
-            z: 8,
-            ancho: 1.20,
-            profundidad: 0.50
-        }
-    ];
-
-    prendas.forEach((prenda) => {
-        cargarModelo(
-            prenda.archivo,
-            prenda.nombre,
-            (original) => {
-                const fuentes = crearFuentesIndependientes(original);
-                const fuente = fuentes[0];
-
-                if (!fuente) return;
-
-                crearCopia(
-                    fuente,
-                    prenda.codigo,
-                    prenda.x,
-                    BASE_PRENDA,
-                    prenda.z,
-                    ALTURA_PRENDA,
-                    GIRO_FRENTE,
-                    'Ropa',
-                    {
-                        ancho: prenda.ancho,
-                        profundidad: prenda.profundidad
-                    }
-                );
-            }
-        );
-    });
-
-    // ========================================================
-    // 7. CONSULTAS PARA CLIENTES Y VENTAS
+    // CONSULTAS PARA CLIENTES Y VENTAS
     // ========================================================
 
     productos.userData.obtenerResumen = () => ({
@@ -1378,9 +611,7 @@ export function crearProductosLacteos(scene) {
     // ========================================================
 
     console.info(
-        'Catálogo de productos iniciado. ' +
-        'Góndolas ampliadas, refrigeradores surtidos, ' +
-        '15 plátanos y precios provisionales MXN.'
+        'Catálogo iniciado: únicamente 15 plátanos a $8 MXN cada uno.'
     );
 
     return productos;
