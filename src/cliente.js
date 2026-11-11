@@ -58,7 +58,7 @@ const CONFIG_BASE = {
     distanciaProducto: 1.35,
     distanciaFrenteProducto: 1.25,
 
-    tiempoRecoger: 1.1,
+    tiempoRecoger: 1.0,
     progresoContactoProducto: 0.78,
     tiempoInspeccionar: 2.2,
     tiempoGuardar: 1.4,
@@ -66,7 +66,7 @@ const CONFIG_BASE = {
     tiempoEntreProductos: 0.8,
     tiempoReintento: 1.5,
 
-    tiempoAnimacionAgarre: 0.38,
+    tiempoAnimacionAgarre: 0.55,
     escalaProductoMano: 0.65,
 
     offsetProductoMano: {
@@ -1042,30 +1042,50 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     // ========================================================
     // ACTUALIZAR ANIMACIÓN DE AGARRE
     // ========================================================
+function actualizarAnimacionAgarre(delta) {
+    if (!animacionAgarre.activa || !productoEnMano) return;
 
-    function actualizarAnimacionAgarre(delta) {
-        if (!animacionAgarre.activa || !productoEnMano) {
-            return false;
-        }
+    const producto = productoEnMano;
+    const mano = rig.manoDerecha || rig.brazoDerecho;
 
-        const producto = productoEnMano;
-        const mano =
-            rig.manoDerecha ||
-            rig.brazoDerecho;
+    if (!mano || producto.parent !== mano) return;
 
-        if (!mano) {
-            animacionAgarre.activa = false;
-            return false;
-        }
+    animacionAgarre.tiempo += delta;
 
-        grupo.updateMatrixWorld(true);
-        mano.updateWorldMatrix(true, true);
-        producto.updateMatrixWorld(true);
+    const t = limitar(
+        animacionAgarre.tiempo / Math.max(animacionAgarre.duracion, 0.01),
+        0,
+        1
+    );
+
+    const suave = suavizar(t);
+
+    producto.position.lerpVectors(
+        animacionAgarre.posicionInicial,
+        animacionAgarre.posicionFinal,
+        suave
+    );
+
+    producto.quaternion.slerpQuaternions(
+        animacionAgarre.quaternionInicial,
+        animacionAgarre.quaternionFinal,
+        suave
+    );
+
+    producto.scale.lerpVectors(
+        animacionAgarre.escalaInicial,
+        animacionAgarre.escalaFinal,
+        suave
+    );
+
+    if (t >= 1) {
+        producto.position.copy(animacionAgarre.posicionFinal);
+        producto.quaternion.copy(animacionAgarre.quaternionFinal);
+        producto.scale.copy(animacionAgarre.escalaFinal);
 
         animacionAgarre.activa = false;
-        return false;
     }
-
+}
     // ========================================================
     // ACTUALIZAR ANIMACIÓN DE PRODUCTO
     // ========================================================
@@ -2470,26 +2490,39 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         grupo.updateMatrixWorld(true);
         mano.updateMatrixWorld(true);
         producto.updateMatrixWorld(true);
+mano.attach(producto);
 
-        mano.attach(producto);
-        producto.updateMatrixWorld(true);
-        producto.updateMatrixWorld(true);
+animacionAgarre.posicionInicial.copy(producto.position);
+animacionAgarre.quaternionInicial.copy(producto.quaternion);
+animacionAgarre.escalaInicial.copy(producto.scale);
 
-        animacionAgarre.posicionInicial.copy(producto.position);
-        animacionAgarre.quaternionInicial.copy(producto.quaternion);
-        animacionAgarre.escalaInicial.copy(producto.scale);
-        animacionAgarre.posicionFinal.copy(producto.position);
-        animacionAgarre.quaternionFinal.copy(producto.quaternion);
-        animacionAgarre.escalaFinal.copy(producto.scale);
+animacionAgarre.posicionFinal.set(
+    numero(config.offsetProductoMano.x),
+    numero(config.offsetProductoMano.y),
+    numero(config.offsetProductoMano.z)
+);
 
-        animacionAgarre.tiempo = 0;
+animacionAgarre.quaternionFinal.copy(
+    animacionAgarre.quaternionInicial
+);
 
-        animacionAgarre.duracion = Math.max(
-            numero(config.tiempoAnimacionAgarre, 0.38),
-            0.05
-        );
+animacionAgarre.escalaFinal.copy(
+    animacionAgarre.escalaInicial
+).multiplyScalar(
+    numero(config.escalaProductoMano, 0.65)
+);
 
-        animacionAgarre.activa = false;
+animacionAgarre.tiempo = 0;
+
+animacionAgarre.duracion = Math.max(
+    numero(config.tiempoAnimacionAgarre, 0.55),
+    0.05
+);
+
+animacionAgarre.activa = true;
+
+producto.visible = true;
+productoEnMano = producto;
 
         producto.visible = true;
         productoEnMano = producto;
