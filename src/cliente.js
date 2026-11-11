@@ -26,41 +26,49 @@ const ESTADOS = {
 // ============================================================
 // CONFIGURACIÓN
 // ============================================================
-
 const CONFIG_BASE = {
-    modelo: '/modelos/Cliente1.glb',
+    modelo: '/modelos/Cliente2.glb',
     posicion: { x: 0, y: 0, z: 20 },
 
+    // Modelo
     altura: 1.75,
     escala: 1,
 
-velocidad: 2.9,
-velocidadEntrada: 2.5,
-velocidadRegreso: 2.7,
+    // Velocidades
+    velocidad: 2.9,
+    velocidadEntrada: 2.5,
+    velocidadRegreso: 2.7,
 
-// Movimiento más ágil
-aceleracion: 5.5,
-suavizadoGiro: 9.0,
+    // Movimiento
+    aceleracion: 5.5,
+    aceleracionMovimiento: 5.5,
+    suavizadoGiro: 9.0,
+
     limiteX: 29,
     limiteZMin: -27,
     limiteZMax: 55,
 
+    // Colisiones y navegación
     radioColision: 0.38,
     margenObstaculos: 0.22,
     tamanoCelda: 0.75,
 
+    // Puerta de entrada
     puertaCentroX: 0,
     puertaAncho: 8.5,
     puertaZInterior: 27.5,
     puertaZUmbral: 29,
     puertaZExterior: 31.5,
 
+    // Compras
     probabilidadCompra: 0.85,
     probabilidadDejarEnOtroRack: 0.22,
 
+    // Distancias de productos
     distanciaProducto: 1.35,
     distanciaFrenteProducto: 1.25,
 
+    // Tiempos de compra
     tiempoRecoger: 1.0,
     progresoContactoProducto: 0.78,
     tiempoInspeccionar: 2.2,
@@ -69,6 +77,7 @@ suavizadoGiro: 9.0,
     tiempoEntreProductos: 0.8,
     tiempoReintento: 1.5,
 
+    // Animación de agarre
     tiempoAnimacionAgarre: 0.55,
     escalaProductoMano: 0.65,
 
@@ -84,48 +93,56 @@ suavizadoGiro: 9.0,
         z: 0
     },
 
+    // Inspección de productos
     alturaProductoInspeccion: 1.25,
     distanciaProductoInspeccion: 0.32,
     alturaEstanteInferior: 0.90,
 
+    // Límites de compra
     maximoProductos: 8,
     distanciaMaximaBusqueda: 40,
 
-    // Filtros de productos.
+    // Filtros de productos
     soloPlatanos: false,
     nombreProductoBuscado: '',
 
+    // Distribución de productos
     separacionProductoRack: 0.06,
     alturaMovimientoProducto: 0.12,
 
-    // Recuperación de rutas.
+    // Recuperación de rutas
     intervaloRecalculoRuta: 0.55,
     maximosIntentosMovimiento: 5,
     distanciaRecalculo: 0.45,
 
-    // Movimiento.
+    // Movimiento entre puntos
     distanciaLlegada: 0.16,
     distanciaWaypoint: 0.30,
 
-    // Animación.
+    // Animaciones GLB
     usarAnimacionesGLB: true,
     velocidadAnimacionGLB: 1.5,
 
+    // Comportamiento de rutas
     repetirRuta: false,
     inactivo: false,
 
-    aceleracionMovimiento: 3.35,
-    suavizadoGiro: 7,
-
+    // Referencias del supermercado
     productos: null,
     carrito: null,
     mobiliario: null,
     colisiones: null,
 
-    posicionCaja: { x: 0, z: 22.5 },
+    // Caja registradora
+    posicionCaja: {
+        x: 0,
+        z: 22.5
+    },
 
+    // Orientación del modelo
     correccionRotacion: 0,
 
+    // Eventos
     alEntrar: null,
     alComprar: null,
     alPagar: null,
