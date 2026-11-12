@@ -3097,91 +3097,115 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     // ENTRADA DESDE VEHÍCULO
     // ========================================================
 
-    function iniciarDesdeVehiculo(posicionEntrada, plaza) {
-        if (!posicionEntrada || !plaza) {
-            console.warn(
-                `[CLIENTE ${id}] Faltan datos del vehículo.`
-            );
-
-            return false;
-        }
-
-        if ([
-            ESTADOS.ENTRANDO,
-            ESTADOS.BUSCANDO,
-            ESTADOS.ACERCANDO,
-            ESTADOS.RECOGIENDO,
-            ESTADOS.INSPECCIONANDO,
-            ESTADOS.DECIDIENDO,
-            ESTADOS.GUARDANDO,
-            ESTADOS.DEVOLVIENDO,
-            ESTADOS.RUTA,
-            ESTADOS.CAJA,
-            ESTADOS.PAGANDO,
-            ESTADOS.REGRESANDO
-        ].includes(estado)) {
-            console.warn(
-                `[CLIENTE ${id}] Ya está realizando una actividad.`
-            );
-
-            return false;
-        }
-
-        liberarReserva();
-
-        if (productoEnMano) {
-            finalizarDevolucionProducto();
-        }
-
-        animacionAgarre.activa = false;
-        animacionAgarre.tiempo = 0;
-
-        animacionProducto.activa = false;
-        animacionProducto.tipo = null;
-
-        compras = [];
-
-        productosExaminados.clear();
-        racksVisitados.clear();
-
-        callbackPagoPendiente = null;
-        ticketPendiente = null;
-        callbackRegreso = null;
-
-        entradaNotificada = false;
-
-        grupo.position.set(
-            numero(posicionEntrada.x, plaza.x),
-            numero(config.posicion.y),
-            numero(posicionEntrada.z, plaza.z)
-        );
-
-        actualizarColisiones();
-
-        const camino = crearRutaPorPuerta(
-            {
-                x: 0,
-                z: config.puertaZInterior
-            },
-            'entrada'
-        );
-
-        if (!camino.length) {
-            console.warn(
-                `[CLIENTE ${id}] No se encontró ruta de entrada por la puerta.`
-            );
-
-            return false;
-        }
-
-        ruta = camino;
-        indiceRuta = 0;
-        objetivo = camino[camino.length - 1];
-
-        cambiarEstado(ESTADOS.ENTRANDO);
-
-        return true;
+   function iniciarDesdeVehiculo(posicionEntrada, plaza) {
+    if (!posicionEntrada || !plaza) {
+        console.warn(`[CLIENTE ${id}] Faltan datos del vehículo.`);
+        return false;
     }
+
+    if (eliminado) return false;
+
+    if ([
+        ESTADOS.ENTRANDO,
+        ESTADOS.BUSCANDO,
+        ESTADOS.ACERCANDO,
+        ESTADOS.RECOGIENDO,
+        ESTADOS.INSPECCIONANDO,
+        ESTADOS.DECIDIENDO,
+        ESTADOS.GUARDANDO,
+        ESTADOS.DEVOLVIENDO,
+        ESTADOS.RUTA,
+        ESTADOS.CAJA,
+        ESTADOS.PAGANDO,
+        ESTADOS.REGRESANDO
+    ].includes(estado)) {
+        console.warn(`[CLIENTE ${id}] Ya está realizando una actividad.`);
+        return false;
+    }
+
+    // Liberar cualquier producto reservado.
+    liberarReserva();
+
+    // Finalizar de forma segura una posible interacción anterior.
+    if (productoEnMano) {
+        finalizarDevolucionProducto();
+    }
+
+    // Reiniciar animaciones.
+    animacionAgarre.activa = false;
+    animacionAgarre.tiempo = 0;
+
+    animacionProducto.activa = false;
+    animacionProducto.tipo = null;
+
+    // Reiniciar compras y colecciones.
+    compras = [];
+
+    if (productosExaminados instanceof Set) {
+        productosExaminados.clear();
+    }
+
+    if (racksVisitados instanceof Set) {
+        racksVisitados.clear();
+    }
+
+    callbackPagoPendiente = null;
+    ticketPendiente = null;
+    callbackRegreso = null;
+
+    entradaNotificada = false;
+
+    // Colocar al cliente en la posición del automóvil.
+    grupo.position.set(
+        numero(posicionEntrada.x, plaza.x),
+        numero(config.posicion.y),
+        numero(posicionEntrada.z, plaza.z)
+    );
+
+    grupo.visible = true;
+
+    actualizarColisiones();
+
+    // Calcular la ruta desde el exterior hasta la entrada.
+    const camino = crearRutaPorPuerta(
+        {
+            x: 0,
+            z: config.puertaZInterior
+        },
+        'entrada'
+    );
+
+    if (!Array.isArray(camino) || camino.length === 0) {
+        console.warn(
+            `[CLIENTE ${id}] No se encontró una ruta de entrada.`
+        );
+
+        cambiarEstado(ESTADOS.INACTIVO);
+        return false;
+    }
+
+    ruta = camino;
+    indiceRuta = 0;
+    objetivo = camino[camino.length - 1];
+
+    // Activar el desplazamiento hacia el supermercado.
+    cambiarEstado(ESTADOS.ENTRANDO);
+
+    if (mixer) {
+        mixer.timeScale = 1;
+    }
+
+    if (accionCaminar) {
+        accionCaminar.reset();
+        accionCaminar.play();
+    }
+
+    console.log(
+        `[CLIENTE ${id}] Visitante iniciado desde vehículo.`
+    );
+
+    return true;
+}
 
     // ========================================================
     // REGRESAR AL VEHÍCULO
