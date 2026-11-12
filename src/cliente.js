@@ -1205,87 +1205,270 @@ function actualizarAnimacionAgarre(delta) {
     // ========================================================
 
     function actualizarAnimacionProducto(delta) {
-        if (!animacionProducto.activa || !productoEnMano) {
-            return false;
-        }
 
-        const producto = productoEnMano;
+    if (!animacionProducto.activa || !productoEnMano) {
+        return false;
+    }
 
-        animacionProducto.tiempo += delta;
+    const producto = productoEnMano;
 
-        const duracion = Math.max(
-            animacionProducto.duracion,
-            0.01
-        );
+    animacionProducto.tiempo += delta;
 
-        const t = limitar(
-            animacionProducto.tiempo / duracion,
-            0,
-            1
-        );
+    const duracion = Math.max(animacionProducto.duracion, 0.01);
 
-        const suave = suavizar(t);
+    const t = limitar(
+        animacionProducto.tiempo / duracion,
+        0,
+        1
+    );
 
-        const posicion = animacionProducto.posicionTemporal;
-        const quaternion = animacionProducto.quaternionTemporal;
+    const suave = suavizar(t);
+    const tipo = animacionProducto.tipo;
 
-        posicion.lerpVectors(
+    // ====================================================
+    // TOMAR: ANIMACIÓN DIRECTAMENTE SOBRE LA MANO
+    // ====================================================
+
+    if (tipo === 'TOMAR') {
+
+        // El producto ya es hijo de la mano derecha.
+        // Todas estas posiciones son coordenadas locales.
+        producto.position.lerpVectors(
             animacionProducto.posicionInicial,
             animacionProducto.posicionFinal,
             suave
         );
 
-        quaternion.slerpQuaternions(
+        producto.quaternion.slerpQuaternions(
             animacionProducto.quaternionInicial,
             animacionProducto.quaternionFinal,
             suave
         );
 
-        const padre = producto.parent;
-
-        if (padre) {
-            padre.updateMatrixWorld(true);
-            const escala =
-                animacionProducto.escalaLocalTemporal.lerpVectors(
-                animacionProducto.escalaInicial,
-                animacionProducto.escalaFinal,
-                suave
-            );
-
-            animacionProducto.matrizMundoTemporal.compose(
-                posicion,
-                quaternion,
-                escala
-            );
-
-            animacionProducto.matrizLocalTemporal
-                .copy(padre.matrixWorld)
-                .invert()
-                .multiply(animacionProducto.matrizMundoTemporal);
-
-            animacionProducto.matrizLocalTemporal.decompose(
-                animacionProducto.posicionLocalTemporal,
-                producto.quaternion,
-                animacionProducto.escalaLocalTemporal
-            );
-
-            producto.position.copy(
-                animacionProducto.posicionLocalTemporal
-            );
-            producto.scale.copy(
-                animacionProducto.escalaLocalTemporal
-            );
-            producto.updateMatrixWorld(true);
-        }
+        producto.scale.lerpVectors(
+            animacionProducto.escalaInicial,
+            animacionProducto.escalaFinal,
+            suave
+        );
 
         if (t >= 1) {
-            finalizarDevolucionProducto();
+
+            producto.position.copy(
+                animacionProducto.posicionFinal
+            );
+
+            producto.quaternion.copy(
+                animacionProducto.quaternionFinal
+            );
+
+            producto.scale.copy(
+                animacionProducto.escalaFinal
+            );
+
+            animacionProducto.activa = false;
+            animacionProducto.tipo = null;
+            animacionProducto.tiempo = 0;
+
             return true;
         }
 
         return false;
     }
 
+    // ====================================================
+    // RESTO DE ANIMACIONES: COORDENADAS MUNDIALES
+    // ====================================================
+
+    const posicion = new THREE.Vector3().lerpVectors(
+        animacionProducto.posicionInicial,
+        animacionProducto.posicionFinal,
+        suave
+    );
+
+    posicion.y +=
+        Math.sin(Math.PI * t) *
+        config.alturaMovimientoProducto;
+
+    const quaternion = new THREE.Quaternion().slerpQuaternions(
+        animacionProducto.quaternionInicial,
+        animacionProducto.quaternionFinal,
+        suave
+    );
+
+    const padre = producto.parent;
+
+    if (padre) {
+
+        padre.updateMatrixWorld(true);
+
+        producto.position.copy(
+            padre.worldToLocal(posicion.clone())
+        );
+
+        const quaternionPadre = padre.getWorldQuaternion(
+            new THREE.Quaternion()
+        );
+
+        producto.quaternion
+            .copy(quaternionPadre.invert())
+            .multiply(quaternion);
+
+        producto.scale.lerpVectors(
+            animacionProducto.escalaInicial,
+            animacionProducto.escalaFinal,
+            suave
+        );
+    }
+
+    if (t < 1) return false;
+
+    if (tipo === 'GUARDAR') {
+
+        animacionProducto.activa = false;
+        animacionProducto.tipo = null;
+        animacionProducto.tiempo = 0;
+
+        confirmarGuardarProducto();
+
+        return true;
+    }
+
+    finalizarDevolucionProducto();
+
+    return true;
+}function actualizarAnimacionProducto(delta) {
+
+    if (!animacionProducto.activa || !productoEnMano) {
+        return false;
+    }
+
+    const producto = productoEnMano;
+
+    animacionProducto.tiempo += delta;
+
+    const duracion = Math.max(animacionProducto.duracion, 0.01);
+
+    const t = limitar(
+        animacionProducto.tiempo / duracion,
+        0,
+        1
+    );
+
+    const suave = suavizar(t);
+    const tipo = animacionProducto.tipo;
+
+    // ====================================================
+    // TOMAR: ANIMACIÓN DIRECTAMENTE SOBRE LA MANO
+    // ====================================================
+
+    if (tipo === 'TOMAR') {
+
+        // El producto ya es hijo de la mano derecha.
+        // Todas estas posiciones son coordenadas locales.
+        producto.position.lerpVectors(
+            animacionProducto.posicionInicial,
+            animacionProducto.posicionFinal,
+            suave
+        );
+
+        producto.quaternion.slerpQuaternions(
+            animacionProducto.quaternionInicial,
+            animacionProducto.quaternionFinal,
+            suave
+        );
+
+        producto.scale.lerpVectors(
+            animacionProducto.escalaInicial,
+            animacionProducto.escalaFinal,
+            suave
+        );
+
+        if (t >= 1) {
+
+            producto.position.copy(
+                animacionProducto.posicionFinal
+            );
+
+            producto.quaternion.copy(
+                animacionProducto.quaternionFinal
+            );
+
+            producto.scale.copy(
+                animacionProducto.escalaFinal
+            );
+
+            animacionProducto.activa = false;
+            animacionProducto.tipo = null;
+            animacionProducto.tiempo = 0;
+
+            return true;
+        }
+
+        return false;
+    }
+
+    // ====================================================
+    // RESTO DE ANIMACIONES: COORDENADAS MUNDIALES
+    // ====================================================
+
+    const posicion = new THREE.Vector3().lerpVectors(
+        animacionProducto.posicionInicial,
+        animacionProducto.posicionFinal,
+        suave
+    );
+
+    posicion.y +=
+        Math.sin(Math.PI * t) *
+        config.alturaMovimientoProducto;
+
+    const quaternion = new THREE.Quaternion().slerpQuaternions(
+        animacionProducto.quaternionInicial,
+        animacionProducto.quaternionFinal,
+        suave
+    );
+
+    const padre = producto.parent;
+
+    if (padre) {
+
+        padre.updateMatrixWorld(true);
+
+        producto.position.copy(
+            padre.worldToLocal(posicion.clone())
+        );
+
+        const quaternionPadre = padre.getWorldQuaternion(
+            new THREE.Quaternion()
+        );
+
+        producto.quaternion
+            .copy(quaternionPadre.invert())
+            .multiply(quaternion);
+
+        producto.scale.lerpVectors(
+            animacionProducto.escalaInicial,
+            animacionProducto.escalaFinal,
+            suave
+        );
+    }
+
+    if (t < 1) return false;
+
+    if (tipo === 'GUARDAR') {
+
+        animacionProducto.activa = false;
+        animacionProducto.tipo = null;
+        animacionProducto.tiempo = 0;
+
+        confirmarGuardarProducto();
+
+        return true;
+    }
+
+    finalizarDevolucionProducto();
+
+    return true;
+}
     // ========================================================
     // FINALIZAR DEVOLUCIÓN
     // ========================================================
@@ -3906,7 +4089,136 @@ function actualizarAnimacionAgarre(delta) {
                 break;
         }
     }
+function tomarProducto() {
 
+    if (
+        animacionProducto.activa ||
+        !productoObjetivo ||
+        !productoDisponible(productoObjetivo)
+    ) {
+        if (!animacionProducto.activa) {
+            liberarReserva();
+            cambiarEstado(ESTADOS.BUSCANDO);
+        }
+
+        return;
+    }
+
+    const producto = productoObjetivo;
+
+    producto.updateMatrixWorld(true);
+
+    productoEsInferior = productoEstaEnEstanteInferior(producto);
+
+    const cajaProducto = new THREE.Box3().setFromObject(producto);
+    const tamanoProducto = new THREE.Vector3();
+
+    cajaProducto.getSize(tamanoProducto);
+
+    productoOriginal = {
+        parent: producto.parent,
+        posicion: producto.position.clone(),
+        quaternion: producto.quaternion.clone(),
+        escala: producto.scale.clone(),
+        visible: producto.visible,
+        tamanoMundo: tamanoProducto.clone()
+    };
+
+    const mano = rig.manoDerecha;
+
+    if (!mano) {
+
+        console.warn(
+            `[CLIENTE ${id}] No se encontró la mano derecha.`
+        );
+
+        productoOriginal = null;
+        liberarReserva();
+        cambiarEstado(ESTADOS.BUSCANDO);
+
+        return;
+    }
+
+    grupo.updateMatrixWorld(true);
+    mano.updateMatrixWorld(true);
+
+    // Guardar la transformación mundial original.
+    const posicionInicialMundo = producto.getWorldPosition(
+        new THREE.Vector3()
+    );
+
+    const quaternionInicialMundo = producto.getWorldQuaternion(
+        new THREE.Quaternion()
+    );
+
+    const escalaInicialMundo = producto.getWorldScale(
+        new THREE.Vector3()
+    );
+
+    // Vincular el producto a la mano sin alterar
+    // su posición visual en el momento del contacto.
+    mano.attach(producto);
+
+    mano.updateMatrixWorld(true);
+
+    // Obtener la transformación local después del attach.
+    const posicionInicial = producto.position.clone();
+    const quaternionInicial = producto.quaternion.clone();
+    const escalaInicial = producto.scale.clone();
+
+    // Posición final dentro de la mano.
+    const offset = config.offsetProductoMano;
+    const rotacion = config.rotacionProductoMano;
+
+    const posicionFinal = new THREE.Vector3(
+        numero(offset.x),
+        numero(offset.y),
+        numero(offset.z)
+    );
+
+    const quaternionFinal = new THREE.Quaternion().setFromEuler(
+        new THREE.Euler(
+            numero(rotacion.x),
+            numero(rotacion.y),
+            numero(rotacion.z)
+        )
+    );
+
+    const escalaFinal = escalaInicial.clone().multiplyScalar(
+        config.escalaProductoMano
+    );
+
+    productoEnMano = producto;
+
+    productosExaminados.add(producto);
+
+    producto.visible = true;
+
+    // Preparar animación de agarre.
+    animacionProducto.activa = true;
+    animacionProducto.tipo = 'TOMAR';
+    animacionProducto.tiempo = 0;
+    animacionProducto.duracion = 0.65;
+
+    animacionProducto.posicionInicial.copy(posicionInicial);
+    animacionProducto.posicionFinal.copy(posicionFinal);
+
+    animacionProducto.quaternionInicial.copy(quaternionInicial);
+    animacionProducto.quaternionFinal.copy(quaternionFinal);
+
+    animacionProducto.escalaInicial.copy(escalaInicial);
+    animacionProducto.escalaFinal.copy(escalaFinal);
+
+    cambiarEstado(ESTADOS.INSPECCIONANDO);
+
+    console.log(
+        `[CLIENTE ${id}] Agarrando ${
+            producto.userData?.nombre ??
+            producto.name ??
+            'producto'
+        }`
+    );
+}
     // ========================================================
     // CONFIGURAR COMPRAS
     // ========================================================
