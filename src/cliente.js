@@ -69,16 +69,16 @@ const CONFIG_BASE = {
     distanciaFrenteProducto: 1.25,
 
     // Tiempos de compra
-    tiempoRecoger: 1.0,
-    progresoContactoProducto: 0.78,
-    tiempoInspeccionar: 2.2,
+    tiempoRecoger: 1.5,
+    progresoContactoProducto: 0.70,
+    tiempoInspeccionar: 2.8,
     tiempoGuardar: 1.4,
     tiempoDevolver: 1.4,
     tiempoEntreProductos: 0.8,
     tiempoReintento: 1.5,
 
     // Animación de agarre
-    tiempoAnimacionAgarre: 0.55,
+    tiempoAnimacionAgarre: 0.40,
     escalaProductoMano: 0.65,
 
     offsetProductoMano: {
@@ -858,75 +858,161 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     // ========================================================
     // ANIMACIÓN DE RECOGIDA
     // ========================================================
+function animarRecogerProcedural() {
+    const progreso = limitar(
+        tiempoEstado / Math.max(config.tiempoRecoger, 0.01),
+        0,
+        1
+    );
 
-    function animarRecogerProcedural() {
-        const progreso = limitar(
-            tiempoEstado / Math.max(config.tiempoRecoger, 0.01), 0, 1
+    const contactoObjetivo = limitar(
+        numero(config.progresoContactoProducto, 0.78),
+        0.55,
+        0.88
+    );
+
+    const acercarse = suavizar(
+        limitar(progreso / contactoObjetivo, 0, 1)
+    );
+
+    const contacto = suavizar(
+        limitar(
+            (progreso - contactoObjetivo) /
+            Math.max(1 - contactoObjetivo, 0.12),
+            0,
+            1
+        )
+    );
+
+    const retirada = suavizar(
+        Math.max(0, Math.min(progreso, 1))
+    );
+
+    const agachado = productoEsInferior ? 1 : 0;
+
+    // Agachamiento progresivo cuando el producto está en una zona baja.
+    animarAgacharse(
+        agachado * suavizar(progreso * 1.35)
+    );
+
+    let cercaniaReal = acercarse;
+
+    // Comprobar la distancia real entre la palma y el producto.
+    if (productoObjetivo && rig.manoDerecha) {
+        grupo.updateMatrixWorld(true);
+        rig.manoDerecha.updateWorldMatrix(true, true);
+        productoObjetivo.updateMatrixWorld(true);
+
+        const palma = rig.manoDerecha.localToWorld(
+            new THREE.Vector3(
+                numero(config.offsetProductoMano.x),
+                numero(config.offsetProductoMano.y),
+                numero(config.offsetProductoMano.z)
+            )
         );
-        const contactoObjetivo = limitar(
-            numero(config.progresoContactoProducto, 0.78), 0.55, 0.88
-        );
-        const acercarse = suavizar(limitar(progreso / contactoObjetivo, 0, 1));
-        const contacto = suavizar(limitar(
-            (progreso - contactoObjetivo) / Math.max(1 - contactoObjetivo, 0.12), 0, 1
-        ));
-        const retirada = suavizar(Math.max(0, Math.min(progreso, 1)));
-        const agachado = productoEsInferior ? 1 : 0;
 
-        animarAgacharse(agachado * suavizar(progreso * 1.35));
+        const productoCentro = new THREE.Vector3();
 
-        let cercaniaReal = acercarse;
+        cajaTemporal.setFromObject(productoObjetivo);
 
-        if (productoObjetivo && rig.manoDerecha) {
-            grupo.updateMatrixWorld(true);
-            rig.manoDerecha.updateWorldMatrix(true, true);
-            productoObjetivo.updateMatrixWorld(true);
+        if (!cajaTemporal.isEmpty()) {
+            cajaTemporal.getCenter(productoCentro);
 
-            const palma = rig.manoDerecha.localToWorld(
-                new THREE.Vector3(
-                    numero(config.offsetProductoMano.x),
-                    numero(config.offsetProductoMano.y),
-                    numero(config.offsetProductoMano.z)
-                )
+            cercaniaReal = THREE.MathUtils.lerp(
+                acercarse,
+                1 - limitar(
+                    palma.distanceTo(productoCentro) / 1.5,
+                    0,
+                    1
+                ),
+                0.35
             );
-            const productoCentro = new THREE.Vector3();
-            cajaTemporal.setFromObject(productoObjetivo);
-
-            if (!cajaTemporal.isEmpty()) {
-                cajaTemporal.getCenter(productoCentro);
-                cercaniaReal = THREE.MathUtils.lerp(
-                    acercarse,
-                    1 - limitar(palma.distanceTo(productoCentro) / 1.5, 0, 1),
-                    0.35
-                );
-            }
         }
-
-        cercaniaReal = suavizar(limitar(cercaniaReal, 0, 1));
-
-        const hombro = THREE.MathUtils.lerp(-0.08, -1.08 * (productoEsInferior ? 0.72 : 1), cercaniaReal);
-        const antebrazo = THREE.MathUtils.lerp(-0.08, -0.78, cercaniaReal);
-
-        aplicarRotacionEuler(rig.brazoDerecho, hombro, -0.06 * cercaniaReal, 0.08 * cercaniaReal);
-        aplicarRotacionEuler(rig.antebrazoDerecho, antebrazo, -0.12 * cercaniaReal, 0.06);
-        aplicarRotacionEuler(rig.manoDerecha, -0.18 - contacto * 0.58, contacto * 0.08, -0.18 * contacto);
-
-        aplicarRotacionEuler(rig.brazoIzquierdo,
-            -0.12 - 0.22 * retirada, 0, 0.06 * retirada);
-        aplicarRotacionEuler(rig.antebrazoIzquierdo,
-            -0.12 - 0.28 * retirada, 0.04, -0.04);
-        aplicarRotacion(rig.manoIzquierda, EJE_X, -0.08 - contacto * 0.16);
-
-        aplicarRotacionEuler(rig.torso,
-            0.08 * acercarse + 0.28 * agachado * acercarse,
-            -0.10 * acercarse,
-            -0.04 * acercarse);
-        aplicarRotacionEuler(rig.cabeza,
-            0.14 + 0.12 * acercarse + Math.sin(tiempoEstado * 2.1) * 0.018,
-            -0.12 * acercarse,
-            0.025 * Math.sin(tiempoEstado * 1.6));
-        aplicarRotacion(rig.cuello, EJE_X, 0.08 + 0.08 * acercarse);
     }
+
+    cercaniaReal = suavizar(
+        limitar(cercaniaReal, 0, 1)
+    );
+
+    // Movimiento del brazo derecho hacia el producto.
+    const hombro = THREE.MathUtils.lerp(
+        -0.08,
+        -1.08 * (productoEsInferior ? 0.72 : 1),
+        cercaniaReal
+    );
+
+    const antebrazo = THREE.MathUtils.lerp(
+        -0.08,
+        -0.78,
+        cercaniaReal
+    );
+
+    aplicarRotacionEuler(
+        rig.brazoDerecho,
+        hombro,
+        -0.06 * cercaniaReal,
+        0.08 * cercaniaReal
+    );
+
+    aplicarRotacionEuler(
+        rig.antebrazoDerecho,
+        antebrazo,
+        -0.12 * cercaniaReal,
+        0.06 * cercaniaReal
+    );
+
+    // Cierre de la mano al llegar al producto.
+    aplicarRotacionEuler(
+        rig.manoDerecha,
+        -0.18 - contacto * 0.58,
+        contacto * 0.08,
+        -0.18 * contacto
+    );
+
+    // El brazo izquierdo acompaña el movimiento del cuerpo.
+    aplicarRotacionEuler(
+        rig.brazoIzquierdo,
+        -0.12 - 0.22 * retirada,
+        0,
+        0.06 * retirada
+    );
+
+    aplicarRotacionEuler(
+        rig.antebrazoIzquierdo,
+        -0.12 - 0.28 * retirada,
+        0.04,
+        -0.04
+    );
+
+    aplicarRotacion(
+        rig.manoIzquierda,
+        EJE_X,
+        -0.08 - contacto * 0.16
+    );
+
+    // Inclinación del torso hacia el producto.
+    aplicarRotacionEuler(
+        rig.torso,
+        0.08 * acercarse + 0.28 * agachado * acercarse,
+        -0.10 * acercarse,
+        -0.04 * acercarse
+    );
+
+    // La cabeza mira hacia el producto durante la recogida.
+    aplicarRotacionEuler(
+        rig.cabeza,
+        0.14 + 0.12 * acercarse +
+            Math.sin(tiempoEstado * 2.1) * 0.018,
+        -0.12 * acercarse,
+        0.025 * Math.sin(tiempoEstado * 1.6)
+    );
+
+    aplicarRotacion(
+        rig.cuello,
+        EJE_X,
+        0.08 + 0.08 * acercarse
+    );
+}
 
     // ========================================================
     // ANIMACIÓN DE INSPECCIÓN
@@ -1063,17 +1149,21 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     // ACTUALIZAR ANIMACIÓN DE AGARRE
     // ========================================================
 function actualizarAnimacionAgarre(delta) {
-    if (!animacionAgarre.activa || !productoEnMano) return;
+    if (!animacionAgarre.activa || !productoEnMano) {
+        return false;
+    }
 
     const producto = productoEnMano;
-    const mano = rig.manoDerecha || rig.brazoDerecho;
-
-    if (!mano || producto.parent !== mano) return;
 
     animacionAgarre.tiempo += delta;
 
+    const duracion = Math.max(
+        animacionAgarre.duracion,
+        0.01
+    );
+
     const t = limitar(
-        animacionAgarre.tiempo / Math.max(animacionAgarre.duracion, 0.01),
+        animacionAgarre.tiempo / duracion,
         0,
         1
     );
@@ -1104,7 +1194,11 @@ function actualizarAnimacionAgarre(delta) {
         producto.scale.copy(animacionAgarre.escalaFinal);
 
         animacionAgarre.activa = false;
+
+        return true;
     }
+
+    return false;
 }
     // ========================================================
     // ACTUALIZAR ANIMACIÓN DE PRODUCTO
@@ -2445,121 +2539,58 @@ function actualizarAnimacionAgarre(delta) {
     // TOMAR PRODUCTO
     // ========================================================
 
-    function tomarProducto() {
-        if (
-            !productoObjetivo ||
-            !productoDisponible(productoObjetivo)
-        ) {
-            liberarReserva();
-            cambiarEstado(ESTADOS.BUSCANDO);
-            return;
-        }
-
-        const producto = productoObjetivo;
-
-        if (!palmaAlcanzaProducto(producto)) {
-            return;
-        }
-
-        producto.updateMatrixWorld(true);
-
-        productoEsInferior =
-            productoEstaEnEstanteInferior(producto);
-
-        cajaTemporal.setFromObject(producto);
-
-        const tamanoProducto = new THREE.Vector3();
-
-        cajaTemporal.getSize(tamanoProducto);
-
-        productoOriginal = {
-            parent: producto.parent,
-
-            posicion: producto.position.clone(),
-            quaternion: producto.quaternion.clone(),
-            escala: producto.scale.clone(),
-
-            visible: producto.visible,
-            tamanoMundo: tamanoProducto.clone()
-        };
-
-        const mano =
-            rig.manoDerecha ||
-            rig.brazoDerecho;
-
-        if (!mano) {
-            console.warn(
-                `[CLIENTE ${id}] No se encontró la mano derecha.`
-            );
-
-            productoOriginal = null;
-
-            liberarReserva();
-            cambiarEstado(ESTADOS.BUSCANDO);
-
-            return;
-        }
-
-        producto.getWorldPosition(vectorTemporal);
-
-        orientarHaciaPunto({
-            x: vectorTemporal.x,
-            z: vectorTemporal.z
-        });
-
-        grupo.updateMatrixWorld(true);
-        mano.updateMatrixWorld(true);
-        producto.updateMatrixWorld(true);
-mano.attach(producto);
-
-animacionAgarre.posicionInicial.copy(producto.position);
-animacionAgarre.quaternionInicial.copy(producto.quaternion);
-animacionAgarre.escalaInicial.copy(producto.scale);
-
-animacionAgarre.posicionFinal.set(
-    numero(config.offsetProductoMano.x),
-    numero(config.offsetProductoMano.y),
-    numero(config.offsetProductoMano.z)
-);
-
-animacionAgarre.quaternionFinal.copy(
-    animacionAgarre.quaternionInicial
-);
-
-animacionAgarre.escalaFinal.copy(
-    animacionAgarre.escalaInicial
-).multiplyScalar(
-    numero(config.escalaProductoMano, 0.65)
-);
-
-animacionAgarre.tiempo = 0;
-
-animacionAgarre.duracion = Math.max(
-    numero(config.tiempoAnimacionAgarre, 0.55),
-    0.05
-);
-
-animacionAgarre.activa = true;
-
-producto.visible = true;
-productoEnMano = producto;
-
-        producto.visible = true;
-        productoEnMano = producto;
-
-        productosExaminados.add(producto);
-
-        cambiarEstado(ESTADOS.INSPECCIONANDO);
-
-        console.log(
-            `[CLIENTE ${id}] Agarró ${
-                producto.userData?.nombre ??
-                producto.name ??
-                'producto'
-            }.`
-        );
+    function actualizarAnimacionAgarre(delta) {
+    if (!animacionAgarre.activa || !productoEnMano) {
+        return false;
     }
 
+    const producto = productoEnMano;
+
+    animacionAgarre.tiempo += delta;
+
+    const duracion = Math.max(
+        animacionAgarre.duracion,
+        0.01
+    );
+
+    const t = limitar(
+        animacionAgarre.tiempo / duracion,
+        0,
+        1
+    );
+
+    const suave = suavizar(t);
+
+    producto.position.lerpVectors(
+        animacionAgarre.posicionInicial,
+        animacionAgarre.posicionFinal,
+        suave
+    );
+
+    producto.quaternion.slerpQuaternions(
+        animacionAgarre.quaternionInicial,
+        animacionAgarre.quaternionFinal,
+        suave
+    );
+
+    producto.scale.lerpVectors(
+        animacionAgarre.escalaInicial,
+        animacionAgarre.escalaFinal,
+        suave
+    );
+
+    if (t >= 1) {
+        producto.position.copy(animacionAgarre.posicionFinal);
+        producto.quaternion.copy(animacionAgarre.quaternionFinal);
+        producto.scale.copy(animacionAgarre.escalaFinal);
+
+        animacionAgarre.activa = false;
+
+        return true;
+    }
+
+    return false;
+}
     // ========================================================
     // BUSCAR UBICACIÓN EN OTRO RACK
     // ========================================================
@@ -3633,39 +3664,53 @@ productoEnMano = producto;
             // RECOGER
             // ------------------------------------------------
 
-            case ESTADOS.RECOGIENDO: {
-                animarRecogerProcedural();
+           case ESTADOS.RECOGIENDO: {
 
-                const momentoAgarre = limitar(
-                    numero(config.progresoContactoProducto, 0.78),
-                    0.55,
-                    0.88
-                );
+    animarRecogerProcedural();
 
-                const alcanceTiempo =
-                    tiempoEstado >=
-                    config.tiempoRecoger * momentoAgarre;
+    // FASE 1: alcanzar el producto.
+    if (!productoEnMano) {
 
-                if (
-                    alcanceTiempo &&
-                    productoObjetivo &&
-                    palmaAlcanzaProducto(productoObjetivo)
-                ) {
-                    tomarProducto();
-                }
+        const momentoContacto = limitar(
+            numero(config.progresoContactoProducto, 0.72),
+            0.55,
+            0.88
+        );
 
-                if (
-                    tiempoEstado >= config.tiempoRecoger &&
-                    estado === ESTADOS.RECOGIENDO &&
-                    !productoEnMano
-                ) {
-                    liberarReserva();
-                    productoObjetivo = null;
-                    cambiarEstado(ESTADOS.BUSCANDO);
-                }
+        const puedeAgarrar =
+            tiempoEstado >=
+            config.tiempoRecoger * momentoContacto;
 
-                break;
-            }
+        if (
+            puedeAgarrar &&
+            productoObjetivo &&
+            palmaAlcanzaProducto(productoObjetivo)
+        ) {
+            tomarProducto();
+        }
+
+        // Si no consigue tocarlo, cancela el intento.
+        if (
+            tiempoEstado >= config.tiempoRecoger &&
+            !productoEnMano
+        ) {
+            liberarReserva();
+            productoObjetivo = null;
+            cambiarEstado(ESTADOS.BUSCANDO);
+        }
+
+    } else {
+
+        // FASE 2: terminar el agarre y retirar el producto.
+        if (!animacionAgarre.activa) {
+
+            // FASE 3: comenzar la inspección.
+            cambiarEstado(ESTADOS.INSPECCIONANDO);
+        }
+    }
+
+    break;
+}
 
             // ------------------------------------------------
             // INSPECCIONAR
@@ -3994,7 +4039,161 @@ productoEnMano = producto;
             activarReposoGLB();
         }
     }
+function animarRecogerProcedural() {
+    const progreso = limitar(
+        tiempoEstado / Math.max(config.tiempoRecoger, 0.01),
+        0,
+        1
+    );
 
+    const contactoObjetivo = limitar(
+        numero(config.progresoContactoProducto, 0.78),
+        0.55,
+        0.88
+    );
+
+    const acercarse = suavizar(
+        limitar(progreso / contactoObjetivo, 0, 1)
+    );
+
+    const contacto = suavizar(
+        limitar(
+            (progreso - contactoObjetivo) /
+            Math.max(1 - contactoObjetivo, 0.12),
+            0,
+            1
+        )
+    );
+
+    const retirada = suavizar(
+        Math.max(0, Math.min(progreso, 1))
+    );
+
+    const agachado = productoEsInferior ? 1 : 0;
+
+    // Agachamiento progresivo cuando el producto está en una zona baja.
+    animarAgacharse(
+        agachado * suavizar(progreso * 1.35)
+    );
+
+    let cercaniaReal = acercarse;
+
+    // Comprobar la distancia real entre la palma y el producto.
+    if (productoObjetivo && rig.manoDerecha) {
+        grupo.updateMatrixWorld(true);
+        rig.manoDerecha.updateWorldMatrix(true, true);
+        productoObjetivo.updateMatrixWorld(true);
+
+        const palma = rig.manoDerecha.localToWorld(
+            new THREE.Vector3(
+                numero(config.offsetProductoMano.x),
+                numero(config.offsetProductoMano.y),
+                numero(config.offsetProductoMano.z)
+            )
+        );
+
+        const productoCentro = new THREE.Vector3();
+
+        cajaTemporal.setFromObject(productoObjetivo);
+
+        if (!cajaTemporal.isEmpty()) {
+            cajaTemporal.getCenter(productoCentro);
+
+            cercaniaReal = THREE.MathUtils.lerp(
+                acercarse,
+                1 - limitar(
+                    palma.distanceTo(productoCentro) / 1.5,
+                    0,
+                    1
+                ),
+                0.35
+            );
+        }
+    }
+
+    cercaniaReal = suavizar(
+        limitar(cercaniaReal, 0, 1)
+    );
+
+    // Movimiento del brazo derecho hacia el producto.
+    const hombro = THREE.MathUtils.lerp(
+        -0.08,
+        -1.08 * (productoEsInferior ? 0.72 : 1),
+        cercaniaReal
+    );
+
+    const antebrazo = THREE.MathUtils.lerp(
+        -0.08,
+        -0.78,
+        cercaniaReal
+    );
+
+    aplicarRotacionEuler(
+        rig.brazoDerecho,
+        hombro,
+        -0.06 * cercaniaReal,
+        0.08 * cercaniaReal
+    );
+
+    aplicarRotacionEuler(
+        rig.antebrazoDerecho,
+        antebrazo,
+        -0.12 * cercaniaReal,
+        0.06 * cercaniaReal
+    );
+
+    // Cierre de la mano al llegar al producto.
+    aplicarRotacionEuler(
+        rig.manoDerecha,
+        -0.18 - contacto * 0.58,
+        contacto * 0.08,
+        -0.18 * contacto
+    );
+
+    // El brazo izquierdo acompaña el movimiento del cuerpo.
+    aplicarRotacionEuler(
+        rig.brazoIzquierdo,
+        -0.12 - 0.22 * retirada,
+        0,
+        0.06 * retirada
+    );
+
+    aplicarRotacionEuler(
+        rig.antebrazoIzquierdo,
+        -0.12 - 0.28 * retirada,
+        0.04,
+        -0.04
+    );
+
+    aplicarRotacion(
+        rig.manoIzquierda,
+        EJE_X,
+        -0.08 - contacto * 0.16
+    );
+
+    // Inclinación del torso hacia el producto.
+    aplicarRotacionEuler(
+        rig.torso,
+        0.08 * acercarse + 0.28 * agachado * acercarse,
+        -0.10 * acercarse,
+        -0.04 * acercarse
+    );
+
+    // La cabeza mira hacia el producto durante la recogida.
+    aplicarRotacionEuler(
+        rig.cabeza,
+        0.14 + 0.12 * acercarse +
+            Math.sin(tiempoEstado * 2.1) * 0.018,
+        -0.12 * acercarse,
+        0.025 * Math.sin(tiempoEstado * 1.6)
+    );
+
+    aplicarRotacion(
+        rig.cuello,
+        EJE_X,
+        0.08 + 0.08 * acercarse
+    );
+}
     // ========================================================
     // ELIMINAR
     // ========================================================
