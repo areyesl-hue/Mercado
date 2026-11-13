@@ -5,7 +5,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 // ============================================================
 // PRODUCTOS DEL SUPERMERCADO
 // Three.js | GLB | Unidades independientes
-// CATÁLOGO: ÚNICAMENTE PLÁTANOS
+// CATÁLOGO: MODELOS REALES DEL PROYECTO
 // ============================================================
 
 export function crearProductosLacteos(scene) {
@@ -534,15 +534,15 @@ export function crearProductosLacteos(scene) {
             ]
         },
         {
-            clave: 'CEREAL',
-            archivo: '/modelos/cereal.glb',
-            nombre: 'Cereal',
-            categoria: 'Cereales',
+            clave: 'ATUN',
+            archivo: '/modelos/Atun.glb',
+            nombre: 'Atún',
+            categoria: 'Enlatados',
             rack: 'GONDOLAS_IZQUIERDAS',
             rotacion: Math.PI / 2,
-            altura: 0.30,
-            ancho: 0.38,
-            profundidad: 0.32,
+            altura: 0.28,
+            ancho: 0.34,
+            profundidad: 0.30,
             posiciones: [
                 { x: -17.0, z: 2.8, y: 0.70 },
                 { x: -17.0, z: 5.8, y: 0.70 },
@@ -555,15 +555,15 @@ export function crearProductosLacteos(scene) {
             ]
         },
         {
-            clave: 'SNACKS',
-            archivo: '/modelos/Sabritas.glb',
-            nombre: 'Snacks',
-            categoria: 'Snacks',
+            clave: 'AZUCAR',
+            archivo: '/modelos/Azucar.glb',
+            nombre: 'Azúcar',
+            categoria: 'Abarrotes',
             rack: 'GONDOLAS_IZQUIERDAS',
             rotacion: Math.PI / 2,
-            altura: 0.26,
-            ancho: 0.24,
-            profundidad: 0.24,
+            altura: 0.32,
+            ancho: 0.38,
+            profundidad: 0.34,
             posiciones: [
                 { x: -17.0, z: 18.0, y: 0.68 },
                 { x: -17.0, z: 21.0, y: 0.68 },
@@ -598,14 +598,14 @@ export function crearProductosLacteos(scene) {
         },
         {
             clave: 'BEBIDAS',
-            archivo: '/modelos/Pepsi.glb',
-            nombre: 'Bebida',
+            archivo: '/modelos/Agua.glb',
+            nombre: 'Agua',
             categoria: 'Bebidas',
             rack: 'GONDOLAS_DERECHAS',
             rotacion: Math.PI / 2,
             altura: 0.45,
-            ancho: 0.24,
-            profundidad: 0.24,
+            ancho: 0.28,
+            profundidad: 0.28,
             posiciones: [
                 { x: 9.0, z: 2.8, y: 0.72 },
                 { x: 9.0, z: 5.8, y: 0.72 },
@@ -615,6 +615,153 @@ export function crearProductosLacteos(scene) {
                 { x: 17.0, z: 5.8, y: 0.72 },
                 { x: 17.0, z: 8.8, y: 1.18 },
                 { x: 17.0, z: 11.8, y: 1.18 }
+            ]
+        },
+        {
+            clave: 'REFRESCOS',
+            archivo: '/modelos/Pepsi.glb',
+            nombre: 'Refresco',
+            categoria: 'Bebidas',
+            rack: 'GONDOLAS_DERECHAS',
+            rotacion: Math.PI / 2,
+            altura: 0.42,
+            ancho: 0.24,
+            profundidad: 0.24,
+            posiciones: [
+                { x: 9.0, z: 18.0, y: 0.70 },
+                { x: 9.0, z: 21.0, y: 0.70 },
+                { x: 9.0, z: 24.0, y: 1.12 },
+                { x: 9.0, z: 27.0, y: 1.12 },
+                { x: 17.0, z: 18.0, y: 0.70 },
+                { x: 17.0, z: 21.0, y: 0.70 },
+                { x: 17.0, z: 24.0, y: 1.12 },
+                { x: 17.0, z: 27.0, y: 1.12 }
+            ]
+        },
+        {
+            clave: 'SNACKS',
+            archivo: '/modelos/Sabritas.glb',
+            nombre: 'Snacks',
+            categoria: 'Snacks',
+            rack: 'GONDOLAS_IZQUIERDAS',
+            rotacion: Math.PI / 2,
+            altura: 0.26,
+            ancho: 0.24,
+            profundidad: 0.24,
+            posiciones: [
+                { x: -17.0, z: 18.0, y: 0.68 },
+                { x: -17.0, z: 21.0, y: 0.68 },
+                { x: -17.0, z: 24.0, y: 1.12 },
+                { x: -17.0, z: 27.0, y: 1.12 },
+                { x: -9.0, z: 18.0, y: 0.68 },
+                { x: -9.0, z: 21.0, y: 0.68 },
+                { x: -9.0, z: 24.0, y: 1.12 },
+                { x: -9.0, z: 27.0, y: 1.12 }
+            ]
+        },
+        {
+            clave: 'DORITOS',
+            archivo: '/modelos/Doritos.glb',
+            nombre: 'Doritos',
+            categoria: 'Snacks',
+            rack: 'GONDOLAS_IZQUIERDAS',
+            rotacion: Math.PI / 2,
+            altura: 0.26,
+            ancho: 0.24,
+            profundidad: 0.22,
+            posiciones: [
+                { x: -25.0, z: -18.0, y: 0.70 },
+                { x: -25.0, z: -15.2, y: 0.70 },
+                { x: -25.0, z: -12.4, y: 1.18 },
+                { x: -25.0, z: -9.6, y: 1.18 },
+                { x: -21.0, z: -18.0, y: 0.70 },
+                { x: -21.0, z: -15.2, y: 0.70 },
+                { x: -21.0, z: -12.4, y: 1.18 },
+                { x: -21.0, z: -9.6, y: 1.18 }
+            ]
+        },
+        {
+            clave: 'CEREAL',
+            archivo: '/modelos/cereal.glb',
+            nombre: 'Cereal',
+            categoria: 'Cereales',
+            rack: 'GONDOLAS_IZQUIERDAS',
+            rotacion: Math.PI / 2,
+            altura: 0.30,
+            ancho: 0.38,
+            profundidad: 0.32,
+            posiciones: [
+                { x: -25.0, z: 3.2, y: 0.70 },
+                { x: -25.0, z: 6.1, y: 0.70 },
+                { x: -25.0, z: 9.4, y: 1.18 },
+                { x: -25.0, z: 12.7, y: 1.18 },
+                { x: -21.0, z: 3.2, y: 0.70 },
+                { x: -21.0, z: 6.1, y: 0.70 },
+                { x: -21.0, z: 9.4, y: 1.18 },
+                { x: -21.0, z: 12.7, y: 1.18 }
+            ]
+        },
+        {
+            clave: 'ACEITE',
+            archivo: '/modelos/Aceite.glb',
+            nombre: 'Aceite',
+            categoria: 'Abarrotes',
+            rack: 'GONDOLAS_DERECHAS',
+            rotacion: Math.PI / 2,
+            altura: 0.36,
+            ancho: 0.26,
+            profundidad: 0.26,
+            posiciones: [
+                { x: 21.0, z: -18.0, y: 0.70 },
+                { x: 21.0, z: -15.2, y: 0.70 },
+                { x: 21.0, z: -12.4, y: 1.18 },
+                { x: 21.0, z: -9.6, y: 1.18 },
+                { x: 25.0, z: -18.0, y: 0.70 },
+                { x: 25.0, z: -15.2, y: 0.70 },
+                { x: 25.0, z: -12.4, y: 1.18 },
+                { x: 25.0, z: -9.6, y: 1.18 }
+            ]
+        },
+        {
+            clave: 'FRUTAS',
+            archivo: '/modelos/Mazana.glb',
+            nombre: 'Manzana',
+            categoria: 'Frutas y verduras',
+            rack: 'MESA_FRUTAS_01',
+            rotacion: Math.PI / 2,
+            altura: 0.22,
+            ancho: 0.22,
+            profundidad: 0.22,
+            posiciones: [
+                { x: -25.5, z: 15.0, y: 1.05 },
+                { x: -24.2, z: 15.0, y: 1.05 },
+                { x: -22.8, z: 15.0, y: 1.05 },
+                { x: -21.4, z: 15.0, y: 1.05 },
+                { x: -25.5, z: 10.8, y: 1.05 },
+                { x: -24.2, z: 10.8, y: 1.05 },
+                { x: -22.8, z: 10.8, y: 1.05 },
+                { x: -21.4, z: 10.8, y: 1.05 }
+            ]
+        },
+        {
+            clave: 'VERDURAS',
+            archivo: '/modelos/Pepino.glb',
+            nombre: 'Pepino',
+            categoria: 'Frutas y verduras',
+            rack: 'MESA_FRUTAS_02',
+            rotacion: Math.PI / 2,
+            altura: 0.28,
+            ancho: 0.22,
+            profundidad: 0.22,
+            posiciones: [
+                { x: -25.5, z: 18.5, y: 1.05 },
+                { x: -24.2, z: 18.5, y: 1.05 },
+                { x: -22.8, z: 18.5, y: 1.05 },
+                { x: -21.4, z: 18.5, y: 1.05 },
+                { x: -25.5, z: 21.6, y: 1.05 },
+                { x: -24.2, z: 21.6, y: 1.05 },
+                { x: -22.8, z: 21.6, y: 1.05 },
+                { x: -21.4, z: 21.6, y: 1.05 }
             ]
         },
         {
@@ -636,6 +783,27 @@ export function crearProductosLacteos(scene) {
                 { x: 25.5, z: 10.1, y: 0.70 },
                 { x: 25.5, z: 12.7, y: 1.18 },
                 { x: 25.5, z: 15.5, y: 1.18 }
+            ]
+        },
+        {
+            clave: 'HIGIENE',
+            archivo: '/modelos/toallitas_bebe.glb',
+            nombre: 'Higiene',
+            categoria: 'Higiene',
+            rack: 'MODULO_HIGIENE',
+            rotacion: Math.PI / 2,
+            altura: 0.30,
+            ancho: 0.26,
+            profundidad: 0.22,
+            posiciones: [
+                { x: 29.5, z: -10.0, y: 0.70 },
+                { x: 29.5, z: -7.0, y: 0.70 },
+                { x: 29.5, z: -4.0, y: 1.18 },
+                { x: 29.5, z: -1.0, y: 1.18 },
+                { x: 26.5, z: -10.0, y: 0.70 },
+                { x: 26.5, z: -7.0, y: 0.70 },
+                { x: 26.5, z: -4.0, y: 1.18 },
+                { x: 26.5, z: -1.0, y: 1.18 }
             ]
         }
     ];
