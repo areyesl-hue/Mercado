@@ -3164,7 +3164,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         return false;
     }
 
-    
+    detenido = false;
     liberarReserva();
 
     compras = [];
@@ -3179,7 +3179,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
     entradaNotificada = false;
 
-    
     grupo.position.set(
         numero(posicionEntrada.x, plaza.x),
         numero(config.posicion.y),
@@ -3190,7 +3189,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
     actualizarColisiones();
 
-    
     const camino = crearRutaPorPuerta(
         {
             x: 0,
@@ -3205,6 +3203,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         );
 
         cambiarEstado(ESTADOS.INACTIVO);
+        detenido = false;
         return false;
     }
 
@@ -3212,8 +3211,8 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     indiceRuta = 0;
     objetivo = camino[camino.length - 1];
 
-    
     cambiarEstado(ESTADOS.ENTRANDO);
+    reproducirAnimacion();
 
     if (mixer) {
         mixer.timeScale = 1;
@@ -3245,6 +3244,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             return false;
         }
 
+        detenido = false;
         liberarReserva();
 
         if (productoEnMano) {
@@ -3291,6 +3291,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
                 : null;
 
         cambiarEstado(ESTADOS.REGRESANDO);
+        reproducirAnimacion();
 
         console.log(
             `[CLIENTE ${id}] Regresando a su vehículo.`
