@@ -386,6 +386,9 @@ export function crearProductosLacteos(scene) {
         modelo.userData.precio = precio;
         modelo.userData.moneda = 'MXN';
         modelo.userData.categoria = categoria;
+        modelo.userData.idRack = categoria;
+        modelo.userData.rackId = categoria;
+        modelo.userData.departamento = categoria;
 
         modelo.userData.recogido = false;
         modelo.userData.vendido = false;
@@ -514,19 +517,20 @@ export function crearProductosLacteos(scene) {
             archivo: '/modelos/Abarrotes.glb',
             nombre: 'Abarrotes',
             categoria: 'Abarrotes',
+            rack: 'GONDOLAS_IZQUIERDAS',
             rotacion: Math.PI / 2,
-            altura: 0.32,
+            altura: 0.34,
             ancho: 0.42,
             profundidad: 0.38,
             posiciones: [
-                { x: -17.5, z: -11.8, y: 0.75 },
-                { x: -17.5, z: -9.0, y: 0.75 },
-                { x: -17.5, z: -5.8, y: 1.25 },
-                { x: -17.5, z: -2.8, y: 1.25 },
-                { x: -8.5, z: -11.8, y: 0.75 },
-                { x: -8.5, z: -9.0, y: 0.75 },
-                { x: -8.5, z: -5.8, y: 1.25 },
-                { x: -8.5, z: -2.8, y: 1.25 }
+                { x: -17.0, z: -13.2, y: 0.72 },
+                { x: -17.0, z: -10.2, y: 0.72 },
+                { x: -17.0, z: -7.0, y: 1.18 },
+                { x: -17.0, z: -4.0, y: 1.18 },
+                { x: -9.0, z: -13.2, y: 0.72 },
+                { x: -9.0, z: -10.2, y: 0.72 },
+                { x: -9.0, z: -7.0, y: 1.18 },
+                { x: -9.0, z: -4.0, y: 1.18 }
             ]
         },
         {
@@ -534,79 +538,20 @@ export function crearProductosLacteos(scene) {
             archivo: '/modelos/cereal.glb',
             nombre: 'Cereal',
             categoria: 'Cereales',
+            rack: 'GONDOLAS_IZQUIERDAS',
             rotacion: Math.PI / 2,
             altura: 0.30,
             ancho: 0.38,
             profundidad: 0.32,
             posiciones: [
-                { x: -17.5, z: 3.2, y: 0.70 },
-                { x: -17.5, z: 6.0, y: 0.70 },
-                { x: -17.5, z: 9.5, y: 1.18 },
-                { x: -17.5, z: 12.8, y: 1.18 },
-                { x: -8.5, z: 3.2, y: 0.70 },
-                { x: -8.5, z: 6.0, y: 0.70 },
-                { x: -8.5, z: 9.5, y: 1.18 },
-                { x: -8.5, z: 12.8, y: 1.18 }
-            ]
-        },
-        {
-            clave: 'LACTEOS',
-            archivo: '/modelos/Lala.glb',
-            nombre: 'Lácteo',
-            categoria: 'Lácteos',
-            rotacion: Math.PI / 2,
-            altura: 0.38,
-            ancho: 0.30,
-            profundidad: 0.26,
-            posiciones: [
-                { x: 8.6, z: -11.8, y: 0.72 },
-                { x: 8.6, z: -9.0, y: 0.72 },
-                { x: 8.6, z: -5.8, y: 1.20 },
-                { x: 8.6, z: -2.8, y: 1.20 },
-                { x: 17.6, z: -11.8, y: 0.72 },
-                { x: 17.6, z: -9.0, y: 0.72 },
-                { x: 17.6, z: -5.8, y: 1.20 },
-                { x: 17.6, z: -2.8, y: 1.20 }
-            ]
-        },
-        {
-            clave: 'BEBIDAS',
-            archivo: '/modelos/Pepsi.glb',
-            nombre: 'Bebida',
-            categoria: 'Bebidas',
-            rotacion: Math.PI / 2,
-            altura: 0.45,
-            ancho: 0.24,
-            profundidad: 0.24,
-            posiciones: [
-                { x: 8.6, z: 3.2, y: 0.72 },
-                { x: 8.6, z: 6.1, y: 0.72 },
-                { x: 8.6, z: 9.5, y: 1.18 },
-                { x: 8.6, z: 12.8, y: 1.18 },
-                { x: 17.6, z: 3.2, y: 0.72 },
-                { x: 17.6, z: 6.1, y: 0.72 },
-                { x: 17.6, z: 9.5, y: 1.18 },
-                { x: 17.6, z: 12.8, y: 1.18 }
-            ]
-        },
-        {
-            clave: 'LIMPIEZA',
-            archivo: '/modelos/detergente_liquido.glb',
-            nombre: 'Limpieza',
-            categoria: 'Limpieza',
-            rotacion: Math.PI / 2,
-            altura: 0.42,
-            ancho: 0.32,
-            profundidad: 0.30,
-            posiciones: [
-                { x: 29.0, z: 7.2, y: 0.70 },
-                { x: 29.0, z: 9.8, y: 0.70 },
-                { x: 29.0, z: 12.6, y: 1.15 },
-                { x: 29.0, z: 15.2, y: 1.15 },
-                { x: 25.5, z: 7.2, y: 0.70 },
-                { x: 25.5, z: 9.8, y: 0.70 },
-                { x: 25.5, z: 12.6, y: 1.15 },
-                { x: 25.5, z: 15.2, y: 1.15 }
+                { x: -17.0, z: 2.8, y: 0.70 },
+                { x: -17.0, z: 5.8, y: 0.70 },
+                { x: -17.0, z: 8.8, y: 1.15 },
+                { x: -17.0, z: 11.8, y: 1.15 },
+                { x: -9.0, z: 2.8, y: 0.70 },
+                { x: -9.0, z: 5.8, y: 0.70 },
+                { x: -9.0, z: 8.8, y: 1.15 },
+                { x: -9.0, z: 11.8, y: 1.15 }
             ]
         },
         {
@@ -614,19 +559,83 @@ export function crearProductosLacteos(scene) {
             archivo: '/modelos/Sabritas.glb',
             nombre: 'Snacks',
             categoria: 'Snacks',
+            rack: 'GONDOLAS_IZQUIERDAS',
             rotacion: Math.PI / 2,
             altura: 0.26,
             ancho: 0.24,
             profundidad: 0.24,
             posiciones: [
-                { x: -22.5, z: -18.0, y: 0.70 },
-                { x: -22.5, z: -15.2, y: 0.70 },
-                { x: -22.5, z: -12.4, y: 1.18 },
-                { x: -22.5, z: -9.6, y: 1.18 },
-                { x: -19.2, z: -18.0, y: 0.70 },
-                { x: -19.2, z: -15.2, y: 0.70 },
-                { x: -19.2, z: -12.4, y: 1.18 },
-                { x: -19.2, z: -9.6, y: 1.18 }
+                { x: -17.0, z: 18.0, y: 0.68 },
+                { x: -17.0, z: 21.0, y: 0.68 },
+                { x: -17.0, z: 24.0, y: 1.12 },
+                { x: -17.0, z: 27.0, y: 1.12 },
+                { x: -9.0, z: 18.0, y: 0.68 },
+                { x: -9.0, z: 21.0, y: 0.68 },
+                { x: -9.0, z: 24.0, y: 1.12 },
+                { x: -9.0, z: 27.0, y: 1.12 }
+            ]
+        },
+        {
+            clave: 'LACTEOS',
+            archivo: '/modelos/Lala.glb',
+            nombre: 'Lácteo',
+            categoria: 'Lacteos',
+            rack: 'GONDOLAS_DERECHAS',
+            rotacion: Math.PI / 2,
+            altura: 0.38,
+            ancho: 0.30,
+            profundidad: 0.26,
+            posiciones: [
+                { x: 9.0, z: -13.2, y: 0.72 },
+                { x: 9.0, z: -10.2, y: 0.72 },
+                { x: 9.0, z: -7.0, y: 1.18 },
+                { x: 9.0, z: -4.0, y: 1.18 },
+                { x: 17.0, z: -13.2, y: 0.72 },
+                { x: 17.0, z: -10.2, y: 0.72 },
+                { x: 17.0, z: -7.0, y: 1.18 },
+                { x: 17.0, z: -4.0, y: 1.18 }
+            ]
+        },
+        {
+            clave: 'BEBIDAS',
+            archivo: '/modelos/Pepsi.glb',
+            nombre: 'Bebida',
+            categoria: 'Bebidas',
+            rack: 'GONDOLAS_DERECHAS',
+            rotacion: Math.PI / 2,
+            altura: 0.45,
+            ancho: 0.24,
+            profundidad: 0.24,
+            posiciones: [
+                { x: 9.0, z: 2.8, y: 0.72 },
+                { x: 9.0, z: 5.8, y: 0.72 },
+                { x: 9.0, z: 8.8, y: 1.18 },
+                { x: 9.0, z: 11.8, y: 1.18 },
+                { x: 17.0, z: 2.8, y: 0.72 },
+                { x: 17.0, z: 5.8, y: 0.72 },
+                { x: 17.0, z: 8.8, y: 1.18 },
+                { x: 17.0, z: 11.8, y: 1.18 }
+            ]
+        },
+        {
+            clave: 'LIMPIEZA',
+            archivo: '/modelos/detergente_liquido.glb',
+            nombre: 'Limpieza',
+            categoria: 'Limpieza',
+            rack: 'MODULO_LIMPIEZA',
+            rotacion: Math.PI / 2,
+            altura: 0.42,
+            ancho: 0.32,
+            profundidad: 0.30,
+            posiciones: [
+                { x: 28.2, z: 7.4, y: 0.70 },
+                { x: 28.2, z: 10.1, y: 0.70 },
+                { x: 28.2, z: 12.7, y: 1.18 },
+                { x: 28.2, z: 15.5, y: 1.18 },
+                { x: 25.5, z: 7.4, y: 0.70 },
+                { x: 25.5, z: 10.1, y: 0.70 },
+                { x: 25.5, z: 12.7, y: 1.18 },
+                { x: 25.5, z: 15.5, y: 1.18 }
             ]
         }
     ];
