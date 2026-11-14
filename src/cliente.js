@@ -355,6 +355,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     let productoOriginal = null;
 
     let productoEsInferior = false;
+    let ladoAgarre = 'derecho';
 
     let rackReservado = null;
 
@@ -421,6 +422,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         numero(config.offsetPalmaProducto.y),
         numero(config.offsetPalmaProducto.z)
     );
+    const offsetPalmaIzquierdaLocal = offsetPalmaLocal.clone();
 
     const ikAgarre = {
         hombro: new THREE.Vector3(),
@@ -702,9 +704,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         );
     }
 
-    function calcularOffsetPalmaDesdeEsqueleto() {
-        const mano = rig.manoDerecha;
-
+    function calcularOffsetPalmaDesdeEsqueleto(mano, destino) {
         if (!mano || !modelo) return false;
 
         modelo.updateMatrixWorld(true);
@@ -761,9 +761,133 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         if (pesoTotal <= 0) return false;
 
-        offsetPalmaLocal
+        destino
             .copy(suma)
             .multiplyScalar(1 / pesoTotal);
+
+        return true;
+    }
+
+    function obtenerRigBrazo(lado = ladoAgarre) {
+        if (lado === 'izquierdo') {
+            return {
+                hombro: rig.brazoIzquierdo,
+                codo: rig.antebrazoIzquierdo,
+                mano: rig.manoIzquierda
+            };
+        }
+
+        return {
+            hombro: rig.brazoDerecho,
+            codo: rig.antebrazoDerecho,
+            mano: rig.manoDerecha
+        };
+    }
+
+    function medirAlcanceBrazo(brazo, cajaProducto) {
+        if (!brazo.mano) return null;
+
+        const posicionMano = brazo.mano.getWorldPosition(
+            new THREE.Vector3()
+        );
+        const contacto = cajaProducto.getCenter(
+            new THREE.Vector3()
+        );
+        const diferenciaX = posicionMano.x - contacto.x;
+        const diferenciaZ = posicionMano.z - contacto.z;
+
+        if (Math.abs(diferenciaX) > Math.abs(diferenciaZ)) {
+            contacto.x = diferenciaX >= 0
+                ? cajaProducto.max.x
+                : cajaProducto.min.x;
+        } else {
+            contacto.z = diferenciaZ >= 0
+                ? cajaProducto.max.z
+                : cajaProducto.min.z;
+        }
+
+        const distanciaMano = posicionMano.distanceTo(contacto);
+
+        if (!brazo.hombro || !brazo.codo) {
+            return {
+                distanciaMano,
+                alcanzable: false,
+                deficit: Infinity
+            };
+        }
+
+        const hombro = brazo.hombro.getWorldPosition(
+            new THREE.Vector3()
+        );
+        const codo = brazo.codo.getWorldPosition(
+            new THREE.Vector3()
+        );
+        const alcanceMaximo =
+            hombro.distanceTo(codo) +
+            codo.distanceTo(posicionMano);
+        const distanciaHombro = hombro.distanceTo(contacto);
+        const deficit = Math.max(
+            0,
+            distanciaHombro - alcanceMaximo + 0.02
+        );
+
+        return {
+            distanciaMano,
+            alcanzable: deficit === 0,
+            deficit
+        };
+    }
+
+    function seleccionarBrazoAgarre(producto) {
+        ladoAgarre = 'derecho';
+
+        if (!producto) return false;
+
+        producto.updateMatrixWorld(true);
+        grupo.updateMatrixWorld(true);
+        cajaTemporal.setFromObject(producto);
+
+        if (cajaTemporal.isEmpty()) return false;
+
+        const brazoDerecho = obtenerRigBrazo('derecho');
+        const brazoIzquierdo = obtenerRigBrazo('izquierdo');
+        const alcanceDerecho = medirAlcanceBrazo(
+            brazoDerecho,
+            cajaTemporal
+        );
+        const alcanceIzquierdo = medirAlcanceBrazo(
+            brazoIzquierdo,
+            cajaTemporal
+        );
+
+        if (!alcanceDerecho && !alcanceIzquierdo) {
+            return false;
+        }
+
+        if (!alcanceDerecho) {
+            ladoAgarre = 'izquierdo';
+        } else if (
+            !alcanceDerecho.alcanzable &&
+            alcanceIzquierdo?.alcanzable
+        ) {
+            ladoAgarre = 'izquierdo';
+        } else if (
+            !alcanceDerecho.alcanzable &&
+            alcanceIzquierdo &&
+            alcanceIzquierdo.deficit < alcanceDerecho.deficit
+        ) {
+            ladoAgarre = 'izquierdo';
+        } else {
+            ladoAgarre = 'derecho';
+        }
+
+        const distancia = ladoAgarre === 'izquierdo'
+            ? alcanceIzquierdo?.distanciaMano
+            : alcanceDerecho.distanciaMano;
+
+        console.info(
+            `[CLIENTE ${id}] Usará la mano ${ladoAgarre} para recoger el producto (${distancia?.toFixed(2) ?? 'N/D'} m).`
+        );
 
         return true;
     }
@@ -986,15 +1110,48 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         const hombro = THREE.MathUtils.lerp(-0.08, -1.08 * (productoEsInferior ? 0.72 : 1), acercarse);
         const antebrazo = THREE.MathUtils.lerp(-0.08, -0.78, acercarse);
 
-        aplicarRotacionEuler(rig.brazoDerecho, hombro, -0.06 * acercarse, 0.08 * acercarse);
-        aplicarRotacionEuler(rig.antebrazoDerecho, antebrazo, -0.12 * acercarse, 0.06);
-        aplicarRotacionEuler(rig.manoDerecha, -0.18 - contacto * 0.58, contacto * 0.08, -0.18 * contacto);
+        const brazoActivo = obtenerRigBrazo();
+        const brazoLibre = obtenerRigBrazo(
+            ladoAgarre === 'derecho' ? 'izquierdo' : 'derecho'
+        );
+        const signoActivo = ladoAgarre === 'izquierdo' ? -1 : 1;
+        const signoLibre = -signoActivo;
 
-        aplicarRotacionEuler(rig.brazoIzquierdo,
-            -0.12 - 0.22 * retirada, 0, 0.06 * retirada);
-        aplicarRotacionEuler(rig.antebrazoIzquierdo,
-            -0.12 - 0.28 * retirada, 0.04, -0.04);
-        aplicarRotacion(rig.manoIzquierda, EJE_X, -0.08 - contacto * 0.16);
+        aplicarRotacionEuler(
+            brazoActivo.hombro,
+            hombro,
+            -0.06 * acercarse * signoActivo,
+            0.08 * acercarse * signoActivo
+        );
+        aplicarRotacionEuler(
+            brazoActivo.codo,
+            antebrazo,
+            -0.12 * acercarse * signoActivo,
+            0.06 * signoActivo
+        );
+        aplicarRotacionEuler(
+            brazoActivo.mano,
+            -0.18 - contacto * 0.58,
+            contacto * 0.08 * signoActivo,
+            -0.18 * contacto * signoActivo
+        );
+
+        aplicarRotacionEuler(brazoLibre.hombro,
+            -0.12 - 0.22 * retirada,
+            0,
+            0.06 * retirada * signoLibre
+        );
+        aplicarRotacionEuler(
+            brazoLibre.codo,
+            -0.12 - 0.28 * retirada,
+            0.04 * signoLibre,
+            -0.04 * signoLibre
+        );
+        aplicarRotacion(
+            brazoLibre.mano,
+            EJE_X,
+            -0.08 - contacto * 0.16
+        );
 
         aplicarRotacionEuler(rig.torso,
             0.08 * acercarse + 0.28 * agachado * acercarse,
@@ -1047,9 +1204,10 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         objetivoPalmaMundo = null,
         progresoIK = null
     ) {
-        const hombro = rig.brazoDerecho;
-        const codo = rig.antebrazoDerecho;
-        const mano = rig.manoDerecha;
+        const brazo = obtenerRigBrazo();
+        const hombro = brazo.hombro;
+        const codo = brazo.codo;
+        const mano = brazo.mano;
 
         if (!producto || !hombro || !codo || !mano) {
             return false;
@@ -1143,7 +1301,11 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         ikAgarre.normalContacto.normalize();
 
-        ikAgarre.offsetPalmaLocal.copy(offsetPalmaLocal);
+        ikAgarre.offsetPalmaLocal.copy(
+            ladoAgarre === 'izquierdo'
+                ? offsetPalmaIzquierdaLocal
+                : offsetPalmaLocal
+        );
 
         const offsetPalmaManual =
             producto.userData?.offsetPalmaLocal;
@@ -1379,18 +1541,49 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         const oscilarCabeza = Math.sin(tiempoEstado * 1.18) * 0.032;
         const respiracion = Math.sin(tiempoEstado * 1.75) * 0.012;
 
-        aplicarRotacionEuler(rig.brazoDerecho, -1.08 * levantar + giroProducto,
-            0.12 * levantar, 0.10 * Math.sin(tiempoEstado));
-        aplicarRotacionEuler(rig.antebrazoDerecho, -0.92 * levantar + balanceoProducto,
-            -0.15 * levantar, -0.18);
-        aplicarRotacionEuler(rig.manoDerecha, -0.28 + giroProducto,
-            balanceoProducto * 0.8, 0.15);
+        const brazoActivo = obtenerRigBrazo();
+        const brazoLibre = obtenerRigBrazo(
+            ladoAgarre === 'derecho' ? 'izquierdo' : 'derecho'
+        );
+        const signoActivo = ladoAgarre === 'izquierdo' ? -1 : 1;
+        const signoLibre = -signoActivo;
 
-        aplicarRotacionEuler(rig.brazoIzquierdo, -0.76 * levantar,
-            -0.10 * levantar, -0.08);
-        aplicarRotacionEuler(rig.antebrazoIzquierdo, -0.82 * levantar,
-            0.08, 0.12);
-        aplicarRotacion(rig.manoIzquierda, EJE_X, -0.22 + giroProducto * 0.35);
+        aplicarRotacionEuler(
+            brazoActivo.hombro,
+            -1.08 * levantar + giroProducto,
+            0.12 * levantar * signoActivo,
+            0.10 * Math.sin(tiempoEstado) * signoActivo
+        );
+        aplicarRotacionEuler(
+            brazoActivo.codo,
+            -0.92 * levantar + balanceoProducto,
+            -0.15 * levantar * signoActivo,
+            -0.18 * signoActivo
+        );
+        aplicarRotacionEuler(
+            brazoActivo.mano,
+            -0.28 + giroProducto,
+            balanceoProducto * 0.8 * signoActivo,
+            0.15 * signoActivo
+        );
+
+        aplicarRotacionEuler(
+            brazoLibre.hombro,
+            -0.76 * levantar,
+            -0.10 * levantar * signoLibre,
+            -0.08 * signoLibre
+        );
+        aplicarRotacionEuler(
+            brazoLibre.codo,
+            -0.82 * levantar,
+            0.08 * signoLibre,
+            0.12 * signoLibre
+        );
+        aplicarRotacion(
+            brazoLibre.mano,
+            EJE_X,
+            -0.22 + giroProducto * 0.35
+        );
 
         aplicarRotacionEuler(rig.cabeza, 0.20 + oscilarCabeza,
             Math.sin(tiempoEstado * 0.48) * 0.16,
@@ -1444,7 +1637,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
     function prepararDepositoProducto() {
         const producto = productoEnMano;
-        const mano = rig.manoDerecha;
+        const mano = obtenerRigBrazo().mano;
 
         if (
             !producto ||
@@ -1477,7 +1670,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
     function animarDepositoProducto() {
         const producto = productoEnMano;
-        const mano = rig.manoDerecha;
+        const mano = obtenerRigBrazo().mano;
 
         if (!producto || !mano) return false;
 
@@ -1538,17 +1731,41 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         const subir = suavizar(limitar((progreso - 0.72) / 0.28, 0, 1));
         const vacilar = Math.sin(tiempoEstado * 5) * 0.025;
 
-        aplicarRotacionEuler(rig.brazoDerecho,
-            THREE.MathUtils.lerp(-0.92, -0.36, subir) + vacilar,
-            -0.08, 0.08);
-        aplicarRotacionEuler(rig.antebrazoDerecho,
-            THREE.MathUtils.lerp(-0.88, -0.55, subir), 0, 0.05);
-        aplicarRotacionEuler(rig.manoDerecha, -0.25 + vacilar, 0, 0.10);
+        const brazoActivo = obtenerRigBrazo();
+        const brazoLibre = obtenerRigBrazo(
+            ladoAgarre === 'derecho' ? 'izquierdo' : 'derecho'
+        );
+        const signoActivo = ladoAgarre === 'izquierdo' ? -1 : 1;
+        const signoLibre = -signoActivo;
 
-        aplicarRotacionEuler(rig.brazoIzquierdo, -0.50 + bajar * 0.18,
-            0.05, -0.08);
-        aplicarRotacionEuler(rig.antebrazoIzquierdo, -0.58 + subir * 0.12,
-            0, -0.04);
+        aplicarRotacionEuler(brazoActivo.hombro,
+            THREE.MathUtils.lerp(-0.92, -0.36, subir) + vacilar,
+            -0.08 * signoActivo, 0.08 * signoActivo);
+        aplicarRotacionEuler(
+            brazoActivo.codo,
+            THREE.MathUtils.lerp(-0.88, -0.55, subir),
+            0,
+            0.05 * signoActivo
+        );
+        aplicarRotacionEuler(
+            brazoActivo.mano,
+            -0.25 + vacilar,
+            0,
+            0.10 * signoActivo
+        );
+
+        aplicarRotacionEuler(
+            brazoLibre.hombro,
+            -0.50 + bajar * 0.18,
+            0.05 * signoLibre,
+            -0.08 * signoLibre
+        );
+        aplicarRotacionEuler(
+            brazoLibre.codo,
+            -0.58 + subir * 0.12,
+            0,
+            -0.04 * signoLibre
+        );
 
         aplicarRotacionEuler(rig.torso, 0.08 + bajar * 0.16, 0, -0.025);
         aplicarRotacionEuler(rig.cabeza, 0.14 + bajar * 0.10,
@@ -1570,20 +1787,35 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             animarAgacharse(1 - t * 0.25);
         }
 
-        aplicarRotacionEuler(rig.brazoDerecho,
+        const brazoActivo = obtenerRigBrazo();
+        const brazoLibre = obtenerRigBrazo(
+            ladoAgarre === 'derecho' ? 'izquierdo' : 'derecho'
+        );
+        const signoActivo = ladoAgarre === 'izquierdo' ? -1 : 1;
+        const signoLibre = -signoActivo;
+
+        aplicarRotacionEuler(brazoActivo.hombro,
             THREE.MathUtils.lerp(-1.05, -0.12, t),
-            THREE.MathUtils.lerp(-0.08, 0, t),
-            0.08);
-        aplicarRotacionEuler(rig.antebrazoDerecho,
+            THREE.MathUtils.lerp(-0.08, 0, t) * signoActivo,
+            0.08 * signoActivo);
+        aplicarRotacionEuler(brazoActivo.codo,
             THREE.MathUtils.lerp(-0.82, -0.08, t),
-            -0.06, -0.04);
-        aplicarRotacion(rig.manoDerecha, EJE_X,
+            -0.06 * signoActivo, -0.04 * signoActivo);
+        aplicarRotacion(brazoActivo.mano, EJE_X,
             THREE.MathUtils.lerp(-0.55, -0.08, t));
 
-        aplicarRotacionEuler(rig.brazoIzquierdo,
-            THREE.MathUtils.lerp(-0.48, -0.1, t), 0, -0.08);
-        aplicarRotacionEuler(rig.antebrazoIzquierdo,
-            THREE.MathUtils.lerp(-0.58, -0.1, t), 0, 0.04);
+        aplicarRotacionEuler(
+            brazoLibre.hombro,
+            THREE.MathUtils.lerp(-0.48, -0.1, t),
+            0,
+            -0.08 * signoLibre
+        );
+        aplicarRotacionEuler(
+            brazoLibre.codo,
+            THREE.MathUtils.lerp(-0.58, -0.1, t),
+            0,
+            0.04 * signoLibre
+        );
 
         aplicarRotacionEuler(rig.cabeza,
             THREE.MathUtils.lerp(0.18, 0.03, t),
@@ -1934,7 +2166,14 @@ export function crearClienteSupermercado(scene, opciones = {}) {
                 actualizarRig();
 
                 if (!opciones.offsetPalmaProducto) {
-                    calcularOffsetPalmaDesdeEsqueleto();
+                    calcularOffsetPalmaDesdeEsqueleto(
+                        rig.manoDerecha,
+                        offsetPalmaLocal
+                    );
+                    calcularOffsetPalmaDesdeEsqueleto(
+                        rig.manoIzquierda,
+                        offsetPalmaIzquierdaLocal
+                    );
                 }
 
                 if (gltf.animations?.length) {
@@ -3159,13 +3398,11 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             tamanoMundo: tamanoProducto.clone()
         };
 
-        const mano =
-            rig.manoDerecha ||
-            rig.brazoDerecho;
+        const mano = obtenerRigBrazo().mano;
 
         if (!mano) {
             console.warn(
-                `[CLIENTE ${id}] No se encontró la mano derecha.`
+                `[CLIENTE ${id}] No se encontró la mano seleccionada para agarrar.`
             );
 
             productoOriginal = null;
@@ -4290,15 +4527,47 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
                 } else if (estadoActual === ESTADOS.ACERCANDO) {
                     if (productoObjetivo) {
-                        productoObjetivo.getWorldPosition(vectorTemporal);
+                        productoObjetivo.updateMatrixWorld(true);
+                        cajaTemporal.setFromObject(productoObjetivo);
 
-                        orientarHaciaPunto({
-                            x: vectorTemporal.x,
-                            z: vectorTemporal.z
-                        });
+                        if (!cajaTemporal.isEmpty()) {
+                            cajaTemporal.getCenter(vectorTemporal);
+                        } else {
+                            productoObjetivo.getWorldPosition(vectorTemporal);
+                        }
+
+                        const dx = vectorTemporal.x - grupo.position.x;
+                        const dz = vectorTemporal.z - grupo.position.z;
+
+                        if (Math.abs(dx) + Math.abs(dz) > 0.0001) {
+                            rotacionObjetivo =
+                                Math.atan2(dx, dz) +
+                                config.correccionRotacion;
+                            grupo.rotation.y = rotacionObjetivo;
+                        }
+
+                        grupo.updateMatrixWorld(true);
+
+                        const producto = productoObjetivo;
+                        const brazoSeleccionado =
+                            seleccionarBrazoAgarre(producto);
+
+                        if (
+                            brazoSeleccionado &&
+                            obtenerRigBrazo().mano
+                        ) {
+                            cambiarEstado(ESTADOS.RECOGIENDO);
+                        } else {
+                            if (producto) {
+                                productosConRutaFallida.add(producto);
+                            }
+
+                            liberarReserva();
+                            cambiarEstado(ESTADOS.BUSCANDO);
+                        }
+                    } else {
+                        cambiarEstado(ESTADOS.BUSCANDO);
                     }
-
-                    cambiarEstado(ESTADOS.RECOGIENDO);
 
                 } else if (estadoActual === ESTADOS.RUTA) {
                     if (
