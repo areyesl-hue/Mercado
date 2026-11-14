@@ -914,6 +914,17 @@ function crearClienteParaVehiculo(datos) {
             maximoProductos: CONFIG.maximoProductosCliente,
             radioColision: 0.42,
 
+            alComprar: ({ totalProductos } = {}) => {
+                const visita = visitantesPorVehiculo.get(idVehiculo);
+
+                if (!visita) return;
+
+                visita.tiempo = 0;
+                console.info(
+                    `[VISITANTE] ${visita.nombreCliente} lleva ${totalProductos} producto(s); se reinicia su tiempo de compra.`
+                );
+            },
+
             alEntrar: () => {
                 const visita = visitantesPorVehiculo.get(idVehiculo);
 
@@ -1221,6 +1232,8 @@ function clienteEstaOcupadoComprando(estado) {
     return [
         'entrando',
         'entrandosupermercado',
+        'buscando',
+        'acercando',
         'acercandose',
         'acercandoseproducto',
         'recogiendo',
@@ -1294,8 +1307,27 @@ function actualizarFasesVisitantes(delta) {
         const tiempoAgotado =
             visita.tiempo >= CONFIG.tiempoCompraAuto;
 
-        if (clienteEstaOcupadoComprando(estado)) continue;
+        if (estado === 'caja' && !visita.pagoSolicitado) {
+            iniciarPagoVisitante(visita);
+            continue;
+        }
+
+        if (
+            clienteEstaOcupadoComprando(estado) &&
+            !maximoComprado
+        ) {
+            continue;
+        }
+
         if (!maximoComprado && !tiempoAgotado) continue;
+
+        if (compras.length === 0) {
+            mostrarMensaje(
+                `${visita.nombreCliente} no encontró productos y regresará a su vehículo.`
+            );
+            iniciarRegresoVisitante(visita);
+            continue;
+        }
 
         visita.pagoSolicitado = true;
         iniciarPagoVisitante(visita);
@@ -1380,9 +1412,6 @@ function iniciarPagoVisitante(visita) {
 function finalizarPagoVisitante(visita, ticket) {
     if (!visita || visita.fase !== 'caja') return;
 
-    liberarCajaVisitante(visita);
-    visita.fase = 'regresando';
-
     if (ticket) {
         const ticketGuardado = {
             ...ticket,
@@ -1396,6 +1425,15 @@ function finalizarPagoVisitante(visita, ticket) {
             visita.nombreCliente ?? 'Cliente'
         );
     }
+
+    iniciarRegresoVisitante(visita);
+}
+
+function iniciarRegresoVisitante(visita) {
+    if (!visita) return;
+
+    liberarCajaVisitante(visita);
+    visita.fase = 'regresando';
 
     const cliente = visita.cliente;
 
