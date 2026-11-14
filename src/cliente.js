@@ -55,7 +55,7 @@ const CONFIG_BASE = {
     probabilidadCompra: 0.85,
     probabilidadDejarEnOtroRack: 0.22,
 
-    distanciaProducto: 0.70,
+    distanciaProducto: 0.55,
     distanciaFrenteProducto: 1.25,
     distanciaContactoMano: 0.005,
 
@@ -1598,25 +1598,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             );
         }
 
-        mano.updateMatrixWorld(true);
-        ikAgarre.muneca
-            .copy(ikAgarre.offsetPalmaLocal)
-            .applyMatrix4(mano.matrixWorld);
-
-        if (objetivoPalmaMundo) {
-            ikAgarre.objetivoContacto.copy(objetivoPalmaMundo);
-        } else {
-            ikAgarre.objetivoContacto
-                .copy(ikAgarre.puntoContacto)
-                .addScaledVector(
-                    ikAgarre.normalContacto,
-                    distanciaContacto
-                );
-        }
-
-        return ikAgarre.muneca.distanceTo(
-            ikAgarre.objetivoContacto
-        ) <= 0.08;
+        return true;
     }
 
     
@@ -3411,8 +3393,8 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         const radioMinimo = Math.max(
             numero(config.radioColision, 0.38) +
                 Math.hypot(tamanoTemporal.x, tamanoTemporal.z) * 0.5 +
-                0.08,
-            numero(config.distanciaProducto, 0.85)
+                0.02,
+            numero(config.distanciaProducto, 0.55)
         );
 
         const radioMaximo = Math.max(
@@ -3549,21 +3531,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         grupo.updateMatrixWorld(true);
         const agarreResuelto = ajustarBrazoAlProducto(producto);
-
-        if (!agarreResuelto) {
-            console.warn(
-                `[CLIENTE ${id}] No alcanzó el producto; buscará otro artículo.`
-            );
-
-            productosConRutaFallida.add(producto);
-            productoOriginal = null;
-            restaurarPoseCompleta();
-            liberarReserva();
-            cambiarEstado(ESTADOS.BUSCANDO);
-
-            return;
-        }
-
         const puntoSujecionLocal = agarreResuelto
             ? ikAgarre.puntoContacto.clone()
             : null;
