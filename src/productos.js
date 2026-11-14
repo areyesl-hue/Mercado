@@ -1,6 +1,7 @@
 
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 // ============================================================
 // PRODUCTOS DEL SUPERMERCADO
@@ -168,6 +169,142 @@ export function crearProductosLacteos(scene) {
     }
 
     // ========================================================
+    // COMPACTAR MALLAS ESTÁTICAS
+    // ========================================================
+
+    function compactarMallasFuente(fuente) {
+        fuente.updateMatrixWorld(true);
+
+        const inversaFuente = new THREE.Matrix4()
+            .copy(fuente.matrixWorld)
+            .invert();
+        const grupos = new Map();
+
+        fuente.traverse((objeto) => {
+            const geometria = objeto.geometry;
+
+            if (
+                !objeto.isMesh ||
+                objeto.isSkinnedMesh ||
+                objeto.isInstancedMesh ||
+                !geometria?.attributes?.position ||
+                !objeto.material?.isMaterial ||
+                !objeto.visible ||
+                geometria.attributes.skinIndex ||
+                Object.keys(geometria.morphAttributes).length
+            ) {
+                return;
+            }
+
+            const matrizRelativa = new THREE.Matrix4()
+                .multiplyMatrices(inversaFuente, objeto.matrixWorld);
+
+            if (matrizRelativa.determinant() <= 0) return;
+
+            const firmaAtributos = Object.entries(
+                geometria.attributes
+            )
+                .sort(([nombreA], [nombreB]) =>
+                    nombreA.localeCompare(nombreB)
+                )
+                .map(([nombre, atributo]) => {
+                    if (atributo.isInterleavedBufferAttribute) {
+                        return null;
+                    }
+
+                    return [
+                        nombre,
+                        atributo.itemSize,
+                        atributo.normalized,
+                        atributo.array.constructor.name
+                    ].join(':');
+                });
+
+            if (firmaAtributos.includes(null)) return;
+
+            const clave = [
+                objeto.material.uuid,
+                objeto.renderOrder,
+                objeto.layers.mask,
+                geometria.index?.array.constructor.name ?? 'sin-indice',
+                firmaAtributos.join('|')
+            ].join(';');
+
+            let grupo = grupos.get(clave);
+
+            if (!grupo) {
+                grupo = {
+                    material: objeto.material,
+                    objetos: [],
+                    matrices: []
+                };
+                grupos.set(clave, grupo);
+            }
+
+            grupo.objetos.push(objeto);
+            grupo.matrices.push(matrizRelativa);
+        });
+
+        for (const grupo of grupos.values()) {
+            if (grupo.objetos.length < 2) continue;
+
+            const geometrias = grupo.objetos.map((objeto, indice) => {
+                return objeto.geometry
+                    .clone()
+                    .applyMatrix4(grupo.matrices[indice]);
+            });
+            const geometriaCombinada = mergeGeometries(
+                geometrias,
+                false
+            );
+
+            geometrias.forEach((geometria) => {
+                geometria.dispose();
+            });
+
+            if (!geometriaCombinada) {
+                console.warn(
+                    `No se pudieron compactar mallas de ${fuente.name}; se conservarán separadas.`
+                );
+                continue;
+            }
+
+            const mallaCombinada = new THREE.Mesh(
+                geometriaCombinada,
+                grupo.material
+            );
+
+            mallaCombinada.name = `MALLAS_COMPACTADAS_${mallaCombinada.id}`;
+            mallaCombinada.castShadow = grupo.objetos[0].castShadow;
+            mallaCombinada.receiveShadow =
+                grupo.objetos[0].receiveShadow;
+            mallaCombinada.frustumCulled =
+                grupo.objetos[0].frustumCulled;
+            mallaCombinada.renderOrder = grupo.objetos[0].renderOrder;
+            mallaCombinada.layers.mask = grupo.objetos[0].layers.mask;
+
+            grupo.objetos.forEach((objeto) => {
+                objeto.removeFromParent();
+            });
+
+            fuente.add(mallaCombinada);
+        }
+
+        function quitarGruposVacios(padre) {
+            for (const hijo of [...padre.children]) {
+                quitarGruposVacios(hijo);
+
+                if (hijo.isGroup && hijo.children.length === 0) {
+                    hijo.removeFromParent();
+                }
+            }
+        }
+
+        quitarGruposVacios(fuente);
+        fuente.updateMatrixWorld(true);
+    }
+
+    // ========================================================
     // CREAR FUENTES INDEPENDIENTES
     // ========================================================
 
@@ -202,6 +339,7 @@ export function crearProductosLacteos(scene) {
             );
 
             fuente.add(copia);
+            compactarMallasFuente(fuente);
             fuente.updateMatrixWorld(true);
 
             const caja = new THREE.Box3().setFromObject(fuente);
