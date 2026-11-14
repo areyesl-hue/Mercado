@@ -329,18 +329,11 @@ export function crearProductosLacteos(scene) {
             return null;
         }
 
-        const anchoMaximo = limites.ancho ?? 0.44;
-        const profundidadMaxima = limites.profundidad ?? 0.42;
-
-        const escalaAltura = altura / dimensionesRotadas.y;
-        const escalaAncho = anchoMaximo / dimensionesRotadas.x;
-        const escalaProfundidad =
-            profundidadMaxima / dimensionesRotadas.z;
-
-        const escala = Math.min(
-            escalaAltura,
-            escalaAncho,
-            escalaProfundidad
+        const dimensionMaximaEstandar = 0.32;
+        const escala = dimensionMaximaEstandar / Math.max(
+            dimensionesRotadas.x,
+            dimensionesRotadas.y,
+            dimensionesRotadas.z
         );
 
         modelo.scale.setScalar(escala);
@@ -532,6 +525,7 @@ export function crearProductosLacteos(scene) {
 
         return {
             idRack: `Gondola_${String(indiceGondola + 1).padStart(2, '0')}_Lado_${lado}`,
+            rotacionY: lado * Math.PI / 2,
             posiciones: offsetsZGondola.map((offsetZ) => ({
                 x: centroX + lado * 0.30,
                 y: nivelesGondola[nivel],
@@ -762,7 +756,9 @@ export function crearProductosLacteos(scene) {
                         posicion.y,
                         posicion.z,
                         catalogo.alto,
-                        catalogo.rotacion ?? Math.PI / 2,
+                        catalogo.rotacion ??
+                            ubicacion.rotacionY ??
+                            Math.PI / 2,
                         catalogo.categoria,
                         {
                             ancho: catalogo.ancho,
