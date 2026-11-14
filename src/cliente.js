@@ -55,7 +55,7 @@ const CONFIG_BASE = {
     probabilidadCompra: 0.85,
     probabilidadDejarEnOtroRack: 0.22,
 
-    distanciaProducto: 0.85,
+    distanciaProducto: 0.70,
     distanciaFrenteProducto: 1.25,
     distanciaContactoMano: 0.005,
 
@@ -93,7 +93,7 @@ const CONFIG_BASE = {
     alturaEstanteInferior: 0.90,
 
     maximoProductos: 8,
-    distanciaMaximaBusqueda: 40,
+    distanciaMaximaBusqueda: 70,
 
     
     soloPlatanos: false,
@@ -1598,7 +1598,25 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             );
         }
 
-        return true;
+        mano.updateMatrixWorld(true);
+        ikAgarre.muneca
+            .copy(ikAgarre.offsetPalmaLocal)
+            .applyMatrix4(mano.matrixWorld);
+
+        if (objetivoPalmaMundo) {
+            ikAgarre.objetivoContacto.copy(objetivoPalmaMundo);
+        } else {
+            ikAgarre.objetivoContacto
+                .copy(ikAgarre.puntoContacto)
+                .addScaledVector(
+                    ikAgarre.normalContacto,
+                    distanciaContacto
+                );
+        }
+
+        return ikAgarre.muneca.distanceTo(
+            ikAgarre.objetivoContacto
+        ) <= 0.08;
     }
 
     
@@ -3344,14 +3362,30 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             sinVisitar = candidatos;
         }
 
-        sinVisitar.sort((a, b) => {
-            const puntuacionA = a.distancia + Math.random() * 3;
-            const puntuacionB = b.distancia + Math.random() * 3;
+        const candidatosPorRack = new Map();
 
-            return puntuacionA - puntuacionB;
-        });
+        for (const candidato of sinVisitar) {
+            const anterior = candidatosPorRack.get(
+                candidato.claveRack
+            );
 
-        return sinVisitar[0]?.producto ?? null;
+            if (
+                !anterior ||
+                candidato.distancia < anterior.distancia
+            ) {
+                candidatosPorRack.set(
+                    candidato.claveRack,
+                    candidato
+                );
+            }
+        }
+
+        const racksDisponibles = [...candidatosPorRack.values()];
+        const rackElegido = racksDisponibles[
+            Math.floor(Math.random() * racksDisponibles.length)
+        ];
+
+        return rackElegido?.producto ?? null;
     }
 
     
@@ -3515,6 +3549,21 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         grupo.updateMatrixWorld(true);
         const agarreResuelto = ajustarBrazoAlProducto(producto);
+
+        if (!agarreResuelto) {
+            console.warn(
+                `[CLIENTE ${id}] No alcanzó el producto; buscará otro artículo.`
+            );
+
+            productosConRutaFallida.add(producto);
+            productoOriginal = null;
+            restaurarPoseCompleta();
+            liberarReserva();
+            cambiarEstado(ESTADOS.BUSCANDO);
+
+            return;
+        }
+
         const puntoSujecionLocal = agarreResuelto
             ? ikAgarre.puntoContacto.clone()
             : null;
