@@ -447,7 +447,6 @@ export function crearLadron(scene, productos, opciones = {}) {
     let soporteProducto = null;
     let rigModelo = null;
     const productosEnMano = [];
-    const productosInalcanzables = new WeakSet();
     let animacionProductoRobado = null;
     let contactoProductoRobo = null;
     let poseBrazoTomando = null;
@@ -1176,14 +1175,6 @@ export function crearLadron(scene, productos, opciones = {}) {
             contacto.punto.clone()
         );
         const puntoPalmaMundo = mano.localToWorld(offsetMano);
-        const puntoPalmaObjetivoMundo = contacto.punto
-            .clone()
-            .addScaledVector(contacto.normal, 0.025);
-
-        if (puntoPalmaMundo.distanceTo(puntoPalmaObjetivoMundo) > 0.22) {
-            return false;
-        }
-
         const puntoProductoObjetivoMundo = puntoPalmaMundo
             .clone()
             .addScaledVector(contacto.normal, -0.025);
@@ -1455,7 +1446,6 @@ export function crearLadron(scene, productos, opciones = {}) {
             if (objeto.userData.recogido) return;
             if (objeto.userData.robadoPor) return;
             if (objeto.userData.reservado === true) return;
-            if (productosInalcanzables.has(objeto)) return;
 
             const reserva = objeto.userData.reservadoPor;
 
@@ -1642,9 +1632,8 @@ export function crearLadron(scene, productos, opciones = {}) {
         if (!colocarProductoEnMano(producto)) {
             producto.userData.recogido = false;
             delete producto.userData.robadoPor;
-            productosInalcanzables.add(producto);
             console.warn(
-                `[${id}] No alcanzó ${producto.userData.nombreProducto || producto.name}; lo omitirá para evitar teletransportarlo.`
+                `[${id}] No pudo sujetar ${producto.userData.nombreProducto || producto.name}.`
             );
             liberarReserva();
             estado = 'buscando';
