@@ -444,6 +444,7 @@ let reloj;
 
 let sistemaVehiculos = null;
 let productosLacteos = null;
+let mobiliarioSupermercado = null;
 
 let luzAmbiente;
 let luzSol;
@@ -649,7 +650,7 @@ function crearEstructuraSupermercado() {
     }
 
     try {
-        crearMobiliario(escena);
+        mobiliarioSupermercado = crearMobiliario(escena);
         console.info('Mobiliario creado.');
     } catch (error) {
         console.error('Error al crear mobiliario:', error);
@@ -900,17 +901,16 @@ function crearClienteParaVehiculo(datos) {
             id: `VISITANTE_${idVehiculo}`,
             modelo: config.modelo,
             posicion: posicionInicio,
+            mobiliario: mobiliarioSupermercado?.userData?.obtenerColisiones?.() ?? [],
             velocidad: CONFIG.velocidadCliente,
             escala: 1,
             ruta: config.ruta,
             repetirRuta: false,
             inactivo: true,
             probabilidadCompra: CONFIG.probabilidadCompra,
-            tiempoExaminar: CONFIG.tiempoExaminar,
-            distanciaRecoger: CONFIG.distanciaRecoger,
-            pausaEntreCompras: CONFIG.pausaEntreCompras,
+            tiempoInspeccionar: CONFIG.tiempoExaminar,
+            tiempoEntreProductos: CONFIG.pausaEntreCompras,
             maximoProductos: CONFIG.maximoProductosCliente,
-            distanciaDestino: 0.8,
             radioColision: 0.42,
 
             alEntrar: () => {
