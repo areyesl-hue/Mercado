@@ -3698,7 +3698,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         if (!acercarseAProducto(producto)) {
             liberarReserva();
-            cambiarEstado(ESTADOS.ESPERANDO);
+            cambiarEstado(ESTADOS.BUSCANDO);
         }
     }
 
@@ -4306,6 +4306,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
                     ) {
                         dirigirseACaja();
                     } else {
+                        productosConRutaFallida.clear();
                         cambiarEstado(ESTADOS.BUSCANDO);
                     }
 
