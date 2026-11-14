@@ -28,7 +28,7 @@ const ESTADOS = {
 
 
 const CONFIG_BASE = {
-    modelo: '/modelos/Cliente1.glb',
+    modelo: '/modelos/Cliente2.glb',
     posicion: { x: 0, y: 0, z: 20 },
 
     altura: 1.75,
