@@ -43,10 +43,10 @@ const CONFIG = {
     maximoProductosCliente: 3,
 
     cajasRegistradoras: [
-        { id: 1, x: -17, z: 23.95 },
-        { id: 2, x: -12, z: 23.95 },
-        { id: 3, x: 12, z: 23.95 },
-        { id: 4, x: 17, z: 23.95 }
+        { id: 1, x: -17, z: 26.95 },
+        { id: 2, x: -12, z: 26.95 },
+        { id: 3, x: 12, z: 26.95 },
+        { id: 4, x: 17, z: 26.95 }
     ],
 
     distanciaRegistro: 0.7,
@@ -836,6 +836,7 @@ function crearSistemaVehiculos() {
             tiempoEntreLlegadas: 5,
             cochesIniciales: 3,
             maximoPorTanda: 3,
+            reemplazoContinuo: true,
 
             alEstacionar: datos => {
                 console.info('[VEHÍCULO] Auto estacionado:', datos);
