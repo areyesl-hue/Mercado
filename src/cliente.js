@@ -2468,40 +2468,8 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         producto.updateMatrixWorld(true);
 
-        animacionAgarre.posicionInicial.copy(producto.position);
-        animacionAgarre.quaternionInicial.copy(producto.quaternion);
-        animacionAgarre.escalaInicial.copy(producto.scale);
-
-        const offset = config.offsetProductoMano;
-
-        animacionAgarre.posicionFinal.set(
-            numero(offset.x),
-            numero(offset.y),
-            numero(offset.z)
-        );
-
-        const rotacion = config.rotacionProductoMano;
-
-        const eulerFinal = new THREE.Euler(
-            numero(rotacion.x),
-            numero(rotacion.y),
-            numero(rotacion.z)
-        );
-
-        animacionAgarre.quaternionFinal.setFromEuler(eulerFinal);
-
-        animacionAgarre.escalaFinal
-            .copy(animacionAgarre.escalaInicial)
-            .multiplyScalar(config.escalaProductoMano);
-
+        animacionAgarre.activa = false;
         animacionAgarre.tiempo = 0;
-
-        animacionAgarre.duracion = Math.max(
-            numero(config.tiempoAnimacionAgarre, 0.38),
-            0.05
-        );
-
-        animacionAgarre.activa = true;
 
         producto.visible = true;
         productoEnMano = producto;
