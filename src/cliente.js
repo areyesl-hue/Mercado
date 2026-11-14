@@ -80,7 +80,7 @@ const CONFIG_BASE = {
 
     
     tiempoAnimacionAgarre: 0.40,
-    escalaProductoMano: 0.65,
+    escalaProductoMano: 1,
 
     offsetProductoMano: {
         x: 0,
@@ -301,7 +301,8 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         }
     };
 
-    const id = siguienteIdCliente++;
+    const idGenerado = siguienteIdCliente++;
+    const id = config.id ?? idGenerado;
 
     const grupo = new THREE.Group();
     grupo.name = `CLIENTE_SUPERMERCADO_${id}`;
@@ -1386,6 +1387,31 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         }
 
         if (typeof objeto === 'object') {
+            const minX = numero(objeto.minX, NaN);
+            const maxX = numero(objeto.maxX, NaN);
+            const minZ = numero(objeto.minZ, NaN);
+            const maxZ = numero(objeto.maxZ, NaN);
+
+            if (
+                Number.isFinite(minX) &&
+                Number.isFinite(maxX) &&
+                Number.isFinite(minZ) &&
+                Number.isFinite(maxZ)
+            ) {
+                salida.push({
+                    x: (minX + maxX) / 2,
+                    z: (minZ + maxZ) / 2,
+                    ancho: maxX - minX,
+                    profundidad: maxZ - minZ,
+                    minX,
+                    maxX,
+                    minZ,
+                    maxZ,
+                    objeto
+                });
+                return salida;
+            }
+
             const x = numero(objeto.x, NaN);
             const z = numero(objeto.z, NaN);
 
@@ -1402,7 +1428,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             );
 
             const profundidad = numero(
-                objeto.profundidad ?? objeto.depth ?? objeto.sizeZ,
+                objeto.profundidad ?? objeto.fondo ?? objeto.depth ?? objeto.sizeZ,
                 1
             );
 
@@ -2005,14 +2031,17 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         if (Array.isArray(fuente)) return fuente;
 
+        if (typeof fuente.userData?.listarUnidades === 'function') {
+            const unidades = fuente.userData.listarUnidades();
+
+            if (Array.isArray(unidades)) return unidades;
+        }
+
         if (fuente.isObject3D) {
             const lista = [];
 
             fuente.traverse(objeto => {
-                if (
-                    objeto.isMesh &&
-                    objeto.userData?.esProducto
-                ) {
+                if (objeto.userData?.esProducto) {
                     lista.push(objeto);
                 }
             });
@@ -2449,28 +2478,32 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             animacionProducto.quaternionFinal,
             suave
         );
+        const escala = animacionProducto.escalaTemporal.lerpVectors(
+            animacionProducto.escalaInicial,
+            animacionProducto.escalaFinal,
+            suave
+        );
 
         const padre = producto.parent;
 
         if (padre) {
             padre.updateMatrixWorld(true);
 
-            producto.position.copy(
-                padre.worldToLocal(posicion.clone())
+            animacionProducto.matrizMundoTemporal.compose(
+                posicion,
+                quaternion,
+                escala
             );
 
-            const quaternionPadre = padre.getWorldQuaternion(
-                new THREE.Quaternion()
-            );
+            animacionProducto.matrizLocalTemporal
+                .copy(padre.matrixWorld)
+                .invert()
+                .multiply(animacionProducto.matrizMundoTemporal);
 
-            producto.quaternion
-                .copy(quaternionPadre.invert())
-                .multiply(quaternion);
-
-            producto.scale.lerpVectors(
-                animacionProducto.escalaInicial,
-                animacionProducto.escalaFinal,
-                suave
+            animacionProducto.matrizLocalTemporal.decompose(
+                producto.position,
+                producto.quaternion,
+                producto.scale
             );
         }
 
@@ -3850,32 +3883,12 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         grupo.updateMatrixWorld(true);
         mano.updateMatrixWorld(true);
 
-        const posicionMundoInicial = producto.getWorldPosition(
-            new THREE.Vector3()
-        );
-        const quaternionMundoInicial = producto.getWorldQuaternion(
-            new THREE.Quaternion()
-        );
-        const escalaMundoInicial = producto.getWorldScale(
-            new THREE.Vector3()
-        );
-
         mano.attach(producto);
         mano.updateMatrixWorld(true);
 
-        const posicionInicialLocal = mano.worldToLocal(
-            posicionMundoInicial.clone()
-        );
-
-        const quaternionPadre = mano.getWorldQuaternion(
-            new THREE.Quaternion()
-        );
-
-        const quaternionInicial = new THREE.Quaternion()
-            .copy(quaternionPadre.clone().invert())
-            .multiply(quaternionMundoInicial);
-
-        const escalaInicial = escalaMundoInicial.clone();
+        const posicionInicialLocal = producto.position.clone();
+        const quaternionInicial = producto.quaternion.clone();
+        const escalaInicial = producto.scale.clone();
 
         const offset = config.offsetProductoMano;
         const rotacion = config.rotacionProductoMano;
@@ -3982,6 +3995,24 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             config.tiempoEntreProductos = Math.max(
                 0,
                 opcionesCompras.tiempoEntreProductos
+            );
+        }
+
+        if (
+            typeof opcionesCompras.tiempoInspeccionar === 'number'
+        ) {
+            config.tiempoInspeccionar = Math.max(
+                0,
+                opcionesCompras.tiempoInspeccionar
+            );
+        }
+
+        if (
+            typeof opcionesCompras.tiempoRecoger === 'number'
+        ) {
+            config.tiempoRecoger = Math.max(
+                0,
+                opcionesCompras.tiempoRecoger
             );
         }
 
