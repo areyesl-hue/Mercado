@@ -4396,8 +4396,8 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
                 if (tiempoEstado >= 0.5) {
                     decisionCompra =
-                        Math.random() <
-                        config.probabilidadCompra;
+                        compras.length > 0 ||
+                        Math.random() < config.probabilidadCompra;
 
                     if (decisionCompra) {
                         cambiarEstado(ESTADOS.GUARDANDO);
