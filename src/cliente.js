@@ -2976,10 +2976,53 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         });
 
         grupo.updateMatrixWorld(true);
+        const agarreResuelto = ajustarBrazoAlProducto(producto);
+        const puntoSujecionLocal = agarreResuelto
+            ? ikAgarre.puntoContacto.clone()
+            : null;
+        const normalSujecion = agarreResuelto
+            ? ikAgarre.normalContacto.clone()
+            : null;
+
+        if (puntoSujecionLocal) {
+            producto.worldToLocal(puntoSujecionLocal);
+        }
+
         mano.updateMatrixWorld(true);
         producto.updateMatrixWorld(true);
 
         mano.attach(producto);
+
+        if (puntoSujecionLocal && normalSujecion) {
+            mano.updateMatrixWorld(true);
+            producto.updateMatrixWorld(true);
+
+            const puntoPalmaMundo = mano.localToWorld(
+                ikAgarre.offsetPalmaLocal.clone()
+            );
+            const distanciaContacto = Math.max(
+                0,
+                numero(
+                    producto.userData?.distanciaContactoMano,
+                    config.distanciaContactoMano
+                )
+            );
+
+            puntoPalmaMundo.addScaledVector(
+                normalSujecion,
+                -distanciaContacto
+            );
+
+            const puntoProductoEnMano = mano.worldToLocal(
+                producto.localToWorld(puntoSujecionLocal.clone())
+            );
+            const puntoObjetivoEnMano =
+                mano.worldToLocal(puntoPalmaMundo);
+
+            producto.position.add(
+                puntoObjetivoEnMano.sub(puntoProductoEnMano)
+            );
+        }
 
         producto.updateMatrixWorld(true);
         productoConCajaAgarre = null;
