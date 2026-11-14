@@ -55,7 +55,7 @@ const CONFIG_BASE = {
     probabilidadCompra: 0.85,
     probabilidadDejarEnOtroRack: 0.22,
 
-    distanciaProducto: 1.35,
+    distanciaProducto: 0.85,
     distanciaFrenteProducto: 1.25,
 
     tiempoRecoger: 1.1,
@@ -3564,13 +3564,10 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             case ESTADOS.RECOGIENDO: {
                 animarRecogerProcedural();
 
-                const momentoAgarre = limitar(
-                    numero(config.progresoContactoProducto, 0.78),
-                    0.55,
-                    0.88
-                );
-
-                if (tiempoEstado >= config.tiempoRecoger * momentoAgarre) {
+                if (
+                    tiempoEstado >=
+                    Math.max(numero(config.tiempoRecoger, 1.1), 0.01)
+                ) {
                     tomarProducto();
                 }
 
