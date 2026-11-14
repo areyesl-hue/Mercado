@@ -75,6 +75,11 @@ const CONFIG_BASE = {
         y: 0.04,
         z: 0.12
     },
+    offsetPalmaProducto: {
+        x: 0,
+        y: 0.06,
+        z: 0.01
+    },
 
     rotacionProductoMano: {
         x: 0,
@@ -280,6 +285,11 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             ...(opciones.offsetProductoMano ?? {})
         },
 
+        offsetPalmaProducto: {
+            ...CONFIG_BASE.offsetPalmaProducto,
+            ...(opciones.offsetPalmaProducto ?? {})
+        },
+
         rotacionProductoMano: {
             ...CONFIG_BASE.rotacionProductoMano,
             ...(opciones.rotacionProductoMano ?? {})
@@ -399,6 +409,11 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     const matrizTemporal = new THREE.Matrix4();
     const cajaAgarreProducto = new THREE.Box3();
     let productoConCajaAgarre = null;
+    const offsetPalmaLocal = new THREE.Vector3(
+        numero(config.offsetPalmaProducto.x),
+        numero(config.offsetPalmaProducto.y),
+        numero(config.offsetPalmaProducto.z)
+    );
 
     const ikAgarre = {
         hombro: new THREE.Vector3(),
@@ -409,6 +424,8 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         normalContacto: new THREE.Vector3(),
         objetivoContacto: new THREE.Vector3(),
         objetivo: new THREE.Vector3(),
+        offsetPalmaLocal: new THREE.Vector3(),
+        offsetPalmaMundo: new THREE.Vector3(),
         codoActual: new THREE.Vector3(),
         codoObjetivo: new THREE.Vector3(),
         direccion: new THREE.Vector3(),
@@ -668,6 +685,72 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             'calfr',
             'rightcalf'
         );
+    }
+
+    function calcularOffsetPalmaDesdeEsqueleto() {
+        const mano = rig.manoDerecha;
+
+        if (!mano || !modelo) return false;
+
+        modelo.updateMatrixWorld(true);
+
+        const inversaMano = new THREE.Matrix4()
+            .copy(mano.matrixWorld)
+            .invert();
+        const suma = new THREE.Vector3();
+        const punto = new THREE.Vector3();
+        let pesoTotal = 0;
+
+        modelo.traverse(objeto => {
+            if (!objeto.isSkinnedMesh || !objeto.skeleton) return;
+
+            const indiceMano =
+                objeto.skeleton.bones.indexOf(mano);
+            const posicion = objeto.geometry?.attributes?.position;
+            const indices = objeto.geometry?.attributes?.skinIndex;
+            const pesos = objeto.geometry?.attributes?.skinWeight;
+
+            if (
+                indiceMano < 0 ||
+                !posicion ||
+                !indices ||
+                !pesos
+            ) {
+                return;
+            }
+
+            objeto.skeleton.update();
+            objeto.updateMatrixWorld(true);
+
+            for (let indice = 0; indice < posicion.count; indice++) {
+                let pesoMano = 0;
+
+                for (let canal = 0; canal < 4; canal++) {
+                    if (indices.getComponent(indice, canal) === indiceMano) {
+                        pesoMano += pesos.getComponent(indice, canal);
+                    }
+                }
+
+                if (pesoMano < 0.35) continue;
+
+                punto.fromBufferAttribute(posicion, indice);
+                objeto.applyBoneTransform(indice, punto);
+                punto
+                    .applyMatrix4(objeto.matrixWorld)
+                    .applyMatrix4(inversaMano);
+
+                suma.addScaledVector(punto, pesoMano);
+                pesoTotal += pesoMano;
+            }
+        });
+
+        if (pesoTotal <= 0) return false;
+
+        offsetPalmaLocal
+            .copy(suma)
+            .multiplyScalar(1 / pesoTotal);
+
+        return true;
     }
 
     
@@ -943,7 +1026,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         return true;
     }
 
-    function ajustarBrazoAlProducto(producto) {
+    function ajustarBrazoAlProducto(producto, correccion = 0) {
         const hombro = rig.brazoDerecho;
         const codo = rig.antebrazoDerecho;
         const mano = rig.manoDerecha;
@@ -1024,6 +1107,24 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         ikAgarre.normalContacto.normalize();
 
+        ikAgarre.offsetPalmaLocal.copy(offsetPalmaLocal);
+
+        const offsetPalmaManual =
+            producto.userData?.offsetPalmaLocal;
+
+        if (
+            offsetPalmaManual &&
+            Number.isFinite(offsetPalmaManual.x) &&
+            Number.isFinite(offsetPalmaManual.y) &&
+            Number.isFinite(offsetPalmaManual.z)
+        ) {
+            ikAgarre.offsetPalmaLocal.set(
+                offsetPalmaManual.x,
+                offsetPalmaManual.y,
+                offsetPalmaManual.z
+            );
+        }
+
         const distanciaContacto = Math.max(
             0,
             numero(
@@ -1038,6 +1139,14 @@ export function crearClienteSupermercado(scene, opciones = {}) {
                 ikAgarre.normalContacto,
                 distanciaContacto
             );
+
+        ikAgarre.offsetPalmaMundo
+            .copy(ikAgarre.offsetPalmaLocal)
+            .applyMatrix4(mano.matrixWorld)
+            .sub(ikAgarre.muneca);
+        ikAgarre.objetivoContacto.sub(
+            ikAgarre.offsetPalmaMundo
+        );
 
         const progreso = limitar(
             tiempoEstado / Math.max(config.tiempoRecoger, 0.01),
@@ -1054,6 +1163,8 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         const pesoIK = suavizar(
             limitar(progreso / progresoExtension, 0, 1)
         );
+
+        if (pesoIK <= 0.0001) return false;
 
         ikAgarre.objetivo
             .copy(ikAgarre.muneca)
@@ -1198,6 +1309,10 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         }
 
         grupo.updateMatrixWorld(true);
+
+        if (correccion === 0) {
+            return ajustarBrazoAlProducto(producto, 1);
+        }
 
         return true;
     }
@@ -1620,6 +1735,10 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
                 detectarHuesos(modelo);
                 actualizarRig();
+
+                if (!opciones.offsetPalmaProducto) {
+                    calcularOffsetPalmaDesdeEsqueleto();
+                }
 
                 if (gltf.animations?.length) {
                     mixer = new THREE.AnimationMixer(modelo);
