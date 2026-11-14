@@ -64,6 +64,7 @@ const CONFIG_BASE = {
     
     probabilidadCompra: 0.85,
     probabilidadDejarEnOtroRack: 0.22,
+    variarComportamiento: true,
 
     
     distanciaProducto: 1.35,
@@ -303,6 +304,15 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
     const idGenerado = siguienteIdCliente++;
     const id = config.id ?? idGenerado;
+    const variacionVelocidad = config.variarComportamiento
+        ? 0.92 + Math.random() * 0.16
+        : 1;
+    const variacionInspeccion = config.variarComportamiento
+        ? 0.85 + Math.random() * 0.30
+        : 1;
+    const variacionEspera = config.variarComportamiento
+        ? 0.75 + Math.random() * 0.50
+        : 1;
 
     const grupo = new THREE.Group();
     grupo.name = `CLIENTE_SUPERMERCADO_${id}`;
@@ -333,6 +343,10 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     let estado = ESTADOS.INACTIVO;
     let tiempoEstado = 0;
     let tiempoIdle = 0;
+    let tiempoInspeccionActual =
+        config.tiempoInspeccionar * variacionInspeccion;
+    let pausaBusquedaActual =
+        config.tiempoEntreProductos * variacionEspera;
 
     let velocidadActual = 0;
     let movimientoSuave = 0;
@@ -1019,7 +1033,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
     function animarInspeccionarProcedural() {
         const entrada = suavizar(Math.min(tiempoEstado / 0.55, 1));
-        const salida = suavizar(Math.min((config.tiempoInspeccionar - tiempoEstado) / 0.45, 1));
+        const salida = suavizar(Math.min((tiempoInspeccionActual - tiempoEstado) / 0.45, 1));
         const levantar = entrada * salida;
         const giroProducto = Math.sin(tiempoEstado * 1.22) * 0.09;
         const balanceoProducto = Math.sin(tiempoEstado * 2.05) * 0.035;
@@ -1312,6 +1326,16 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         estado = nuevoEstado;
         tiempoEstado = 0;
 
+        if (nuevoEstado === ESTADOS.INSPECCIONANDO) {
+            tiempoInspeccionActual =
+                config.tiempoInspeccionar * variacionInspeccion;
+        } else if (nuevoEstado === ESTADOS.BUSCANDO) {
+            pausaBusquedaActual =
+                config.tiempoEntreProductos * variacionEspera;
+        }
+
+        actualizarSeguimientoCarrito(nuevoEstado);
+
         if (
             nuevoEstado === ESTADOS.ENTRANDO ||
             nuevoEstado === ESTADOS.ACERCANDO ||
@@ -1334,6 +1358,39 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             console.error(
                 `[CLIENTE ${id}] Error en alCambiarEstado:`,
                 error
+            );
+        }
+    }
+
+    function actualizarSeguimientoCarrito(nuevoEstado) {
+        const carrito = config.carrito;
+
+        if (!carrito) return;
+
+        const detener = [
+            ESTADOS.INACTIVO,
+            ESTADOS.ACERCANDO,
+            ESTADOS.RECOGIENDO,
+            ESTADOS.INSPECCIONANDO,
+            ESTADOS.DECIDIENDO,
+            ESTADOS.GUARDANDO,
+            ESTADOS.DEVOLVIENDO,
+            ESTADOS.ESPERANDO,
+            ESTADOS.PAGANDO,
+            ESTADOS.FINALIZADO
+        ].includes(nuevoEstado);
+
+        if (detener) {
+            carrito.detenerSeguimiento?.();
+            return;
+        }
+
+        if (
+            typeof carrito.seguirObjetivo === 'function' &&
+            carrito.seguirObjetivo(grupo) === false
+        ) {
+            console.warn(
+                `[CLIENTE ${id}] No se pudo reanudar el seguimiento del carrito.`
             );
         }
     }
@@ -1978,7 +2035,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
                 : estado === ESTADOS.REGRESANDO
                     ? config.velocidadRegreso
                     : config.velocidad
-        );
+        ) * variacionVelocidad;
 
         velocidadActual = THREE.MathUtils.lerp(
             velocidadActual,
@@ -3588,7 +3645,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             case ESTADOS.BUSCANDO: {
                 if (
                     tiempoEstado <
-                    config.tiempoEntreProductos
+                    pausaBusquedaActual
                 ) {
                     break;
                 }
@@ -3675,7 +3732,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
                 if (
                     tiempoEstado >=
-                    config.tiempoInspeccionar
+                    tiempoInspeccionActual
                 ) {
                     cambiarEstado(ESTADOS.DECIDIENDO);
                 }
