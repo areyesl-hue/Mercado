@@ -784,6 +784,26 @@ export function crearLadron(scene, productos, opciones = {}) {
         soporteProducto.position.set(0, 0.04, 0.02);
         soporteProducto.rotation.set(0, 0, 0);
         huesoMano.add(soporteProducto);
+
+        const mallaMano = modeloCargado.getObjectByName('Mano_R');
+
+        if (mallaMano?.isSkinnedMesh) {
+            modeloCargado.updateMatrixWorld(true);
+            mallaMano.skeleton.update();
+
+            const cajaMano = new THREE.Box3().setFromObject(
+                mallaMano,
+                true
+            );
+
+            if (!cajaMano.isEmpty()) {
+                soporteProducto.position.copy(
+                    huesoMano.worldToLocal(
+                        cajaMano.getCenter(new THREE.Vector3())
+                    )
+                );
+            }
+        }
     }
 
     function colocarProductoEnMano(producto) {
@@ -821,7 +841,7 @@ export function crearLadron(scene, productos, opciones = {}) {
         animacionProductoRobado = {
             producto,
             tiempo: 0,
-            duracion: 0.65,
+            duracion: 0.32,
             posicionInicial,
             quaternionInicial,
             escalaInicial,
