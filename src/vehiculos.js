@@ -49,7 +49,8 @@ const CONFIG_BASE = {
     alEstacionar: null,
     alSalir: null,
 
-    llegadasAutomaticas: true
+    llegadasAutomaticas: true,
+    reemplazoContinuo: false
 };
 
 // ============================================================
@@ -133,6 +134,10 @@ export function crearVehiculos(scene, opciones = {}) {
     config.llegadasAutomaticas =
         opciones.llegadasAutomaticas ??
         config.llegadasAutomaticas;
+
+    config.reemplazoContinuo =
+        opciones.reemplazoContinuo ??
+        config.reemplazoContinuo;
 
     config.velocidad = Math.max(0.1, config.velocidad);
     config.aceleracion = Math.max(0.1, config.aceleracion);
@@ -737,6 +742,17 @@ export function crearVehiculos(scene, opciones = {}) {
         if (tandaActiva) {
 
             vehiculosSalidosTanda++;
+
+            if (config.reemplazoContinuo) {
+                vehiculosTotalesTanda++;
+                vehiculosPendientesTanda++;
+
+                console.info(
+                    `[VEHICULOS] Reposición programada para ${vehiculo.id}.`
+                );
+
+                return;
+            }
 
             console.info(
                 `[VEHICULOS] Salidas: ${vehiculosSalidosTanda}/${vehiculosTotalesTanda}`
