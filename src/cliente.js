@@ -57,7 +57,7 @@ const CONFIG_BASE = {
 
     distanciaProducto: 0.85,
     distanciaFrenteProducto: 1.25,
-    distanciaContactoMano: 0.045,
+    distanciaContactoMano: 0.005,
 
     tiempoRecoger: 1.1,
     progresoContactoProducto: 0.78,
@@ -1066,10 +1066,26 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             );
             producto.localToWorld(ikAgarre.puntoContacto);
         } else {
-            cajaAgarreProducto.clampPoint(
-                ikAgarre.muneca,
-                ikAgarre.puntoContacto
+            const diferenciaX =
+                ikAgarre.muneca.x - ikAgarre.centroProducto.x;
+            const diferenciaZ =
+                ikAgarre.muneca.z - ikAgarre.centroProducto.z;
+
+            ikAgarre.puntoContacto.copy(
+                ikAgarre.centroProducto
             );
+
+            if (Math.abs(diferenciaX) > Math.abs(diferenciaZ)) {
+                ikAgarre.puntoContacto.x =
+                    diferenciaX >= 0
+                        ? cajaAgarreProducto.max.x
+                        : cajaAgarreProducto.min.x;
+            } else {
+                ikAgarre.puntoContacto.z =
+                    diferenciaZ >= 0
+                        ? cajaAgarreProducto.max.z
+                        : cajaAgarreProducto.min.z;
+            }
         }
 
         const normalManual = producto.userData?.normalAgarreLocal;
