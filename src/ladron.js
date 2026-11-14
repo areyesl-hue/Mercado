@@ -18,7 +18,7 @@ export function crearLadron(scene, productos, opciones = {}) {
         velocidadCaminar: 1.8,
         velocidadHuida: 5.8,
         productosRobados: 2,
-        distanciaProducto: 1.5,
+        distanciaProducto: 0.85,
         tiempoRobo: 1.3,
         tiempoObservacion: 1.8,
         tiempoAtascado: 4,
@@ -447,6 +447,7 @@ export function crearLadron(scene, productos, opciones = {}) {
     let soporteProducto = null;
     let rigModelo = null;
     const productosEnMano = [];
+    let animacionProductoRobado = null;
 
     function normalizarNombre(nombre) {
         return nombre
@@ -479,19 +480,23 @@ export function crearLadron(scene, productos, opciones = {}) {
 
         const mapa = {
             manoDerecha: buscarHueso(huesos, [
+                /^handr$/,
                 /righthand$/,
                 /rightwrist/,
                 /handright/,
                 /wristight/,
+                /^manor$/,
                 /manoderecha/,
                 /manoder/
             ]),
 
             manoIzquierda: buscarHueso(huesos, [
+                /^handl$/,
                 /lefthand$/,
                 /leftwrist/,
                 /handleft/,
                 /wristleft/,
+                /^manol$/,
                 /manoizquierda/,
                 /manoizq/
             ]),
@@ -517,58 +522,86 @@ export function crearLadron(scene, productos, opciones = {}) {
             ]),
 
             antebrazoIzquierdo: buscarHueso(huesos, [
+                /^forearml$/,
                 /leftforearm/,
                 /leftlowerarm/,
                 /forearmleft/,
                 /lowerarmleft/,
+                /^antebrazol$/,
                 /antebrazoizquierdo/,
                 /antebrazoizq/
             ]),
 
             antebrazoDerecho: buscarHueso(huesos, [
+                /^forearmr$/,
                 /rightforearm/,
                 /rightlowerarm/,
                 /forearmright/,
                 /lowerarmright/,
+                /^antebrazor$/,
                 /antebrazoderecho/,
                 /antebrazoder/
             ]),
 
             piernaIzquierda: buscarHueso(huesos, [
+                /^thighl$/,
                 /leftupleg/,
                 /leftthigh/,
                 /leftupperleg/,
                 /thighleft/,
                 /upperlegleft/,
+                /^muslol$/,
                 /piernaizquierda/,
                 /piernaizq/
             ]),
 
             piernaDerecha: buscarHueso(huesos, [
+                /^thighr$/,
                 /rightupleg/,
                 /rightthigh/,
                 /rightupperleg/,
                 /thighright/,
                 /upperlegright/,
+                /^muslor$/,
                 /piernader/
             ]),
 
             pantorrillaIzquierda: buscarHueso(huesos, [
+                /^shinl$/,
                 /leftleg$/,
                 /leftcalf/,
                 /leftshin/,
                 /leftlowerleg/,
                 /calfleft/,
+                /^pantorrillal$/,
                 /pantorrillaizq/
             ]),
 
             pantorrillaDerecha: buscarHueso(huesos, [
+                /^shinr$/,
                 /rightleg$/,
                 /rightcalf/,
                 /rightshin/,
                 /rightlowerleg/,
                 /calfright/,
+                /^pantorrillar$/,
                 /pantorrillader/
+            ]),
+
+            pieIzquierdo: buscarHueso(huesos, [
+                /^footl$/,
+                /^leftfoot$/,
+                /^piel$/,
+                /pieizquierdo/,
+                /pieizq/
+            ]),
+
+            pieDerecho: buscarHueso(huesos, [
+                /^footr$/,
+                /^rightfoot$/,
+                /^pier$/,
+                /piederecho/,
+                /pieder/
             ]),
 
             cadera: buscarHueso(huesos, [
@@ -630,8 +663,14 @@ export function crearLadron(scene, productos, opciones = {}) {
         tiempoAnimacion += delta;
 
         // Alternancia de extremidades.
-        const frecuencia = corriendoAhora ? 12 : 7;
-        const intensidad = quieto ? 0 : corriendoAhora ? 1 : 0.62;
+        const frecuencia = corriendoAhora ? 19 : 10;
+        const intensidad = estado === 'robando'
+            ? 1
+            : quieto
+                ? 0
+                : corriendoAhora
+                    ? 1
+                    : 0.62;
 
         const paso = Math.sin(tiempoAnimacion * frecuencia);
         const pasoContrario = Math.sin(
@@ -652,10 +691,15 @@ export function crearLadron(scene, productos, opciones = {}) {
             piernaDerecha: pasoContrario * 0.48,
 
             pantorrillaIzquierda:
-                Math.max(0, paso) * 0.65,
+                Math.max(0, paso) *
+                (corriendoAhora ? 0.9 : 0.55),
 
             pantorrillaDerecha:
-                Math.max(0, pasoContrario) * 0.65,
+                Math.max(0, pasoContrario) *
+                (corriendoAhora ? 0.9 : 0.55),
+
+            pieIzquierdo: -Math.max(0, paso) * 0.18,
+            pieDerecho: -Math.max(0, pasoContrario) * 0.18,
 
             cadera: paso * 0.035,
             pecho: -paso * 0.025
@@ -668,12 +712,19 @@ export function crearLadron(scene, productos, opciones = {}) {
             );
 
             const movimientoBrazo = Math.sin(
-                progreso * Math.PI
+                progreso * Math.PI / 2
             );
 
-            movimiento.brazoDerecho += movimientoBrazo * 0.85;
-            movimiento.antebrazoDerecho += movimientoBrazo * 0.65;
+            movimiento.brazoDerecho = movimientoBrazo * 0.82;
+            movimiento.antebrazoDerecho = movimientoBrazo * 0.58;
 
+            movimiento.brazoIzquierdo = 0;
+            movimiento.piernaIzquierda = 0;
+            movimiento.piernaDerecha = 0;
+            movimiento.pantorrillaIzquierda = 0;
+            movimiento.pantorrillaDerecha = 0;
+            movimiento.pieIzquierdo = 0;
+            movimiento.pieDerecho = 0;
             movimiento.piernaIzquierda -= movimientoBrazo * 0.12;
             movimiento.piernaDerecha -= movimientoBrazo * 0.12;
 
@@ -683,12 +734,34 @@ export function crearLadron(scene, productos, opciones = {}) {
 
         for (const item of huesosAnimados) {
             const { hueso, base, nombre } = item;
-            const giro = movimiento[nombre] ?? 0;
+            let giro = movimiento[nombre] ?? 0;
 
-            hueso.rotation.x = base.x + giro * intensidad;
+            if (estado === 'tomando') {
+                giro = {
+                    brazoDerecho: 0.82,
+                    antebrazoDerecho: 0.58,
+                    manoDerecha: 0.12
+                }[nombre] ?? 0;
+            }
+
+            hueso.rotation.x = base.x + giro *
+                (estado === 'tomando' ? 1 : intensidad);
             hueso.rotation.y = base.y;
             hueso.rotation.z = base.z;
         }
+
+        const rebote = quieto
+            ? 0
+            : Math.max(
+                0,
+                Math.sin(tiempoAnimacion * frecuencia * 2)
+            ) * (corriendoAhora ? 0.045 : 0.014);
+
+        grupo.position.y = CONFIG.posicion.y + (
+            estado === 'robando'
+                ? -Math.sin(tiempoAnimacionRobo * 2) * 0.015
+                : rebote
+        );
     }
 
     // =========================================================
@@ -719,65 +792,142 @@ export function crearLadron(scene, productos, opciones = {}) {
         prepararSoporteProducto();
         soporteProducto.visible = true;
 
-        const copia = producto.clone(true);
-
-        copia.name =
-            `COPIA_ROBADA_${productosEnMano.length + 1}`;
-
-        copia.visible = true;
-
-        copia.traverse(objeto => {
-            objeto.visible = true;
-
-            if (objeto.isMesh) {
-                objeto.castShadow = true;
-                objeto.receiveShadow = true;
-            }
-        });
-
-        copia.updateMatrixWorld(true);
-
-        const caja = new THREE.Box3().setFromObject(copia);
-        const dimensiones = new THREE.Vector3();
-
-        caja.getSize(dimensiones);
-
-        const maximo = Math.max(
-            dimensiones.x,
-            dimensiones.y,
-            dimensiones.z
-        );
-
-        if (maximo > 0) {
-            copia.scale.multiplyScalar(0.28 / maximo);
-        }
-
         const numero = productosEnMano.length;
+        scene.updateMatrixWorld(true);
+        producto.updateMatrixWorld(true);
 
-        copia.position.set(
-            numero * 0.11,
-            -numero * 0.07,
-            numero * -0.10
+        const caja = new THREE.Box3().setFromObject(producto);
+
+        if (caja.isEmpty()) return false;
+
+        const centroLocal = producto.worldToLocal(
+            caja.getCenter(new THREE.Vector3())
+        );
+        const posicionInicial = producto.getWorldPosition(
+            new THREE.Vector3()
+        );
+        const quaternionInicial = producto.getWorldQuaternion(
+            new THREE.Quaternion()
+        );
+        const escalaInicial = producto.getWorldScale(
+            new THREE.Vector3()
         );
 
-        copia.rotation.set(
-            -0.15,
-            numero * 0.25,
-            0.10
+        scene.updateMatrixWorld(true);
+        scene.attach(producto);
+        producto.visible = true;
+        productosEnMano.push(producto);
+
+        animacionProductoRobado = {
+            producto,
+            tiempo: 0,
+            duracion: 0.65,
+            posicionInicial,
+            quaternionInicial,
+            escalaInicial,
+            centroLocal,
+            posicionCentroMano: new THREE.Vector3(
+                numero * 0.09,
+                -numero * 0.05,
+                -numero * 0.07
+            ),
+            rotacionMano: new THREE.Quaternion().setFromEuler(
+                new THREE.Euler(-0.15, numero * 0.25, 0.10)
+            )
+        };
+
+        return true;
+    }
+
+    function actualizarAnimacionProductoRobado(delta) {
+        const animacion = animacionProductoRobado;
+
+        if (!animacion || !soporteProducto) return false;
+
+        animacion.tiempo += delta;
+
+        const t = Math.min(
+            animacion.tiempo / animacion.duracion,
+            1
+        );
+        const suave = t * t * (3 - 2 * t);
+
+        soporteProducto.updateWorldMatrix(true, false);
+
+        const centroObjetivo = soporteProducto.localToWorld(
+            animacion.posicionCentroMano.clone()
+        );
+        const quaternionObjetivo = soporteProducto.getWorldQuaternion(
+            new THREE.Quaternion()
+        ).multiply(animacion.rotacionMano);
+        const desplazamientoCentro =
+            animacion.centroLocal
+                .clone()
+                .multiply(animacion.escalaInicial)
+                .applyQuaternion(quaternionObjetivo);
+        const posicionObjetivo = centroObjetivo.sub(
+            desplazamientoCentro
         );
 
-        soporteProducto.add(copia);
-        productosEnMano.push(copia);
+        const posicionMundo = animacion.posicionInicial
+            .clone()
+            .lerp(posicionObjetivo, suave);
+        const quaternionMundo = animacion.quaternionInicial
+            .clone()
+            .slerp(quaternionObjetivo, suave);
 
-        producto.visible = false;
+        scene.updateMatrixWorld(true);
+
+        const escalaPadre = scene.getWorldScale(
+            new THREE.Vector3()
+        );
+        const quaternionPadreInversa = scene.getWorldQuaternion(
+            new THREE.Quaternion()
+        ).invert();
+
+        animacion.producto.position.copy(
+            scene.worldToLocal(posicionMundo)
+        );
+        animacion.producto.quaternion
+            .copy(quaternionPadreInversa)
+            .multiply(quaternionMundo);
+        animacion.producto.scale
+            .copy(animacion.escalaInicial)
+            .divide(escalaPadre);
+        animacion.producto.updateMatrixWorld(true);
+
+        if (t < 1) return false;
+
+        soporteProducto.attach(animacion.producto);
+        animacion.producto.updateMatrixWorld(true);
+
+        const caja = new THREE.Box3().setFromObject(
+            animacion.producto
+        );
+        const centroActualLocal = soporteProducto.worldToLocal(
+            caja.getCenter(new THREE.Vector3())
+        );
+
+        animacion.producto.position.add(
+            animacion.posicionCentroMano
+                .clone()
+                .sub(centroActualLocal)
+        );
+        animacion.producto.updateMatrixWorld(true);
+
+        animacionProductoRobado = null;
+        completarRoboProducto(animacion.producto);
+
+        return true;
     }
 
     function limpiarProductosVisuales() {
-        for (const copia of productosEnMano) {
-            copia.parent?.remove(copia);
+        for (const producto of productosEnMano) {
+            producto.parent?.remove(producto);
         }
 
         productosEnMano.length = 0;
+        animacionProductoRobado = null;
 
         if (soporteProducto) {
             soporteProducto.visible = false;
@@ -1029,10 +1179,10 @@ export function crearLadron(scene, productos, opciones = {}) {
 
         const radios = [
             CONFIG.distanciaProducto,
-            1.9,
-            2.3,
-            2.8,
-            3.3
+            1.05,
+            1.25,
+            1.45,
+            1.65
         ];
 
         let mejorRuta = null;
@@ -1170,8 +1320,22 @@ export function crearLadron(scene, productos, opciones = {}) {
         producto.userData.recogido = true;
         producto.userData.robadoPor = id;
 
-        colocarProductoEnMano(producto);
+        if (!colocarProductoEnMano(producto)) {
+            producto.userData.recogido = false;
+            delete producto.userData.robadoPor;
+            liberarReserva();
+            estado = 'buscando';
+            tiempoBusqueda = 0;
+            return;
+        }
 
+        liberarReserva();
+        estado = 'tomando';
+        tiempoEstado = 0;
+        return;
+    }
+
+    function completarRoboProducto(producto) {
         const registro = {
             nombre:
                 producto.userData.nombreProducto ||
@@ -1185,8 +1349,6 @@ export function crearLadron(scene, productos, opciones = {}) {
 
         productosRobados.push(registro);
         cantidadRobada++;
-
-        liberarReserva();
 
         console.info(
             `[${id}] Robó ${registro.nombre}.`,
@@ -1306,7 +1468,8 @@ export function crearLadron(scene, productos, opciones = {}) {
         const estaCorriendo = estado === 'huyendo';
         const estaQuieto =
             estado === 'robando' ||
-            estado === 'observando';
+            estado === 'observando' ||
+            estado === 'tomando';
 
         animarCuerpo(
             delta,
@@ -1447,6 +1610,11 @@ export function crearLadron(scene, productos, opciones = {}) {
                     robarProducto();
                 }
 
+                break;
+            }
+
+            case 'tomando': {
+                actualizarAnimacionProductoRobado(delta);
                 break;
             }
 
