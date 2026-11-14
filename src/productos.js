@@ -521,21 +521,20 @@ export function crearProductosLacteos(scene) {
 
     function obtenerFilaGondola() {
         const fila = siguienteFilaGondola++;
-        const filasPorGondola = 8;
-        const indiceGondola = Math.floor(fila / filasPorGondola) % gondolas.length;
-        const filaEnGondola = fila % filasPorGondola;
-        const lado = filaEnGondola < 4 ? -1 : 1;
-        const nivel = filaEnGondola % 4;
+        const indiceGondola = fila % gondolas.length;
+        const nivel = Math.floor(fila / gondolas.length) % nivelesGondola.length;
         const [centroX, centroZ] = gondolas[indiceGondola];
 
         return {
-            idRack: `Gondola_${String(indiceGondola + 1).padStart(2, '0')}_Lado_${lado}`,
-            rotacionY: lado * Math.PI / 2,
-            posiciones: offsetsZGondola.map((offsetZ) => ({
-                x: centroX + lado * 0.40,
-                y: nivelesGondola[nivel],
-                z: centroZ + offsetZ
-            }))
+            idRack: `Gondola_${String(indiceGondola + 1).padStart(2, '0')}`,
+            posiciones: [-1, 1].flatMap((lado) =>
+                offsetsZGondola.map((offsetZ) => ({
+                    x: centroX + lado * 0.40,
+                    y: nivelesGondola[nivel],
+                    z: centroZ + offsetZ,
+                    rotacionY: lado * Math.PI / 2
+                }))
+            )
         };
     }
 
@@ -782,6 +781,7 @@ export function crearProductosLacteos(scene) {
                         posicion.z,
                         catalogo.alto,
                         catalogo.rotacion ??
+                            posicion.rotacionY ??
                             ubicacion.rotacionY ??
                             Math.PI / 2,
                         catalogo.categoria,
