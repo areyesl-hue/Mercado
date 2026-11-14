@@ -64,8 +64,8 @@ let acumuladorHUD = 0;
 
 const CONFIG_CLIENTES = [
     {
-        nombre: 'Cliente1',
-        modelo: '/modelos/Cliente1.glb',
+        nombre: 'Cliente2',
+        modelo: '/modelos/Cliente2.glb',
         ruta: [
             { x: -27, z: 18 },
             { x: -23, z: 15 },
