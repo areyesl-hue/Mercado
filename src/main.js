@@ -35,7 +35,7 @@ const CONFIG = {
 
     velocidadCliente: 1.5,
     probabilidadCompra: 0.75,
-    tiempoExaminar: 1.5,
+    tiempoExaminar: 2.2,
     distanciaRecoger: 2,
     pausaEntreCompras: 1.8,
 
