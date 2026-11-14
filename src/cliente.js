@@ -1812,7 +1812,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     
     
 
-    function orientarHaciaPunto(punto) {
+    function orientarHaciaPunto(punto, delta = 0.016) {
         if (!punto) return;
 
         const dx = punto.x - grupo.position.x;
@@ -1821,11 +1821,13 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         if (Math.abs(dx) + Math.abs(dz) < 0.001) return;
 
         const angulo = Math.atan2(dx, dz);
+        const diferencia = Math.atan2(
+            Math.sin(angulo - grupo.rotation.y),
+            Math.cos(angulo - grupo.rotation.y)
+        );
 
-        grupo.rotation.y = THREE.MathUtils.lerp(
-            grupo.rotation.y,
-            angulo,
-            1 - Math.exp(-config.suavizadoGiro * 0.016)
+        grupo.rotation.y += diferencia * (
+            1 - Math.exp(-config.suavizadoGiro * delta)
         );
     }
 
@@ -1943,7 +1945,20 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         const distancia = Math.hypot(dx, dz);
 
-        if (distancia <= config.distanciaWaypoint) {
+        const esUltimoWaypoint = indiceRuta === ruta.length - 1;
+        const toleranciaLlegada = esUltimoWaypoint
+            ? config.distanciaLlegada
+            : config.distanciaWaypoint;
+
+        if (distancia <= toleranciaLlegada) {
+            if (
+                esUltimoWaypoint &&
+                puntoLibre(waypoint.x, waypoint.z)
+            ) {
+                grupo.position.x = waypoint.x;
+                grupo.position.z = waypoint.z;
+            }
+
             indiceRuta++;
 
             if (indiceRuta >= ruta.length) {
@@ -3596,6 +3611,17 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             
 
             case ESTADOS.RECOGIENDO: {
+                if (productoObjetivo && !productoEnMano) {
+                    productoObjetivo.getWorldPosition(vectorTemporal);
+                    orientarHaciaPunto(
+                        {
+                            x: vectorTemporal.x,
+                            z: vectorTemporal.z
+                        },
+                        delta
+                    );
+                }
+
                 animarRecogerProcedural();
 
                 if (!productoEnMano) {
