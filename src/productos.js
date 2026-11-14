@@ -329,7 +329,8 @@ export function crearProductosLacteos(scene) {
             return null;
         }
 
-        const dimensionMaximaEstandar = 0.32;
+        const dimensionMaximaEstandar =
+            categoria === 'Ropa' ? 0.46 : 0.32;
         const escala = dimensionMaximaEstandar / Math.max(
             dimensionesRotadas.x,
             dimensionesRotadas.y,
@@ -349,9 +350,13 @@ export function crearProductosLacteos(scene) {
         cajaFinal.getCenter(centroFinal);
         cajaFinal.getSize(dimensionesFinales);
 
+        const posicionY = categoria === 'Ropa'
+            ? 1.72 - cajaFinal.max.y
+            : y - cajaFinal.min.y;
+
         modelo.position.set(
             x - centroFinal.x,
-            y - cajaFinal.min.y,
+            posicionY,
             z - centroFinal.z
         );
 
@@ -617,8 +622,6 @@ export function crearProductosLacteos(scene) {
         { archivo: '/modelos/cereal.glb', nombre: 'Cereal', categoria: 'Cereales', tipo: 'gondola', alto: 0.38, ancho: 0.30, profundidad: 0.24 },
         { archivo: '/modelos/cereal2.glb', nombre: 'Cereal 2', categoria: 'Cereales', tipo: 'gondola', alto: 0.38, ancho: 0.30, profundidad: 0.24 },
         { archivo: '/modelos/galletas.glb', nombre: 'Galletas', categoria: 'Panaderia', tipo: 'gondola', alto: 0.28, ancho: 0.30, profundidad: 0.24 },
-        { archivo: '/modelos/bebidas.glb', nombre: 'Bebidas', categoria: 'Bebidas', tipo: 'gondola', alto: 0.34, ancho: 0.32, profundidad: 0.28 },
-
         { archivo: '/modelos/Agua.glb', nombre: 'Agua', categoria: 'Bebidas', tipo: 'refrigerador', refrigerador: 0, nivel: 0, alto: 0.43, ancho: 0.25, profundidad: 0.25 },
         { archivo: '/modelos/Lala.glb', nombre: 'Lala', categoria: 'Lacteos', tipo: 'refrigerador', refrigerador: 1, nivel: 1, alto: 0.38, ancho: 0.30, profundidad: 0.26 },
         { archivo: '/modelos/Pepsi. y coca.glb', nombre: 'Pepsi y Coca', categoria: 'Bebidas', tipo: 'refrigerador', refrigerador: 2, nivel: 0, alto: 0.42, ancho: 0.28, profundidad: 0.25 },
