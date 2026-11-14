@@ -447,7 +447,29 @@ export function crearLadron(scene, productos, opciones = {}) {
     let soporteProducto = null;
     let rigModelo = null;
     const productosEnMano = [];
+    const productosInalcanzables = new WeakSet();
     let animacionProductoRobado = null;
+    let contactoProductoRobo = null;
+    let poseBrazoTomando = null;
+    const ikRobo = {
+        hombro: new THREE.Vector3(),
+        codo: new THREE.Vector3(),
+        muneca: new THREE.Vector3(),
+        objetivo: new THREE.Vector3(),
+        objetivoMuneca: new THREE.Vector3(),
+        objetivoFinal: new THREE.Vector3(),
+        direccion: new THREE.Vector3(),
+        direccionActual: new THREE.Vector3(),
+        direccionDeseada: new THREE.Vector3(),
+        codoActual: new THREE.Vector3(),
+        perpendicular: new THREE.Vector3(),
+        codoObjetivo: new THREE.Vector3(),
+        quaternionDeltaMundo: new THREE.Quaternion(),
+        quaternionPadre: new THREE.Quaternion(),
+        quaternionPadreInversa: new THREE.Quaternion(),
+        quaternionDeltaLocal: new THREE.Quaternion(),
+        quaternionObjetivo: new THREE.Quaternion()
+    };
 
     function normalizarNombre(nombre) {
         return nombre
@@ -742,6 +764,31 @@ export function crearLadron(scene, productos, opciones = {}) {
                     antebrazoDerecho: 0.58,
                     manoDerecha: 0.12
                 }[nombre] ?? 0;
+
+                const poseInicial = poseBrazoTomando?.get(hueso);
+
+                if (poseInicial) {
+                    const progreso = THREE.MathUtils.clamp(
+                        tiempoEstado / 0.32,
+                        0,
+                        1
+                    );
+                    const mezcla = progreso * progreso *
+                        (3 - 2 * progreso);
+
+                    ikRobo.quaternionObjetivo.setFromEuler(
+                        new THREE.Euler(
+                            base.x + giro,
+                            base.y,
+                            base.z
+                        )
+                    );
+                    hueso.quaternion
+                        .copy(poseInicial)
+                        .slerp(ikRobo.quaternionObjetivo, mezcla);
+
+                    continue;
+                }
             }
 
             hueso.rotation.x = base.x + giro *
@@ -768,8 +815,286 @@ export function crearLadron(scene, productos, opciones = {}) {
     // PRODUCTOS EN LA MANO
     // =========================================================
 
+    function orientarHuesoHaciaDireccion(
+        hueso,
+        direccionActual,
+        direccionDeseada
+    ) {
+        if (
+            !hueso?.parent ||
+            direccionActual.lengthSq() < 0.000001 ||
+            direccionDeseada.lengthSq() < 0.000001
+        ) {
+            return false;
+        }
+
+        ikRobo.direccionActual.copy(direccionActual).normalize();
+        ikRobo.direccionDeseada.copy(direccionDeseada).normalize();
+
+        ikRobo.quaternionDeltaMundo.setFromUnitVectors(
+            ikRobo.direccionActual,
+            ikRobo.direccionDeseada
+        );
+
+        hueso.parent.getWorldQuaternion(ikRobo.quaternionPadre);
+        ikRobo.quaternionPadreInversa
+            .copy(ikRobo.quaternionPadre)
+            .invert();
+        ikRobo.quaternionDeltaLocal
+            .copy(ikRobo.quaternionPadreInversa)
+            .multiply(ikRobo.quaternionDeltaMundo)
+            .multiply(ikRobo.quaternionPadre);
+
+        hueso.quaternion
+            .premultiply(ikRobo.quaternionDeltaLocal)
+            .normalize();
+
+        return true;
+    }
+
+    function resolverIKBrazoDerecho(objetivo) {
+        const hombro = rigModelo?.brazoDerecho;
+        const codo = rigModelo?.antebrazoDerecho;
+        const mano = rigModelo?.manoDerecha;
+
+        if (!hombro || !codo || !mano || !objetivo) return false;
+
+        grupo.updateMatrixWorld(true);
+        hombro.getWorldPosition(ikRobo.hombro);
+        codo.getWorldPosition(ikRobo.codo);
+        mano.getWorldPosition(ikRobo.muneca);
+
+        ikRobo.direccion.subVectors(
+            objetivo,
+            ikRobo.hombro
+        );
+
+        const distanciaObjetivo = ikRobo.direccion.length();
+        const longitudBrazo = ikRobo.hombro.distanceTo(ikRobo.codo);
+        const longitudAntebrazo = ikRobo.codo.distanceTo(ikRobo.muneca);
+
+        if (
+            distanciaObjetivo < 0.0001 ||
+            longitudBrazo < 0.0001 ||
+            longitudAntebrazo < 0.0001
+        ) {
+            return false;
+        }
+
+        const distanciaMinima =
+            Math.abs(longitudBrazo - longitudAntebrazo) + 0.005;
+        const distanciaMaxima = Math.max(
+            distanciaMinima + 0.001,
+            longitudBrazo + longitudAntebrazo - 0.005
+        );
+        const distanciaAjustada = THREE.MathUtils.clamp(
+            distanciaObjetivo,
+            distanciaMinima,
+            distanciaMaxima
+        );
+
+        ikRobo.direccion.multiplyScalar(1 / distanciaObjetivo);
+        ikRobo.objetivo
+            .copy(ikRobo.hombro)
+            .addScaledVector(ikRobo.direccion, distanciaAjustada);
+
+        ikRobo.codoActual.subVectors(
+            ikRobo.codo,
+            ikRobo.hombro
+        );
+
+        const proyeccionCodo = ikRobo.codoActual.dot(
+            ikRobo.direccion
+        );
+        ikRobo.perpendicular
+            .copy(ikRobo.codoActual)
+            .addScaledVector(ikRobo.direccion, -proyeccionCodo);
+
+        if (ikRobo.perpendicular.lengthSq() < 0.000001) {
+            ikRobo.perpendicular
+                .set(0, 1, 0)
+                .cross(ikRobo.direccion);
+        }
+
+        if (ikRobo.perpendicular.lengthSq() < 0.000001) {
+            ikRobo.perpendicular
+                .set(1, 0, 0)
+                .cross(ikRobo.direccion);
+        }
+
+        ikRobo.perpendicular.normalize();
+
+        const distanciaCodo = (
+            longitudBrazo * longitudBrazo -
+            longitudAntebrazo * longitudAntebrazo +
+            distanciaAjustada * distanciaAjustada
+        ) / (2 * distanciaAjustada);
+        const alturaCodo = Math.sqrt(Math.max(
+            0,
+            longitudBrazo * longitudBrazo -
+            distanciaCodo * distanciaCodo
+        ));
+
+        ikRobo.codoObjetivo
+            .copy(ikRobo.hombro)
+            .addScaledVector(ikRobo.direccion, distanciaCodo)
+            .addScaledVector(ikRobo.perpendicular, alturaCodo);
+
+        ikRobo.direccionActual.subVectors(
+            ikRobo.codo,
+            ikRobo.hombro
+        );
+        ikRobo.direccionDeseada.subVectors(
+            ikRobo.codoObjetivo,
+            ikRobo.hombro
+        );
+
+        if (!orientarHuesoHaciaDireccion(
+            hombro,
+            ikRobo.direccionActual,
+            ikRobo.direccionDeseada
+        )) {
+            return false;
+        }
+
+        grupo.updateMatrixWorld(true);
+        codo.getWorldPosition(ikRobo.codo);
+        mano.getWorldPosition(ikRobo.muneca);
+        ikRobo.direccionActual.subVectors(
+            ikRobo.muneca,
+            ikRobo.codo
+        );
+        ikRobo.direccionDeseada.subVectors(
+            ikRobo.objetivo,
+            ikRobo.codo
+        );
+
+        if (!orientarHuesoHaciaDireccion(
+            codo,
+            ikRobo.direccionActual,
+            ikRobo.direccionDeseada
+        )) {
+            return false;
+        }
+
+        grupo.updateMatrixWorld(true);
+        return true;
+    }
+
+    function calcularContactoProducto(producto) {
+        if (!producto || !rigModelo?.manoDerecha) return null;
+
+        producto.updateMatrixWorld(true);
+
+        const caja = new THREE.Box3().setFromObject(producto);
+
+        if (caja.isEmpty()) return null;
+
+        const centro = caja.getCenter(new THREE.Vector3());
+        const punto = new THREE.Vector3();
+        const normal = new THREE.Vector3();
+        const puntoManual = producto.userData?.puntoAgarreLocal;
+
+        if (
+            puntoManual &&
+            Number.isFinite(puntoManual.x) &&
+            Number.isFinite(puntoManual.y) &&
+            Number.isFinite(puntoManual.z)
+        ) {
+            punto.set(puntoManual.x, puntoManual.y, puntoManual.z);
+            producto.localToWorld(punto);
+        } else {
+            const manoActual = rigModelo.manoDerecha.getWorldPosition(
+                new THREE.Vector3()
+            );
+            const diferenciaX = manoActual.x - centro.x;
+            const diferenciaZ = manoActual.z - centro.z;
+
+            punto.copy(centro);
+
+            if (Math.abs(diferenciaX) > Math.abs(diferenciaZ)) {
+                punto.x = diferenciaX >= 0 ? caja.max.x : caja.min.x;
+                normal.set(diferenciaX >= 0 ? 1 : -1, 0, 0);
+            } else {
+                punto.z = diferenciaZ >= 0 ? caja.max.z : caja.min.z;
+                normal.set(0, 0, diferenciaZ >= 0 ? 1 : -1);
+            }
+        }
+
+        const normalManual = producto.userData?.normalAgarreLocal;
+
+        if (
+            normalManual &&
+            Number.isFinite(normalManual.x) &&
+            Number.isFinite(normalManual.y) &&
+            Number.isFinite(normalManual.z)
+        ) {
+            normal
+                .set(
+                    normalManual.x,
+                    normalManual.y,
+                    normalManual.z
+                )
+                .transformDirection(producto.matrixWorld);
+        }
+
+        if (normal.lengthSq() < 0.000001) {
+            normal.subVectors(punto, centro);
+        }
+
+        if (normal.lengthSq() < 0.000001) {
+            normal.set(0, 0, 1);
+        }
+
+        return {
+            punto,
+            normal: normal.normalize()
+        };
+    }
+
+    function obtenerOffsetProductoEnMano(indice) {
+        return new THREE.Vector3(
+            indice * 0.07,
+            -indice * 0.02,
+            -indice * 0.04
+        );
+    }
+
+    function ajustarBrazoAlProducto(progreso) {
+        if (!contactoProductoRobo || !soporteProducto) return false;
+
+        const mano = rigModelo?.manoDerecha;
+
+        if (!mano) return false;
+
+        grupo.updateMatrixWorld(true);
+        mano.getWorldPosition(ikRobo.muneca);
+
+        const offsetPalmaLocal = soporteProducto.position
+            .clone()
+            .add(obtenerOffsetProductoEnMano(productosEnMano.length));
+        const puntoPalmaMundo = mano.localToWorld(offsetPalmaLocal);
+        const offsetPalmaMundo = puntoPalmaMundo
+            .sub(ikRobo.muneca);
+        const objetivoPalma = contactoProductoRobo.punto
+            .clone()
+            .addScaledVector(contactoProductoRobo.normal, 0.025);
+
+        ikRobo.objetivoMuneca.copy(objetivoPalma)
+            .sub(offsetPalmaMundo);
+
+        const extension = THREE.MathUtils.clamp(progreso, 0, 1);
+        const peso = extension * extension * (3 - 2 * extension);
+
+        ikRobo.objetivoFinal.copy(ikRobo.muneca)
+            .lerp(ikRobo.objetivoMuneca, peso);
+
+        return resolverIKBrazoDerecho(ikRobo.objetivoFinal);
+    }
+
     function prepararSoporteProducto() {
-        if (!modeloCargado || soporteProducto) return;
+        if (!modeloCargado) return false;
+        if (soporteProducto) return true;
 
         soporteProducto = new THREE.Group();
         soporteProducto.name = 'PRODUCTOS_ROBADOS_EN_MANO';
@@ -804,56 +1129,91 @@ export function crearLadron(scene, productos, opciones = {}) {
                 );
             }
         }
+
+        return true;
+    }
+
+    function guardarPoseBrazoTomando() {
+        const huesos = [
+            rigModelo?.brazoDerecho,
+            rigModelo?.antebrazoDerecho,
+            rigModelo?.manoDerecha
+        ].filter(Boolean);
+
+        poseBrazoTomando = new Map(
+            huesos.map(hueso => [
+                hueso,
+                hueso.quaternion.clone()
+            ])
+        );
     }
 
     function colocarProductoEnMano(producto) {
-        if (!producto || !modeloCargado) return;
+        if (
+            !producto ||
+            !modeloCargado ||
+            !prepararSoporteProducto()
+        ) {
+            return false;
+        }
 
-        prepararSoporteProducto();
-        soporteProducto.visible = true;
+        const mano = rigModelo?.manoDerecha;
+        const contacto =
+            contactoProductoRobo ??
+            calcularContactoProducto(producto);
 
-        const numero = productosEnMano.length;
-        scene.updateMatrixWorld(true);
+        if (!mano || !contacto) return false;
+
+        const indice = productosEnMano.length;
+        const offsetMano = soporteProducto.position
+            .clone()
+            .add(obtenerOffsetProductoEnMano(indice));
+
         producto.updateMatrixWorld(true);
+        mano.updateWorldMatrix(true, false);
 
-        const caja = new THREE.Box3().setFromObject(producto);
+        const puntoContactoLocal = producto.worldToLocal(
+            contacto.punto.clone()
+        );
+        const puntoPalmaMundo = mano.localToWorld(offsetMano);
+        const puntoPalmaObjetivoMundo = contacto.punto
+            .clone()
+            .addScaledVector(contacto.normal, 0.025);
 
-        if (caja.isEmpty()) return false;
+        if (puntoPalmaMundo.distanceTo(puntoPalmaObjetivoMundo) > 0.22) {
+            return false;
+        }
 
-        const centroLocal = producto.worldToLocal(
-            caja.getCenter(new THREE.Vector3())
-        );
-        const posicionInicial = producto.getWorldPosition(
-            new THREE.Vector3()
-        );
-        const quaternionInicial = producto.getWorldQuaternion(
-            new THREE.Quaternion()
-        );
-        const escalaInicial = producto.getWorldScale(
-            new THREE.Vector3()
-        );
+        const puntoProductoObjetivoMundo = puntoPalmaMundo
+            .clone()
+            .addScaledVector(contacto.normal, -0.025);
 
         scene.updateMatrixWorld(true);
-        scene.attach(producto);
+        mano.attach(producto);
+        mano.updateWorldMatrix(true, false);
+        producto.updateWorldMatrix(true, false);
+
+        const puntoProductoActualEnMano = mano.worldToLocal(
+            producto.localToWorld(puntoContactoLocal.clone())
+        );
+        const puntoProductoObjetivoEnMano = mano.worldToLocal(
+            puntoProductoObjetivoMundo
+        );
+
+        producto.position.add(
+            puntoProductoObjetivoEnMano.sub(
+                puntoProductoActualEnMano
+            )
+        );
+        producto.updateMatrixWorld(true);
         producto.visible = true;
         productosEnMano.push(producto);
+        guardarPoseBrazoTomando();
 
         animacionProductoRobado = {
             producto,
             tiempo: 0,
-            duracion: 0.32,
-            posicionInicial,
-            quaternionInicial,
-            escalaInicial,
-            centroLocal,
-            posicionCentroMano: new THREE.Vector3(
-                numero * 0.09,
-                -numero * 0.05,
-                -numero * 0.07
-            ),
-            rotacionMano: new THREE.Quaternion().setFromEuler(
-                new THREE.Euler(-0.15, numero * 0.25, 0.10)
-            )
+            duracion: 0.32
         };
 
         return true;
@@ -862,80 +1222,15 @@ export function crearLadron(scene, productos, opciones = {}) {
     function actualizarAnimacionProductoRobado(delta) {
         const animacion = animacionProductoRobado;
 
-        if (!animacion || !soporteProducto) return false;
+        if (!animacion) return false;
 
         animacion.tiempo += delta;
 
-        const t = Math.min(
-            animacion.tiempo / animacion.duracion,
-            1
-        );
-        const suave = t * t * (3 - 2 * t);
-
-        soporteProducto.updateWorldMatrix(true, false);
-
-        const centroObjetivo = soporteProducto.localToWorld(
-            animacion.posicionCentroMano.clone()
-        );
-        const quaternionObjetivo = soporteProducto.getWorldQuaternion(
-            new THREE.Quaternion()
-        ).multiply(animacion.rotacionMano);
-        const desplazamientoCentro =
-            animacion.centroLocal
-                .clone()
-                .multiply(animacion.escalaInicial)
-                .applyQuaternion(quaternionObjetivo);
-        const posicionObjetivo = centroObjetivo.sub(
-            desplazamientoCentro
-        );
-
-        const posicionMundo = animacion.posicionInicial
-            .clone()
-            .lerp(posicionObjetivo, suave);
-        const quaternionMundo = animacion.quaternionInicial
-            .clone()
-            .slerp(quaternionObjetivo, suave);
-
-        scene.updateMatrixWorld(true);
-
-        const escalaPadre = scene.getWorldScale(
-            new THREE.Vector3()
-        );
-        const quaternionPadreInversa = scene.getWorldQuaternion(
-            new THREE.Quaternion()
-        ).invert();
-
-        animacion.producto.position.copy(
-            scene.worldToLocal(posicionMundo)
-        );
-        animacion.producto.quaternion
-            .copy(quaternionPadreInversa)
-            .multiply(quaternionMundo);
-        animacion.producto.scale
-            .copy(animacion.escalaInicial)
-            .divide(escalaPadre);
-        animacion.producto.updateMatrixWorld(true);
-
-        if (t < 1) return false;
-
-        soporteProducto.attach(animacion.producto);
-        animacion.producto.updateMatrixWorld(true);
-
-        const caja = new THREE.Box3().setFromObject(
-            animacion.producto
-        );
-        const centroActualLocal = soporteProducto.worldToLocal(
-            caja.getCenter(new THREE.Vector3())
-        );
-
-        animacion.producto.position.add(
-            animacion.posicionCentroMano
-                .clone()
-                .sub(centroActualLocal)
-        );
-        animacion.producto.updateMatrixWorld(true);
+        if (animacion.tiempo < animacion.duracion) return false;
 
         animacionProductoRobado = null;
+        contactoProductoRobo = null;
+        poseBrazoTomando = null;
         completarRoboProducto(animacion.producto);
 
         return true;
@@ -948,6 +1243,8 @@ export function crearLadron(scene, productos, opciones = {}) {
 
         productosEnMano.length = 0;
         animacionProductoRobado = null;
+        contactoProductoRobo = null;
+        poseBrazoTomando = null;
 
         if (soporteProducto) {
             soporteProducto.visible = false;
@@ -1158,6 +1455,7 @@ export function crearLadron(scene, productos, opciones = {}) {
             if (objeto.userData.recogido) return;
             if (objeto.userData.robadoPor) return;
             if (objeto.userData.reservado === true) return;
+            if (productosInalcanzables.has(objeto)) return;
 
             const reserva = objeto.userData.reservadoPor;
 
@@ -1191,6 +1489,7 @@ export function crearLadron(scene, productos, opciones = {}) {
         }
 
         productoObjetivo = null;
+        contactoProductoRobo = null;
     }
 
     function encontrarPosicionDeRobo(producto) {
@@ -1343,6 +1642,10 @@ export function crearLadron(scene, productos, opciones = {}) {
         if (!colocarProductoEnMano(producto)) {
             producto.userData.recogido = false;
             delete producto.userData.robadoPor;
+            productosInalcanzables.add(producto);
+            console.warn(
+                `[${id}] No alcanzó ${producto.userData.nombreProducto || producto.name}; lo omitirá para evitar teletransportarlo.`
+            );
             liberarReserva();
             estado = 'buscando';
             tiempoBusqueda = 0;
@@ -1613,9 +1916,19 @@ export function crearLadron(scene, productos, opciones = {}) {
                         variacionVelocidad
                     )
                 ) {
-                    estado = 'robando';
-                    tiempoRobo = 0;
-                    tiempoAnimacionRobo = 0;
+                    if (
+                        !prepararSoporteProducto() ||
+                        !(contactoProductoRobo =
+                            calcularContactoProducto(productoObjetivo))
+                    ) {
+                        liberarReserva();
+                        estado = 'buscando';
+                        tiempoBusqueda = 0;
+                    } else {
+                        estado = 'robando';
+                        tiempoRobo = 0;
+                        tiempoAnimacionRobo = 0;
+                    }
                 }
 
                 break;
@@ -1624,6 +1937,9 @@ export function crearLadron(scene, productos, opciones = {}) {
             case 'robando': {
                 tiempoRobo += delta;
                 tiempoAnimacionRobo += delta;
+                ajustarBrazoAlProducto(
+                    tiempoAnimacionRobo / CONFIG.tiempoRobo
+                );
 
                 if (tiempoRobo >= CONFIG.tiempoRobo) {
                     tiempoAnimacionRobo = 0;
