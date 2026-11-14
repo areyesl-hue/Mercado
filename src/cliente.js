@@ -57,6 +57,7 @@ const CONFIG_BASE = {
 
     distanciaProducto: 0.85,
     distanciaFrenteProducto: 1.25,
+    distanciaContactoMano: 0.045,
 
     tiempoRecoger: 1.1,
     progresoContactoProducto: 0.78,
@@ -396,6 +397,29 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     const cajaTemporal = new THREE.Box3();
     const tamanoTemporal = new THREE.Vector3();
     const matrizTemporal = new THREE.Matrix4();
+    const cajaAgarreProducto = new THREE.Box3();
+    let productoConCajaAgarre = null;
+
+    const ikAgarre = {
+        hombro: new THREE.Vector3(),
+        codo: new THREE.Vector3(),
+        muneca: new THREE.Vector3(),
+        centroProducto: new THREE.Vector3(),
+        puntoContacto: new THREE.Vector3(),
+        normalContacto: new THREE.Vector3(),
+        objetivoContacto: new THREE.Vector3(),
+        objetivo: new THREE.Vector3(),
+        codoActual: new THREE.Vector3(),
+        codoObjetivo: new THREE.Vector3(),
+        direccion: new THREE.Vector3(),
+        direccionActual: new THREE.Vector3(),
+        direccionDeseada: new THREE.Vector3(),
+        perpendicular: new THREE.Vector3(),
+        quaternionDeltaMundo: new THREE.Quaternion(),
+        quaternionPadre: new THREE.Quaternion(),
+        quaternionPadreInversa: new THREE.Quaternion(),
+        quaternionDeltaLocal: new THREE.Quaternion()
+    };
 
     
     
@@ -876,6 +900,299 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             -0.12 * acercarse,
             0.025 * Math.sin(tiempoEstado * 1.6));
         aplicarRotacion(rig.cuello, EJE_X, 0.08 + 0.08 * acercarse);
+    }
+
+    function orientarHuesoHaciaDireccion(hueso, direccionActual, direccionDeseada) {
+        if (
+            !hueso?.parent ||
+            direccionActual.lengthSq() < 0.000001 ||
+            direccionDeseada.lengthSq() < 0.000001
+        ) {
+            return false;
+        }
+
+        ikAgarre.direccionActual.copy(direccionActual).normalize();
+        ikAgarre.direccionDeseada.copy(direccionDeseada).normalize();
+
+        ikAgarre.quaternionDeltaMundo.setFromUnitVectors(
+            ikAgarre.direccionActual,
+            ikAgarre.direccionDeseada
+        );
+
+        hueso.parent.getWorldQuaternion(ikAgarre.quaternionPadre);
+        ikAgarre.quaternionPadreInversa
+            .copy(ikAgarre.quaternionPadre)
+            .invert();
+
+        ikAgarre.quaternionDeltaLocal
+            .copy(ikAgarre.quaternionPadreInversa)
+            .multiply(ikAgarre.quaternionDeltaMundo)
+            .multiply(ikAgarre.quaternionPadre);
+
+        hueso.quaternion
+            .premultiply(ikAgarre.quaternionDeltaLocal)
+            .normalize();
+
+        return true;
+    }
+
+    function ajustarBrazoAlProducto(producto) {
+        const hombro = rig.brazoDerecho;
+        const codo = rig.antebrazoDerecho;
+        const mano = rig.manoDerecha;
+
+        if (!producto || !hombro || !codo || !mano) {
+            return false;
+        }
+
+        grupo.updateMatrixWorld(true);
+
+        hombro.getWorldPosition(ikAgarre.hombro);
+        codo.getWorldPosition(ikAgarre.codo);
+        mano.getWorldPosition(ikAgarre.muneca);
+
+        if (productoConCajaAgarre !== producto) {
+            producto.updateMatrixWorld(true);
+            cajaAgarreProducto.setFromObject(producto);
+            productoConCajaAgarre = producto;
+        }
+
+        if (cajaAgarreProducto.isEmpty()) return false;
+
+        cajaAgarreProducto.getCenter(ikAgarre.centroProducto);
+
+        const puntoManual = producto.userData?.puntoAgarreLocal;
+
+        if (
+            puntoManual &&
+            Number.isFinite(puntoManual.x) &&
+            Number.isFinite(puntoManual.y) &&
+            Number.isFinite(puntoManual.z)
+        ) {
+            ikAgarre.puntoContacto.set(
+                puntoManual.x,
+                puntoManual.y,
+                puntoManual.z
+            );
+            producto.localToWorld(ikAgarre.puntoContacto);
+        } else {
+            cajaAgarreProducto.clampPoint(
+                ikAgarre.muneca,
+                ikAgarre.puntoContacto
+            );
+        }
+
+        const normalManual = producto.userData?.normalAgarreLocal;
+
+        if (
+            normalManual &&
+            Number.isFinite(normalManual.x) &&
+            Number.isFinite(normalManual.y) &&
+            Number.isFinite(normalManual.z)
+        ) {
+            ikAgarre.normalContacto
+                .set(
+                    normalManual.x,
+                    normalManual.y,
+                    normalManual.z
+                )
+                .transformDirection(producto.matrixWorld);
+        } else {
+            ikAgarre.normalContacto.subVectors(
+                ikAgarre.puntoContacto,
+                ikAgarre.centroProducto
+            );
+        }
+
+        if (ikAgarre.normalContacto.lengthSq() < 0.000001) {
+            ikAgarre.normalContacto.subVectors(
+                ikAgarre.hombro,
+                ikAgarre.centroProducto
+            );
+        }
+
+        if (ikAgarre.normalContacto.lengthSq() < 0.000001) {
+            ikAgarre.normalContacto.set(0, 0, 1);
+        }
+
+        ikAgarre.normalContacto.normalize();
+
+        const distanciaContacto = Math.max(
+            0,
+            numero(
+                producto.userData?.distanciaContactoMano,
+                config.distanciaContactoMano
+            )
+        );
+
+        ikAgarre.objetivoContacto
+            .copy(ikAgarre.puntoContacto)
+            .addScaledVector(
+                ikAgarre.normalContacto,
+                distanciaContacto
+            );
+
+        const progreso = limitar(
+            tiempoEstado / Math.max(config.tiempoRecoger, 0.01),
+            0,
+            1
+        );
+
+        const progresoExtension = limitar(
+            numero(config.progresoContactoProducto, 0.78),
+            0.55,
+            0.88
+        );
+
+        const pesoIK = suavizar(
+            limitar(progreso / progresoExtension, 0, 1)
+        );
+
+        ikAgarre.objetivo
+            .copy(ikAgarre.muneca)
+            .lerp(ikAgarre.objetivoContacto, pesoIK);
+
+        ikAgarre.direccion.subVectors(
+            ikAgarre.objetivo,
+            ikAgarre.hombro
+        );
+
+        const distanciaObjetivo = ikAgarre.direccion.length();
+
+        const longitudBrazo = ikAgarre.hombro.distanceTo(
+            ikAgarre.codo
+        );
+        const longitudAntebrazo = ikAgarre.codo.distanceTo(
+            ikAgarre.muneca
+        );
+
+        if (
+            distanciaObjetivo < 0.0001 ||
+            longitudBrazo < 0.0001 ||
+            longitudAntebrazo < 0.0001
+        ) {
+            return false;
+        }
+
+        const distanciaMinima = Math.abs(
+            longitudBrazo - longitudAntebrazo
+        ) + 0.005;
+        const distanciaMaxima = Math.max(
+            distanciaMinima + 0.001,
+            longitudBrazo + longitudAntebrazo - 0.005
+        );
+        const distanciaAjustada = limitar(
+            distanciaObjetivo,
+            distanciaMinima,
+            distanciaMaxima
+        );
+
+        ikAgarre.direccion.multiplyScalar(
+            1 / distanciaObjetivo
+        );
+
+        ikAgarre.objetivo
+            .copy(ikAgarre.hombro)
+            .addScaledVector(
+                ikAgarre.direccion,
+                distanciaAjustada
+            );
+
+        ikAgarre.codoActual.subVectors(
+            ikAgarre.codo,
+            ikAgarre.hombro
+        );
+
+        const proyeccionCodo = ikAgarre.codoActual.dot(
+            ikAgarre.direccion
+        );
+
+        ikAgarre.perpendicular
+            .copy(ikAgarre.codoActual)
+            .addScaledVector(
+                ikAgarre.direccion,
+                -proyeccionCodo
+            );
+
+        if (ikAgarre.perpendicular.lengthSq() < 0.000001) {
+            ikAgarre.perpendicular
+                .set(0, 1, 0)
+                .cross(ikAgarre.direccion);
+        }
+
+        if (ikAgarre.perpendicular.lengthSq() < 0.000001) {
+            ikAgarre.perpendicular
+                .set(1, 0, 0)
+                .cross(ikAgarre.direccion);
+        }
+
+        ikAgarre.perpendicular.normalize();
+
+        const distanciaCodo =
+            (
+                longitudBrazo * longitudBrazo -
+                longitudAntebrazo * longitudAntebrazo +
+                distanciaAjustada * distanciaAjustada
+            ) / (2 * distanciaAjustada);
+
+        const alturaCodo = Math.sqrt(Math.max(
+            0,
+            longitudBrazo * longitudBrazo -
+            distanciaCodo * distanciaCodo
+        ));
+
+        ikAgarre.codoObjetivo
+            .copy(ikAgarre.hombro)
+            .addScaledVector(
+                ikAgarre.direccion,
+                distanciaCodo
+            )
+            .addScaledVector(
+                ikAgarre.perpendicular,
+                alturaCodo
+            );
+
+        ikAgarre.direccionActual.subVectors(
+            ikAgarre.codo,
+            ikAgarre.hombro
+        );
+        ikAgarre.direccionDeseada.subVectors(
+            ikAgarre.codoObjetivo,
+            ikAgarre.hombro
+        );
+
+        if (!orientarHuesoHaciaDireccion(
+            hombro,
+            ikAgarre.direccionActual,
+            ikAgarre.direccionDeseada
+        )) {
+            return false;
+        }
+
+        grupo.updateMatrixWorld(true);
+        codo.getWorldPosition(ikAgarre.codo);
+        mano.getWorldPosition(ikAgarre.muneca);
+
+        ikAgarre.direccionActual.subVectors(
+            ikAgarre.muneca,
+            ikAgarre.codo
+        );
+        ikAgarre.direccionDeseada.subVectors(
+            ikAgarre.objetivo,
+            ikAgarre.codo
+        );
+
+        if (!orientarHuesoHaciaDireccion(
+            codo,
+            ikAgarre.direccionActual,
+            ikAgarre.direccionDeseada
+        )) {
+            return false;
+        }
+
+        grupo.updateMatrixWorld(true);
+
+        return true;
     }
 
     
@@ -2158,6 +2475,10 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     function liberarReserva() {
         liberarRack();
 
+        if (productoConCajaAgarre === productoObjetivo) {
+            productoConCajaAgarre = null;
+        }
+
         if (productoObjetivo) {
             if (reservasProductos.get(productoObjetivo) === id) {
                 reservasProductos.delete(productoObjetivo);
@@ -2312,18 +2633,26 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     
 
     function obtenerPuntoFrenteProducto(producto) {
-        producto.getWorldPosition(vectorTemporal);
+        producto.updateMatrixWorld(true);
+        cajaTemporal.setFromObject(producto);
+
+        if (cajaTemporal.isEmpty()) return null;
+
+        cajaTemporal.getCenter(vectorTemporal2);
+        cajaTemporal.getSize(tamanoTemporal);
 
         const posicionProducto = {
-            x: vectorTemporal.x,
-            z: vectorTemporal.z
+            x: vectorTemporal2.x,
+            z: vectorTemporal2.z
         };
 
         const candidatos = [];
 
         const radioMinimo = Math.max(
-            0.75,
-            numero(config.distanciaProducto, 1.35)
+            numero(config.radioColision, 0.38) +
+                Math.hypot(tamanoTemporal.x, tamanoTemporal.z) * 0.5 +
+                0.08,
+            numero(config.distanciaProducto, 0.85)
         );
 
         const radioMaximo = Math.max(
@@ -2467,6 +2796,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         mano.attach(producto);
 
         producto.updateMatrixWorld(true);
+        productoConCajaAgarre = null;
 
         animacionAgarre.activa = false;
         animacionAgarre.tiempo = 0;
@@ -3563,6 +3893,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
             case ESTADOS.RECOGIENDO: {
                 animarRecogerProcedural();
+                ajustarBrazoAlProducto(productoObjetivo);
 
                 if (
                     tiempoEstado >=
