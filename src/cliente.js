@@ -43,7 +43,7 @@ const CONFIG_BASE = {
     limiteZMax: 55,
 
     radioColision: 0.38,
-    margenObstaculos: 0.22,
+    margenObstaculos: 0.12,
     tamanoCelda: 0.75,
 
     puertaCentroX: 0,
@@ -269,6 +269,12 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     const config = {
         ...CONFIG_BASE,
         ...opciones,
+
+        colisiones:
+            opciones.colisiones ??
+            (Array.isArray(opciones.mobiliario)
+                ? opciones.mobiliario
+                : CONFIG_BASE.colisiones),
 
         posicion: {
             ...CONFIG_BASE.posicion,
@@ -2035,20 +2041,43 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             for (const colision of config.colisiones) {
                 if (!colision) continue;
 
-                obstaculos.push({
-                    x: numero(colision.x),
-                    z: numero(colision.z),
+                const minX = numero(colision.minX, NaN);
+                const maxX = numero(colision.maxX, NaN);
+                const minZ = numero(colision.minZ, NaN);
+                const maxZ = numero(colision.maxZ, NaN);
 
-                    ancho: numero(
-                        colision.ancho,
-                        colision.width ?? 1
-                    ),
-
-                    profundidad: numero(
-                        colision.profundidad,
-                        colision.depth ?? 1
+                const x = numero(
+                    colision.x,
+                    (minX + maxX) / 2
+                );
+                const z = numero(
+                    colision.z,
+                    (minZ + maxZ) / 2
+                );
+                const ancho = numero(
+                    colision.ancho,
+                    numero(colision.width, maxX - minX)
+                );
+                const profundidad = numero(
+                    colision.profundidad,
+                    numero(
+                        colision.fondo,
+                        numero(colision.depth, maxZ - minZ)
                     )
-                });
+                );
+
+                if (
+                    !Number.isFinite(x) ||
+                    !Number.isFinite(z) ||
+                    !Number.isFinite(ancho) ||
+                    !Number.isFinite(profundidad) ||
+                    ancho <= 0 ||
+                    profundidad <= 0
+                ) {
+                    continue;
+                }
+
+                obstaculos.push({ x, z, ancho, profundidad });
             }
         }
 
@@ -2971,7 +3000,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         for (
             let radio = radioMinimo;
             radio <= radioMaximo;
-            radio += 0.3
+            radio += 0.15
         ) {
             for (
                 let angulo = 0;
@@ -4544,6 +4573,14 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         if (opcionesCompras.mobiliario) {
             config.mobiliario = opcionesCompras.mobiliario;
+
+            if (
+                Array.isArray(opcionesCompras.mobiliario) &&
+                !Array.isArray(opcionesCompras.colisiones)
+            ) {
+                config.colisiones = opcionesCompras.mobiliario;
+            }
+
             actualizarColisiones();
         }
 
