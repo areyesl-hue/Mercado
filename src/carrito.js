@@ -680,6 +680,56 @@ export function crearCarrito(scene, opciones = {}) {
         estado.objetivo = null;
     }
 
+    function obtenerPuntoManubrio() {
+        grupo.updateMatrixWorld(true);
+
+        let manubrio = null;
+        grupoModelo.traverse(objeto => {
+            const nombre = objeto.name
+                .toLowerCase()
+                .replace(/[\s_-]/g, '');
+
+            if (
+                !manubrio &&
+                /(agarremanubrio|manubrio|handle|grip)/.test(nombre) &&
+                !nombre.includes('soporte')
+            ) {
+                manubrio = objeto;
+            }
+        });
+
+        if (manubrio) {
+            const cajaManubrio = new THREE.Box3().setFromObject(manubrio);
+
+            if (!cajaManubrio.isEmpty()) {
+                const centro = cajaManubrio.getCenter(new THREE.Vector3());
+                const tamano = cajaManubrio.getSize(new THREE.Vector3());
+
+                estado.objetivo?.updateMatrixWorld(true);
+
+                const izquierda = estado.objetivo
+                    ? new THREE.Vector3(-1, 0, 0)
+                        .transformDirection(estado.objetivo.matrixWorld)
+                    : new THREE.Vector3(-1, 0, 0)
+                        .transformDirection(grupoModelo.matrixWorld);
+                const radio = (
+                    Math.abs(izquierda.x) * tamano.x +
+                    Math.abs(izquierda.y) * tamano.y +
+                    Math.abs(izquierda.z) * tamano.z
+                ) * 0.5;
+
+                return centro.addScaledVector(
+                    izquierda,
+                    Math.min(0.13, radio * 0.5)
+                );
+            }
+        }
+
+        return grupoModelo.localToWorld(
+            new THREE.Vector3(-0.13, 1.02, -0.75)
+        );
+    }
+
     const posicionObjetivo = new THREE.Vector3();
     const direccion = new THREE.Vector3();
     const posicionDeseada = new THREE.Vector3();
@@ -1179,6 +1229,7 @@ export function crearCarrito(scene, opciones = {}) {
         obtenerProductos,
         obtenerTotal,
         obtenerPuntoDeposito,
+        obtenerPuntoManubrio,
 
         eliminar,
 
