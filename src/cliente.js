@@ -64,6 +64,7 @@ const CONFIG_BASE = {
     tiempoInspeccionar: 2.2,
     tiempoGuardar: 1.4,
     tiempoDevolver: 1.4,
+    tiempoPago: 3.0,
     tiempoEntreProductos: 0.8,
     tiempoReintento: 1.5,
 
@@ -1595,32 +1596,88 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     
 
     function animarPagarProcedural() {
-        const entrada = suavizar(Math.min(tiempoEstado / 0.65, 1));
-        const salida = suavizar(Math.min((2.5 - tiempoEstado) / 0.45, 1));
-        const levantar = entrada * salida;
-        const mirarCaja = Math.sin(tiempoEstado * 0.9) * 0.035;
-        const respiracion = Math.sin(tiempoEstado * 1.8) * 0.012;
-        const movimientoPago = Math.sin(tiempoEstado * 2.4) * 0.035;
-        const cambioDePeso = Math.sin(tiempoEstado * 0.72) * 0.018;
+        const duracion = Math.max(
+            numero(config.tiempoPago, 3.0),
+            0.1
+        );
+        const progreso = limitar(tiempoEstado / duracion, 0, 1);
+        const extender = suavizar(limitar(progreso / 0.30, 0, 1));
+        const retirar = suavizar(limitar((progreso - 0.78) / 0.22, 0, 1));
+        const alcance = extender * (1 - retirar);
+        const prepararTarjeta =
+            suavizar(limitar(progreso / 0.18, 0, 1)) *
+            (1 - retirar);
+        const pausa = suavizar(
+            limitar((progreso - 0.44) / 0.12, 0, 1)
+        ) * (1 - retirar);
 
-        aplicarRotacionEuler(rig.brazoDerecho, (-0.88 + movimientoPago) * levantar,
-            -0.12 * levantar, 0.10);
-        aplicarRotacionEuler(rig.antebrazoDerecho, -0.58 * levantar,
-            movimientoPago * 0.35, -0.08);
-        aplicarRotacion(rig.manoDerecha, EJE_X, movimientoPago * 0.35);
+        const toqueUno = Math.exp(
+            -Math.pow((progreso - 0.34) / 0.025, 2)
+        );
+        const toqueDos = Math.exp(
+            -Math.pow((progreso - 0.41) / 0.025, 2)
+        );
+        const toque = (toqueUno + toqueDos) * alcance;
+        const respiracion = Math.sin(tiempoEstado * 2.1) * 0.012;
+        const cambioPeso = Math.sin(tiempoEstado * 1.35) * 0.018;
+        const asentir = Math.sin(tiempoEstado * 4.2) * pausa * 0.025;
 
-        aplicarRotacionEuler(rig.brazoIzquierdo, -0.68 * levantar,
-            0.08 * levantar, -0.08);
-        aplicarRotacionEuler(rig.antebrazoIzquierdo, -0.42 * levantar,
-            movimientoPago * -0.18, 0.04);
-        aplicarRotacion(rig.manoIzquierda, EJE_X, movimientoPago * -0.2);
+        aplicarRotacionEuler(
+            rig.brazoDerecho,
+            -0.78 * alcance + 0.03 * toque,
+            -0.10 * alcance,
+            0.08 * alcance
+        );
+        aplicarRotacionEuler(
+            rig.antebrazoDerecho,
+            -0.48 * alcance - 0.035 * toque,
+            -0.08 * alcance,
+            -0.06
+        );
+        aplicarRotacionEuler(
+            rig.manoDerecha,
+            -0.12 * alcance + 0.12 * toque,
+            0.05 * alcance,
+            0.08 * alcance
+        );
 
-        aplicarRotacionEuler(rig.cabeza, 0.08 + mirarCaja,
-            Math.sin(tiempoEstado * 0.55) * 0.10,
-            Math.sin(tiempoEstado * 0.38) * 0.025);
-        aplicarRotacion(rig.cuello, EJE_X, respiracion);
-        aplicarRotacionEuler(rig.torso, respiracion * 0.7, 0, cambioDePeso);
-        aplicarRotacionEuler(rig.cadera, respiracion * 0.3, 0, -cambioDePeso);
+        aplicarRotacionEuler(
+            rig.brazoIzquierdo,
+            -0.38 * prepararTarjeta,
+            0.12 * prepararTarjeta,
+            -0.10 * prepararTarjeta
+        );
+        aplicarRotacionEuler(
+            rig.antebrazoIzquierdo,
+            -0.62 * prepararTarjeta,
+            0.08 * prepararTarjeta,
+            0.05
+        );
+        aplicarRotacion(
+            rig.manoIzquierda,
+            EJE_X,
+            -0.16 * prepararTarjeta + toque * 0.04
+        );
+
+        aplicarRotacionEuler(
+            rig.cabeza,
+            0.08 + 0.06 * alcance + asentir,
+            -0.08 * alcance,
+            Math.sin(tiempoEstado * 1.1) * 0.025
+        );
+        aplicarRotacion(rig.cuello, EJE_X, 0.04 + respiracion);
+        aplicarRotacionEuler(
+            rig.torso,
+            0.045 * alcance + respiracion * 0.7,
+            0,
+            cambioPeso * alcance
+        );
+        aplicarRotacionEuler(
+            rig.cadera,
+            -0.015 * alcance + respiracion * 0.3,
+            0,
+            -cambioPeso * alcance
+        );
     }
 
     
@@ -4452,7 +4509,10 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             case ESTADOS.PAGANDO: {
                 animarPagarProcedural();
 
-                if (tiempoEstado >= 2.5) {
+                if (
+                    tiempoEstado >=
+                    Math.max(numero(config.tiempoPago, 3.0), 0.1)
+                ) {
                     const ticket = ticketPendiente;
 
                     ticketPendiente = null;
