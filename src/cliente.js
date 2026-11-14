@@ -114,6 +114,7 @@ const CONFIG_BASE = {
 
     
     intervaloRecalculoRuta: 0.55,
+    tiempoMaximoAtasco: 3.5,
     maximosIntentosMovimiento: 5,
     distanciaRecalculo: 0.45,
 
@@ -387,6 +388,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     let objetivo = null;
 
     const productosExaminados = new Set();
+    const productosConRutaFallida = new Set();
     const racksVisitados = new Set();
 
     const obstaculos = [];
@@ -1369,7 +1371,6 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         const detener = [
             ESTADOS.INACTIVO,
-            ESTADOS.ACERCANDO,
             ESTADOS.RECOGIENDO,
             ESTADOS.INSPECCIONANDO,
             ESTADOS.DECIDIENDO,
@@ -1936,7 +1937,17 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             destinoAnterior
         );
 
-        if (nuevoCamino.length) {
+        const rutaActual = ruta.slice(indiceRuta);
+        const mismaRuta = (camino) => {
+            return (
+                camino.length === rutaActual.length &&
+                camino.every((punto, indice) => {
+                    return distanciaXZ(punto, rutaActual[indice]) < 0.08;
+                })
+            );
+        };
+
+        if (nuevoCamino.length && !mismaRuta(nuevoCamino)) {
             ruta = nuevoCamino;
             indiceRuta = 0;
             tiempoSinMovimiento = 0;
@@ -1966,7 +1977,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
                     destinoAnterior
                 );
 
-                if (camino.length) {
+                if (camino.length && !mismaRuta(camino)) {
                     ruta = camino;
                     indiceRuta = 0;
                     tiempoSinMovimiento = 0;
@@ -1976,9 +1987,92 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             }
         }
 
+        const direccionesDestino = [
+            [1, 0],
+            [-1, 0],
+            [0, 1],
+            [0, -1],
+            [0.707, 0.707],
+            [-0.707, 0.707],
+            [0.707, -0.707],
+            [-0.707, -0.707]
+        ];
+        const origen = {
+            x: grupo.position.x,
+            z: grupo.position.z
+        };
+
+        if (estado !== ESTADOS.ACERCANDO) {
+            for (const distancia of [
+                config.tamanoCelda,
+                config.tamanoCelda * 2
+            ]) {
+                for (const [dx, dz] of direccionesDestino) {
+                    const destinoAlternativo = {
+                        x: destinoAnterior.x + dx * distancia,
+                        z: destinoAnterior.z + dz * distancia
+                    };
+
+                    if (!puntoLibre(destinoAlternativo.x, destinoAlternativo.z)) {
+                        continue;
+                    }
+
+                    const camino = encontrarCamino(
+                        origen,
+                        destinoAlternativo
+                    );
+
+                    if (!camino.length) continue;
+
+                    ruta = camino;
+                    indiceRuta = 0;
+                    objetivo = destinoAlternativo;
+                    tiempoSinMovimiento = 0;
+
+                    console.warn(
+                        `[CLIENTE ${id}] Recalculó la ruta hacia un punto cercano transitable.`
+                    );
+
+                    return true;
+                }
+            }
+        }
+
         tiempoSinMovimiento = 0;
 
         return false;
+    }
+
+    function recuperarTrasAtasco() {
+        if (estado === ESTADOS.ACERCANDO && productoObjetivo) {
+            productosConRutaFallida.add(productoObjetivo);
+            liberarReserva();
+            ruta = [];
+            objetivo = null;
+
+            if (compras.length >= config.maximoProductos) {
+                if (!dirigirseACaja()) {
+                    cambiarEstado(ESTADOS.ESPERANDO);
+                }
+            } else {
+                cambiarEstado(ESTADOS.BUSCANDO);
+            }
+
+            console.warn(
+                `[CLIENTE ${id}] Omitió un producto cuyo acceso quedó bloqueado.`
+            );
+            return;
+        }
+
+        if (estado === ESTADOS.RUTA) {
+            ruta = [];
+            objetivo = null;
+            cambiarEstado(ESTADOS.BUSCANDO);
+
+            console.warn(
+                `[CLIENTE ${id}] Canceló una ruta sin progreso y retomó la búsqueda.`
+            );
+        }
     }
 
     function moverHaciaDestino(delta) {
@@ -2269,6 +2363,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         for (const producto of productos) {
             if (!productoDisponible(producto)) continue;
+            if (productosConRutaFallida.has(producto)) continue;
             if (!esProductoBuscado(producto)) continue;
 
             const claveRack = obtenerClaveRack(producto);
@@ -2301,6 +2396,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
             for (const producto of productos) {
                 if (!productoDisponible(producto)) continue;
+                if (productosConRutaFallida.has(producto)) continue;
                 if (!esProductoBuscado(producto)) continue;
                 if (!rackDisponible(producto)) continue;
 
@@ -3007,6 +3103,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         }
 
         if (!acercarseAProducto(producto)) {
+            productosConRutaFallida.add(producto);
             liberarReserva();
             cambiarEstado(ESTADOS.ESPERANDO);
         }
@@ -3275,6 +3372,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     compras = [];
 
     productosExaminados.clear();
+    productosConRutaFallida.clear();
     racksVisitados.clear();
     celdasOcupadas.clear();
 
@@ -3500,8 +3598,10 @@ export function crearClienteSupermercado(scene, opciones = {}) {
                 tiempoSinMovimiento += delta;
             }
 
-            if (tiempoSinMovimiento >= 5) {
-                resolverClienteAtascado();
+            if (tiempoSinMovimiento >= config.tiempoMaximoAtasco) {
+                if (!resolverClienteAtascado()) {
+                    recuperarTrasAtasco();
+                }
             }
         } else {
             tiempoSinMovimiento = 0;
@@ -3706,6 +3806,10 @@ export function crearClienteSupermercado(scene, opciones = {}) {
                         tiempoEstado >= config.tiempoRecoger &&
                         !productoEnMano
                     ) {
+                        if (productoObjetivo) {
+                            productosConRutaFallida.add(productoObjetivo);
+                        }
+
                         liberarReserva();
                         productoObjetivo = null;
                         cambiarEstado(ESTADOS.BUSCANDO);
@@ -3877,6 +3981,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
                         compras = [];
 
                         productosExaminados.clear();
+                        productosConRutaFallida.clear();
                         racksVisitados.clear();
 
                         cambiarEstado(ESTADOS.BUSCANDO);
@@ -4188,6 +4293,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         liberarReserva();
 
         productosExaminados.clear();
+        productosConRutaFallida.clear();
         racksVisitados.clear();
         celdasOcupadas.clear();
 
