@@ -440,6 +440,13 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         escalaFinal: new THREE.Vector3(1, 1, 1)
     };
 
+    const poseAgarreInspeccion = {
+        activa: false,
+        duracion: 0,
+        posicionGrupoY: 0,
+        huesos: []
+    };
+
     
     
     
@@ -1230,6 +1237,41 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         if (productoEsInferior) {
             animarAgacharse((1 - suavizar(tiempoEstado * 1.5)) * levantar);
         }
+
+        mezclarPoseAgarreInspeccion();
+    }
+
+    function mezclarPoseAgarreInspeccion() {
+        if (!poseAgarreInspeccion.activa) return;
+
+        const duracion = Math.max(
+            numero(poseAgarreInspeccion.duracion, 0.38),
+            0.05
+        );
+        const progreso = suavizar(
+            limitar(tiempoEstado / duracion, 0, 1)
+        );
+        const posicionObjetivoY = grupo.position.y;
+
+        for (const pose of poseAgarreInspeccion.huesos) {
+            pose.objetivo.copy(pose.hueso.quaternion);
+            pose.hueso.quaternion.slerpQuaternions(
+                pose.inicial,
+                pose.objetivo,
+                progreso
+            );
+        }
+
+        grupo.position.y = THREE.MathUtils.lerp(
+            poseAgarreInspeccion.posicionGrupoY,
+            posicionObjetivoY,
+            progreso
+        );
+
+        if (progreso >= 1) {
+            poseAgarreInspeccion.activa = false;
+            poseAgarreInspeccion.huesos.length = 0;
+        }
     }
 
     
@@ -1654,6 +1696,15 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         estado = nuevoEstado;
         tiempoEstado = 0;
+
+        if (
+            nuevoEstado !== ESTADOS.INSPECCIONANDO &&
+            poseAgarreInspeccion.activa
+        ) {
+            poseAgarreInspeccion.activa = false;
+            poseAgarreInspeccion.huesos.length = 0;
+        }
+
         actualizarSeguimientoCarrito();
 
         intentosMovimiento = 0;
@@ -2803,6 +2854,24 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         producto.visible = true;
         productoEnMano = producto;
+
+        poseAgarreInspeccion.huesos.length = 0;
+
+        for (const [hueso] of huesosBase) {
+            poseAgarreInspeccion.huesos.push({
+                hueso,
+                inicial: hueso.quaternion.clone(),
+                objetivo: new THREE.Quaternion()
+            });
+        }
+
+        poseAgarreInspeccion.posicionGrupoY = grupo.position.y;
+        poseAgarreInspeccion.duracion = Math.max(
+            numero(animacionAgarre.duracion, 0.38),
+            0.05
+        );
+        poseAgarreInspeccion.activa =
+            poseAgarreInspeccion.huesos.length > 0;
 
         productosExaminados.add(producto);
 
