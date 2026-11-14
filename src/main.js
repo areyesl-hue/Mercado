@@ -194,10 +194,10 @@ const CONFIG_LADRONES = [
     }
 ];
 
-const INTERVALO_LADRONES = 25;
+const INTERVALO_LADRONES = 60;
 const MAXIMO_LADRONES_ACTIVOS = 2;
-const MINIMO_INTERVALO_LADRONES = 18;
-const MAXIMO_INTERVALO_LADRONES = 32;
+const MINIMO_INTERVALO_LADRONES = 45;
+const MAXIMO_INTERVALO_LADRONES = 70;
 
 let temporizadorLadrones = INTERVALO_LADRONES;
 let indiceSiguienteLadron = 0;
@@ -716,10 +716,11 @@ function crearLadrones() {
         return;
     }
 
-    generarSiguienteLadron();
     temporizadorLadrones = INTERVALO_LADRONES;
 
-    console.info(`[LADRONES] Generador activado.`);
+    console.info(
+        `[LADRONES] Generador activado. Primer ladrón en ${INTERVALO_LADRONES} segundos.`
+    );
 }
 
 function generarSiguienteLadron() {
@@ -753,7 +754,7 @@ function generarSiguienteLadron() {
                 ...config,
                 altura: 1.75,
                 escala: 1,
-                distanciaProducto: 1.5,
+                distanciaProducto: 0.85,
                 tiempoRobo: 1.3,
                 margenColision: 0.35,
                 tamanoCelda: 0.5,
