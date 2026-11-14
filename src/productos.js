@@ -20,7 +20,7 @@ export function crearProductosLacteos(scene) {
     scene.add(productos);
 
     // ========================================================
-    // PRECIO DEL ÚNICO PRODUCTO
+    // Precios configurados en este catálogo.
     // ========================================================
 
     const PRECIOS = {
@@ -380,14 +380,16 @@ export function crearProductosLacteos(scene) {
         modelo.userData.skuProducto = codigoCatalogo;
 
         modelo.userData.nombreProducto = codigoCatalogo;
+        modelo.userData.nombre = nombre;
         modelo.userData.nombreVisible = nombre;
         modelo.userData.nombreUnidad = nombre;
+        modelo.userData.codigo = codigoCatalogo;
 
         modelo.userData.precio = precio;
         modelo.userData.moneda = 'MXN';
         modelo.userData.categoria = categoria;
-        modelo.userData.idRack = categoria;
-        modelo.userData.rackId = categoria;
+        modelo.userData.idRack = limites.idRack ?? categoria;
+        modelo.userData.rackId = modelo.userData.idRack;
         modelo.userData.departamento = categoria;
 
         modelo.userData.recogido = false;
@@ -493,7 +495,8 @@ export function crearProductosLacteos(scene) {
                     'Frutas y verduras',
                     {
                         ancho: 0.42,
-                        profundidad: 0.42
+                        profundidad: 0.42,
+                        idRack: 'Mesa_frescos_02'
                     }
                 );
             });
@@ -505,344 +508,272 @@ export function crearProductosLacteos(scene) {
     );
 
     // ========================================================
-    // OTROS PRODUCTOS DEL SUPERMERCADO
-    // Se colocan en las góndolas y módulos con tamaños reales,
-    // respetando altura, ancho y profundidad para que queden
-    // ordenados en cada rack.
+    // PRODUCTOS GLB EXISTENTES, DISTRIBUIDOS POR CATEGORIA
     // ========================================================
 
+    const gondolas = [
+        [-17, -13], [-17, 0], [-17, 13],
+        [-9, -13], [-9, 0], [-9, 13],
+        [9, -13], [9, 0], [9, 13],
+        [17, -13], [17, 0]
+    ];
+    const nivelesGondola = [0.4625, 0.8925, 1.3225, 1.7525];
+    const offsetsZGondola = [-2.15, -1.075, 0, 1.075, 2.15];
+    let siguienteFilaGondola = 0;
+
+    function obtenerFilaGondola() {
+        const fila = siguienteFilaGondola++;
+        const filasPorGondola = 8;
+        const indiceGondola = Math.floor(fila / filasPorGondola) % gondolas.length;
+        const filaEnGondola = fila % filasPorGondola;
+        const lado = filaEnGondola < 4 ? -1 : 1;
+        const nivel = filaEnGondola % 4;
+        const [centroX, centroZ] = gondolas[indiceGondola];
+
+        return {
+            idRack: `Gondola_${String(indiceGondola + 1).padStart(2, '0')}_Lado_${lado}`,
+            posiciones: offsetsZGondola.map((offsetZ) => ({
+                x: centroX + lado * 0.30,
+                y: nivelesGondola[nivel],
+                z: centroZ + offsetZ
+            }))
+        };
+    }
+
+    const mesasFrutas = [
+        { x: -25.5, z: 15, rack: 'Mesa_frescos_01' },
+        { x: -21.7, z: 15, rack: 'Mesa_frescos_02' },
+        { x: -25.5, z: 10.8, rack: 'Mesa_frescos_03' },
+        { x: -21.7, z: 10.8, rack: 'Mesa_frescos_04' }
+    ];
+    const offsetsMesaFrutas = [
+        [-0.9, -0.42], [-0.3, -0.42], [0.3, -0.42], [0.9, -0.42],
+        [-0.9, 0], [-0.3, 0], [0.3, 0], [0.9, 0],
+        [-0.9, 0.42], [-0.3, 0.42], [0.3, 0.42], [0.9, 0.42]
+    ];
+    const usoMesasFrutas = new Map();
+
+    function obtenerPosicionesMesa(indiceMesa) {
+        const mesa = mesasFrutas[indiceMesa];
+        const inicio = usoMesasFrutas.get(indiceMesa) ?? 0;
+        const posiciones = offsetsMesaFrutas.slice(inicio, inicio + 4);
+        usoMesasFrutas.set(indiceMesa, inicio + posiciones.length);
+
+        return {
+            idRack: mesa.rack,
+            posiciones: posiciones.map(([dx, dz]) => ({
+                x: mesa.x + dx,
+                y: 1.0,
+                z: mesa.z + dz
+            }))
+        };
+    }
+
+    const refrigeradoresX = [-27, -23.5, -20, -16.5, 16.5, 20, 27];
+    const nivelesRefrigerador = [0.5225, 0.9525, 1.3825, 1.8125];
+    const offsetsXRefrigerador = [-0.82, -0.27, 0.27, 0.82];
+
+    function obtenerPosicionesRefrigerador(indiceRefrigerador, nivel) {
+        const x = refrigeradoresX[indiceRefrigerador % refrigeradoresX.length];
+
+        return {
+            idRack: `Refrigerador_${String(indiceRefrigerador + 1).padStart(2, '0')}`,
+            posiciones: offsetsXRefrigerador.map((offsetX) => ({
+                x: x + offsetX,
+                y: nivelesRefrigerador[nivel],
+                z: -26.5 + 0.18
+            }))
+        };
+    }
+
+    const nivelesHigiene = [0.4575, 0.8075, 1.1575, 1.5075, 1.8575];
+    const offsetsXHigiene = [-0.95, -0.35, 0.35, 0.95];
+    let siguienteProductoHigiene = 0;
+
+    function obtenerPosicionesHigiene() {
+        const indice = siguienteProductoHigiene++;
+        const nivel = Math.floor(indice / 2);
+        const mitad = indice % 2;
+        const offsets = mitad === 0
+            ? offsetsXHigiene.slice(0, 2)
+            : offsetsXHigiene.slice(2, 4);
+
+        return {
+            idRack: 'Modulo_limpieza',
+            posiciones: offsets.map((offsetX) => ({
+                x: 28.3 + offsetX,
+                y: nivelesHigiene[nivel],
+                z: 8.15
+            }))
+        };
+    }
+
     const catalogoProductosAdicionales = [
-        {
-            clave: 'ABARROTES',
-            archivo: '/modelos/Abarrotes.glb',
-            nombre: 'Abarrotes',
-            categoria: 'Abarrotes',
-            rack: 'GONDOLAS_IZQUIERDAS',
-            rotacion: Math.PI / 2,
-            altura: 0.34,
-            ancho: 0.42,
-            profundidad: 0.38,
-            posiciones: [
-                { x: -17.0, z: -13.2, y: 0.72 },
-                { x: -17.0, z: -10.2, y: 0.72 },
-                { x: -17.0, z: -7.0, y: 1.18 },
-                { x: -17.0, z: -4.0, y: 1.18 },
-                { x: -9.0, z: -13.2, y: 0.72 },
-                { x: -9.0, z: -10.2, y: 0.72 },
-                { x: -9.0, z: -7.0, y: 1.18 },
-                { x: -9.0, z: -4.0, y: 1.18 }
-            ]
-        },
-        {
-            clave: 'ATUN',
-            archivo: '/modelos/Atun.glb',
-            nombre: 'Atún',
-            categoria: 'Enlatados',
-            rack: 'GONDOLAS_IZQUIERDAS',
-            rotacion: Math.PI / 2,
-            altura: 0.28,
-            ancho: 0.34,
-            profundidad: 0.30,
-            posiciones: [
-                { x: -17.0, z: 2.8, y: 0.70 },
-                { x: -17.0, z: 5.8, y: 0.70 },
-                { x: -17.0, z: 8.8, y: 1.15 },
-                { x: -17.0, z: 11.8, y: 1.15 },
-                { x: -9.0, z: 2.8, y: 0.70 },
-                { x: -9.0, z: 5.8, y: 0.70 },
-                { x: -9.0, z: 8.8, y: 1.15 },
-                { x: -9.0, z: 11.8, y: 1.15 }
-            ]
-        },
-        {
-            clave: 'AZUCAR',
-            archivo: '/modelos/Azucar.glb',
-            nombre: 'Azúcar',
-            categoria: 'Abarrotes',
-            rack: 'GONDOLAS_IZQUIERDAS',
-            rotacion: Math.PI / 2,
-            altura: 0.32,
-            ancho: 0.38,
-            profundidad: 0.34,
-            posiciones: [
-                { x: -17.0, z: 18.0, y: 0.68 },
-                { x: -17.0, z: 21.0, y: 0.68 },
-                { x: -17.0, z: 24.0, y: 1.12 },
-                { x: -17.0, z: 27.0, y: 1.12 },
-                { x: -9.0, z: 18.0, y: 0.68 },
-                { x: -9.0, z: 21.0, y: 0.68 },
-                { x: -9.0, z: 24.0, y: 1.12 },
-                { x: -9.0, z: 27.0, y: 1.12 }
-            ]
-        },
-        {
-            clave: 'LACTEOS',
-            archivo: '/modelos/Lala.glb',
-            nombre: 'Lácteo',
-            categoria: 'Lacteos',
-            rack: 'GONDOLAS_DERECHAS',
-            rotacion: Math.PI / 2,
-            altura: 0.38,
-            ancho: 0.30,
-            profundidad: 0.26,
-            posiciones: [
-                { x: 9.0, z: -13.2, y: 0.72 },
-                { x: 9.0, z: -10.2, y: 0.72 },
-                { x: 9.0, z: -7.0, y: 1.18 },
-                { x: 9.0, z: -4.0, y: 1.18 },
-                { x: 17.0, z: -13.2, y: 0.72 },
-                { x: 17.0, z: -10.2, y: 0.72 },
-                { x: 17.0, z: -7.0, y: 1.18 },
-                { x: 17.0, z: -4.0, y: 1.18 }
-            ]
-        },
-        {
-            clave: 'BEBIDAS',
-            archivo: '/modelos/Agua.glb',
-            nombre: 'Agua',
-            categoria: 'Bebidas',
-            rack: 'GONDOLAS_DERECHAS',
-            rotacion: Math.PI / 2,
-            altura: 0.45,
-            ancho: 0.28,
-            profundidad: 0.28,
-            posiciones: [
-                { x: 9.0, z: 2.8, y: 0.72 },
-                { x: 9.0, z: 5.8, y: 0.72 },
-                { x: 9.0, z: 8.8, y: 1.18 },
-                { x: 9.0, z: 11.8, y: 1.18 },
-                { x: 17.0, z: 2.8, y: 0.72 },
-                { x: 17.0, z: 5.8, y: 0.72 },
-                { x: 17.0, z: 8.8, y: 1.18 },
-                { x: 17.0, z: 11.8, y: 1.18 }
-            ]
-        },
-        {
-            clave: 'REFRESCOS',
-            archivo: '/modelos/Pepsi.glb',
-            nombre: 'Refresco',
-            categoria: 'Bebidas',
-            rack: 'GONDOLAS_DERECHAS',
-            rotacion: Math.PI / 2,
-            altura: 0.42,
-            ancho: 0.24,
-            profundidad: 0.24,
-            posiciones: [
-                { x: 9.0, z: 18.0, y: 0.70 },
-                { x: 9.0, z: 21.0, y: 0.70 },
-                { x: 9.0, z: 24.0, y: 1.12 },
-                { x: 9.0, z: 27.0, y: 1.12 },
-                { x: 17.0, z: 18.0, y: 0.70 },
-                { x: 17.0, z: 21.0, y: 0.70 },
-                { x: 17.0, z: 24.0, y: 1.12 },
-                { x: 17.0, z: 27.0, y: 1.12 }
-            ]
-        },
-        {
-            clave: 'SNACKS',
-            archivo: '/modelos/Sabritas.glb',
-            nombre: 'Snacks',
-            categoria: 'Snacks',
-            rack: 'GONDOLAS_IZQUIERDAS',
-            rotacion: Math.PI / 2,
-            altura: 0.26,
-            ancho: 0.24,
-            profundidad: 0.24,
-            posiciones: [
-                { x: -17.0, z: 18.0, y: 0.68 },
-                { x: -17.0, z: 21.0, y: 0.68 },
-                { x: -17.0, z: 24.0, y: 1.12 },
-                { x: -17.0, z: 27.0, y: 1.12 },
-                { x: -9.0, z: 18.0, y: 0.68 },
-                { x: -9.0, z: 21.0, y: 0.68 },
-                { x: -9.0, z: 24.0, y: 1.12 },
-                { x: -9.0, z: 27.0, y: 1.12 }
-            ]
-        },
-        {
-            clave: 'DORITOS',
-            archivo: '/modelos/Doritos.glb',
-            nombre: 'Doritos',
-            categoria: 'Snacks',
-            rack: 'GONDOLAS_IZQUIERDAS',
-            rotacion: Math.PI / 2,
-            altura: 0.26,
-            ancho: 0.24,
-            profundidad: 0.22,
-            posiciones: [
-                { x: -25.0, z: -18.0, y: 0.70 },
-                { x: -25.0, z: -15.2, y: 0.70 },
-                { x: -25.0, z: -12.4, y: 1.18 },
-                { x: -25.0, z: -9.6, y: 1.18 },
-                { x: -21.0, z: -18.0, y: 0.70 },
-                { x: -21.0, z: -15.2, y: 0.70 },
-                { x: -21.0, z: -12.4, y: 1.18 },
-                { x: -21.0, z: -9.6, y: 1.18 }
-            ]
-        },
-        {
-            clave: 'CEREAL',
-            archivo: '/modelos/cereal.glb',
-            nombre: 'Cereal',
-            categoria: 'Cereales',
-            rack: 'GONDOLAS_IZQUIERDAS',
-            rotacion: Math.PI / 2,
-            altura: 0.30,
-            ancho: 0.38,
-            profundidad: 0.32,
-            posiciones: [
-                { x: -25.0, z: 3.2, y: 0.70 },
-                { x: -25.0, z: 6.1, y: 0.70 },
-                { x: -25.0, z: 9.4, y: 1.18 },
-                { x: -25.0, z: 12.7, y: 1.18 },
-                { x: -21.0, z: 3.2, y: 0.70 },
-                { x: -21.0, z: 6.1, y: 0.70 },
-                { x: -21.0, z: 9.4, y: 1.18 },
-                { x: -21.0, z: 12.7, y: 1.18 }
-            ]
-        },
-        {
-            clave: 'ACEITE',
-            archivo: '/modelos/Aceite.glb',
-            nombre: 'Aceite',
-            categoria: 'Abarrotes',
-            rack: 'GONDOLAS_DERECHAS',
-            rotacion: Math.PI / 2,
-            altura: 0.36,
-            ancho: 0.26,
-            profundidad: 0.26,
-            posiciones: [
-                { x: 21.0, z: -18.0, y: 0.70 },
-                { x: 21.0, z: -15.2, y: 0.70 },
-                { x: 21.0, z: -12.4, y: 1.18 },
-                { x: 21.0, z: -9.6, y: 1.18 },
-                { x: 25.0, z: -18.0, y: 0.70 },
-                { x: 25.0, z: -15.2, y: 0.70 },
-                { x: 25.0, z: -12.4, y: 1.18 },
-                { x: 25.0, z: -9.6, y: 1.18 }
-            ]
-        },
-        {
-            clave: 'FRUTAS',
-            archivo: '/modelos/Mazana.glb',
-            nombre: 'Manzana',
-            categoria: 'Frutas y verduras',
-            rack: 'MESA_FRUTAS_01',
-            rotacion: Math.PI / 2,
-            altura: 0.22,
-            ancho: 0.22,
-            profundidad: 0.22,
-            posiciones: [
-                { x: -25.5, z: 15.0, y: 1.05 },
-                { x: -24.2, z: 15.0, y: 1.05 },
-                { x: -22.8, z: 15.0, y: 1.05 },
-                { x: -21.4, z: 15.0, y: 1.05 },
-                { x: -25.5, z: 10.8, y: 1.05 },
-                { x: -24.2, z: 10.8, y: 1.05 },
-                { x: -22.8, z: 10.8, y: 1.05 },
-                { x: -21.4, z: 10.8, y: 1.05 }
-            ]
-        },
-        {
-            clave: 'VERDURAS',
-            archivo: '/modelos/Pepino.glb',
-            nombre: 'Pepino',
-            categoria: 'Frutas y verduras',
-            rack: 'MESA_FRUTAS_02',
-            rotacion: Math.PI / 2,
-            altura: 0.28,
-            ancho: 0.22,
-            profundidad: 0.22,
-            posiciones: [
-                { x: -25.5, z: 18.5, y: 1.05 },
-                { x: -24.2, z: 18.5, y: 1.05 },
-                { x: -22.8, z: 18.5, y: 1.05 },
-                { x: -21.4, z: 18.5, y: 1.05 },
-                { x: -25.5, z: 21.6, y: 1.05 },
-                { x: -24.2, z: 21.6, y: 1.05 },
-                { x: -22.8, z: 21.6, y: 1.05 },
-                { x: -21.4, z: 21.6, y: 1.05 }
-            ]
-        },
-        {
-            clave: 'LIMPIEZA',
-            archivo: '/modelos/detergente_liquido.glb',
-            nombre: 'Limpieza',
-            categoria: 'Limpieza',
-            rack: 'MODULO_LIMPIEZA',
-            rotacion: Math.PI / 2,
-            altura: 0.42,
-            ancho: 0.32,
-            profundidad: 0.30,
-            posiciones: [
-                { x: 28.2, z: 7.4, y: 0.70 },
-                { x: 28.2, z: 10.1, y: 0.70 },
-                { x: 28.2, z: 12.7, y: 1.18 },
-                { x: 28.2, z: 15.5, y: 1.18 },
-                { x: 25.5, z: 7.4, y: 0.70 },
-                { x: 25.5, z: 10.1, y: 0.70 },
-                { x: 25.5, z: 12.7, y: 1.18 },
-                { x: 25.5, z: 15.5, y: 1.18 }
-            ]
-        },
-        {
-            clave: 'HIGIENE',
-            archivo: '/modelos/toallitas_bebe.glb',
-            nombre: 'Higiene',
-            categoria: 'Higiene',
-            rack: 'MODULO_HIGIENE',
-            rotacion: Math.PI / 2,
-            altura: 0.30,
-            ancho: 0.26,
-            profundidad: 0.22,
-            posiciones: [
-                { x: 29.5, z: -10.0, y: 0.70 },
-                { x: 29.5, z: -7.0, y: 0.70 },
-                { x: 29.5, z: -4.0, y: 1.18 },
-                { x: 29.5, z: -1.0, y: 1.18 },
-                { x: 26.5, z: -10.0, y: 0.70 },
-                { x: 26.5, z: -7.0, y: 0.70 },
-                { x: 26.5, z: -4.0, y: 1.18 },
-                { x: 26.5, z: -1.0, y: 1.18 }
-            ]
-        }
+        { archivo: '/modelos/Aceite.glb', nombre: 'Aceite', categoria: 'Abarrotes', tipo: 'gondola', alto: 0.36, ancho: 0.26, profundidad: 0.26 },
+        { archivo: '/modelos/Atun.glb', nombre: 'At\u00fan', categoria: 'Enlatados', tipo: 'gondola', alto: 0.28, ancho: 0.34, profundidad: 0.30 },
+        { archivo: '/modelos/Azucar.glb', nombre: 'Az\u00facar', categoria: 'Abarrotes', tipo: 'gondola', alto: 0.32, ancho: 0.38, profundidad: 0.34 },
+        { archivo: '/modelos/Dorito.glb', nombre: 'Dorito', categoria: 'Snacks', tipo: 'gondola', alto: 0.28, ancho: 0.25, profundidad: 0.20 },
+        { archivo: '/modelos/DoritoDinamita.glb', nombre: 'Dorito Dinamita', categoria: 'Snacks', tipo: 'gondola', alto: 0.28, ancho: 0.25, profundidad: 0.20 },
+        { archivo: '/modelos/DoritoIconig.glb', nombre: 'Dorito Iconig', categoria: 'Snacks', tipo: 'gondola', alto: 0.28, ancho: 0.25, profundidad: 0.20 },
+        { archivo: '/modelos/DoritoPizeerola.glb', nombre: 'Dorito Pizzerola', categoria: 'Snacks', tipo: 'gondola', alto: 0.28, ancho: 0.25, profundidad: 0.20 },
+        { archivo: '/modelos/Frijoles.glb', nombre: 'Frijoles', categoria: 'Enlatados', tipo: 'gondola', alto: 0.30, ancho: 0.30, profundidad: 0.28 },
+        { archivo: '/modelos/Sabrita.glb', nombre: 'Sabrita', categoria: 'Snacks', tipo: 'gondola', alto: 0.27, ancho: 0.25, profundidad: 0.20 },
+        { archivo: '/modelos/SabritasAdobadas.glb', nombre: 'Sabritas Adobadas', categoria: 'Snacks', tipo: 'gondola', alto: 0.27, ancho: 0.25, profundidad: 0.20 },
+        { archivo: '/modelos/SabritasLimon.glb', nombre: 'Sabritas Lim?n', categoria: 'Snacks', tipo: 'gondola', alto: 0.27, ancho: 0.25, profundidad: 0.20 },
+        { archivo: '/modelos/cereal.glb', nombre: 'Cereal', categoria: 'Cereales', tipo: 'gondola', alto: 0.38, ancho: 0.30, profundidad: 0.24 },
+        { archivo: '/modelos/cereal2.glb', nombre: 'Cereal 2', categoria: 'Cereales', tipo: 'gondola', alto: 0.38, ancho: 0.30, profundidad: 0.24 },
+        { archivo: '/modelos/galletas.glb', nombre: 'Galletas', categoria: 'Panaderia', tipo: 'gondola', alto: 0.28, ancho: 0.30, profundidad: 0.24 },
+        { archivo: '/modelos/bebidas.glb', nombre: 'Bebidas', categoria: 'Bebidas', tipo: 'gondola', alto: 0.34, ancho: 0.32, profundidad: 0.28 },
+
+        { archivo: '/modelos/Agua.glb', nombre: 'Agua', categoria: 'Bebidas', tipo: 'refrigerador', refrigerador: 0, nivel: 0, alto: 0.43, ancho: 0.25, profundidad: 0.25 },
+        { archivo: '/modelos/Lala.glb', nombre: 'Lala', categoria: 'Lacteos', tipo: 'refrigerador', refrigerador: 1, nivel: 1, alto: 0.38, ancho: 0.30, profundidad: 0.26 },
+        { archivo: '/modelos/Pepsi. y coca.glb', nombre: 'Pepsi y Coca', categoria: 'Bebidas', tipo: 'refrigerador', refrigerador: 2, nivel: 0, alto: 0.42, ancho: 0.28, profundidad: 0.25 },
+        { archivo: '/modelos/Pepsi.glb', nombre: 'Pepsi', categoria: 'Bebidas', tipo: 'refrigerador', refrigerador: 3, nivel: 0, alto: 0.42, ancho: 0.24, profundidad: 0.24 },
+        { archivo: '/modelos/SantaClara.glb', nombre: 'Santa Clara', categoria: 'Lacteos', tipo: 'refrigerador', refrigerador: 4, nivel: 1, alto: 0.38, ancho: 0.30, profundidad: 0.26 },
+        { archivo: '/modelos/cocacola.glb', nombre: 'Coca-Cola', categoria: 'Bebidas', tipo: 'refrigerador', refrigerador: 5, nivel: 0, alto: 0.42, ancho: 0.24, profundidad: 0.24 },
+        { archivo: '/modelos/nesquik.glb', nombre: 'Nesquik', categoria: 'Lacteos', tipo: 'refrigerador', refrigerador: 6, nivel: 1, alto: 0.38, ancho: 0.30, profundidad: 0.26 },
+
+        { archivo: '/modelos/Brocoli.glb', nombre: 'Brocoli', categoria: 'Frutas y verduras', tipo: 'mesa', mesa: 0, alto: 0.28, ancho: 0.30, profundidad: 0.28 },
+        { archivo: '/modelos/Elote.glb', nombre: 'Elote', categoria: 'Frutas y verduras', tipo: 'mesa', mesa: 0, alto: 0.30, ancho: 0.24, profundidad: 0.24 },
+        { archivo: '/modelos/Limon.glb', nombre: 'Limon', categoria: 'Frutas y verduras', tipo: 'mesa', mesa: 0, alto: 0.20, ancho: 0.20, profundidad: 0.20 },
+        { archivo: '/modelos/Jalape\\u00f1o.glb', nombre: 'Jalapeno', categoria: 'Frutas y verduras', tipo: 'mesa', mesa: 2, alto: 0.20, ancho: 0.20, profundidad: 0.20 },
+        { archivo: '/modelos/Mazana.glb', nombre: 'Manzana', categoria: 'Frutas y verduras', tipo: 'mesa', mesa: 2, alto: 0.22, ancho: 0.22, profundidad: 0.22 },
+        { archivo: '/modelos/Pepino.glb', nombre: 'Pepino', categoria: 'Frutas y verduras', tipo: 'mesa', mesa: 2, alto: 0.28, ancho: 0.22, profundidad: 0.22 },
+        { archivo: '/modelos/Pera.glb', nombre: 'Pera', categoria: 'Frutas y verduras', tipo: 'mesa', mesa: 3, alto: 0.22, ancho: 0.22, profundidad: 0.22 },
+        { archivo: '/modelos/Uvas.glb', nombre: 'Uvas', categoria: 'Frutas y verduras', tipo: 'mesa', mesa: 3, alto: 0.24, ancho: 0.28, profundidad: 0.24 },
+
+        { archivo: '/modelos/cloro_liquido.glb', nombre: 'Cloro liquido', categoria: 'Limpieza', tipo: 'higiene', alto: 0.38, ancho: 0.28, profundidad: 0.25 },
+        { archivo: '/modelos/detergente_liquido.glb', nombre: 'Detergente liquido', categoria: 'Limpieza', tipo: 'higiene', alto: 0.38, ancho: 0.28, profundidad: 0.25 },
+        { archivo: '/modelos/detergente_liquido1.glb', nombre: 'Detergente liquido 2', categoria: 'Limpieza', tipo: 'higiene', alto: 0.38, ancho: 0.28, profundidad: 0.25 },
+        { archivo: '/modelos/limpiador_multiusos.glb', nombre: 'Limpiador multiusos', categoria: 'Limpieza', tipo: 'higiene', alto: 0.36, ancho: 0.28, profundidad: 0.25 },
+        { archivo: '/modelos/papel.glb', nombre: 'Papel', categoria: 'Higiene', tipo: 'higiene', alto: 0.34, ancho: 0.30, profundidad: 0.28 },
+        { archivo: '/modelos/suavizante_liquido.glb', nombre: 'Suavizante', categoria: 'Limpieza', tipo: 'higiene', alto: 0.38, ancho: 0.28, profundidad: 0.25 },
+        { archivo: '/modelos/toallitas_bebe.glb', nombre: 'Toallitas para bebe', categoria: 'Higiene', tipo: 'higiene', alto: 0.28, ancho: 0.30, profundidad: 0.24 },
+
+        { archivo: '/modelos/Filete.glb', nombre: 'Filete', categoria: 'Carniceria', tipo: 'mostrador', alto: 0.24, ancho: 0.32, profundidad: 0.28 },
+        { archivo: '/modelos/Pollo.glb', nombre: 'Pollo', categoria: 'Carniceria', tipo: 'mostrador', alto: 0.28, ancho: 0.34, profundidad: 0.30 },
+
+        { archivo: '/modelos/Blusa.glb', nombre: 'Blusa', categoria: 'Ropa', tipo: 'ropa', alto: 0.72, ancho: 0.42, profundidad: 0.24 },
+        { archivo: '/modelos/SudaderaNegra.glb', nombre: 'Sudadera negra', categoria: 'Ropa', tipo: 'ropa', alto: 0.72, ancho: 0.42, profundidad: 0.24 },
+        { archivo: '/modelos/camisaAzul.glb', nombre: 'Camisa azul', categoria: 'Ropa', tipo: 'ropa', alto: 0.72, ancho: 0.42, profundidad: 0.24 },
+        { archivo: '/modelos/chamarranegra.glb', nombre: 'Chamarra negra', categoria: 'Ropa', tipo: 'ropa', alto: 0.72, ancho: 0.42, profundidad: 0.24 },
+        { archivo: '/modelos/pantalomezclilla.glb', nombre: 'Pantalon de mezclilla', categoria: 'Ropa', tipo: 'ropa', alto: 0.72, ancho: 0.42, profundidad: 0.24 },
+        { archivo: '/modelos/sudaderaroja.glb', nombre: 'Sudadera roja', categoria: 'Ropa', tipo: 'ropa', alto: 0.72, ancho: 0.42, profundidad: 0.24 },
+        { archivo: '/modelos/vesitdo.glb', nombre: 'Vestido', categoria: 'Ropa', tipo: 'ropa', alto: 0.72, ancho: 0.42, profundidad: 0.24 }
     ];
 
+    let siguientePerchero = 0;
+    let siguienteMostrador = 0;
+
+    function obtenerUbicacion(catalogo) {
+        if (catalogo.tipo === 'gondola') {
+            return obtenerFilaGondola();
+        }
+
+        if (catalogo.tipo === 'mesa') {
+            return obtenerPosicionesMesa(catalogo.mesa);
+        }
+
+        if (catalogo.tipo === 'refrigerador') {
+            return obtenerPosicionesRefrigerador(
+                catalogo.refrigerador,
+                catalogo.nivel
+            );
+        }
+
+        if (catalogo.tipo === 'higiene') {
+            return obtenerPosicionesHigiene();
+        }
+
+        if (catalogo.tipo === 'mostrador') {
+            const indice = siguienteMostrador++;
+            const offsets = indice === 0
+                ? [-1.0, -0.5, 0]
+                : [0.5, 1.0, 1.25];
+
+            return {
+                idRack: 'Mostrador_carniceria',
+                posiciones: offsets.map((offsetX) => ({
+                    x: 25.1 + offsetX,
+                    y: 1.26,
+                    z: -7.3
+                }))
+            };
+        }
+
+        const percheros = [
+            { x: -25.7, z: -4, rack: 'Perchero_ropa_01' },
+            { x: -25.7, z: 2, rack: 'Perchero_ropa_02' },
+            { x: -25.7, z: 8, rack: 'Perchero_ropa_03' }
+        ];
+        const indice = siguientePerchero++;
+        const indicePerchero = indice < 2 ? 0 : indice < 4 ? 1 : 2;
+        const articuloEnPerchero = indicePerchero === 0
+            ? indice
+            : indicePerchero === 1
+                ? indice - 2
+                : indice - 4;
+        const percha = percheros[indicePerchero];
+        const offsetsPorPerchero = [
+            [[-0.9, -0.3], [0.3, 0.9]],
+            [[-0.9, -0.3], [0.3, 0.9]],
+            [[-1.1, -0.66], [-0.22, 0.22], [0.66, 1.1]]
+        ];
+        const offsets = offsetsPorPerchero[indicePerchero][articuloEnPerchero];
+
+        return {
+            idRack: percha.rack,
+            posiciones: offsets.map((offsetX) => ({
+                x: percha.x + offsetX,
+                y: 1.0,
+                z: percha.z
+            }))
+        };
+    }
+
     function colocarCatalogoProductos(catalogo) {
+        const ubicacion = obtenerUbicacion(catalogo);
+        const clave = catalogo.archivo
+            .split('/')
+            .pop()
+            .replace(/\.glb$/i, '')
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^A-Za-z0-9]/g, '')
+            .toUpperCase();
+
         cargarModelo(
             catalogo.archivo,
             catalogo.nombre,
             (original) => {
                 const fuentes = crearFuentesIndependientes(original);
 
-                if (!fuentes.length) {
-                    console.warn(
-                        `No se detectaron fuentes para ${catalogo.nombre}.`
-                    );
+                if (!fuentes.length || !ubicacion.posiciones.length) {
+                    console.warn(`No se pudo preparar ${catalogo.nombre} para su rack.`);
                     return;
                 }
 
-                catalogo.posiciones.forEach(({ x, z, y }, indice) => {
+                ubicacion.posiciones.forEach((posicion, indice) => {
                     const fuente = fuentes[indice % fuentes.length];
-
                     crearCopia(
                         fuente,
-                        `${catalogo.clave}_${indice + 1}`,
-                        x,
-                        y,
-                        z,
-                        catalogo.altura,
-                        catalogo.rotacion,
+                        `${clave}_${indice + 1}`,
+                        posicion.x,
+                        posicion.y,
+                        posicion.z,
+                        catalogo.alto,
+                        catalogo.rotacion ?? Math.PI / 2,
                         catalogo.categoria,
                         {
                             ancho: catalogo.ancho,
-                            profundidad: catalogo.profundidad
+                            profundidad: catalogo.profundidad,
+                            idRack: ubicacion.idRack
                         }
                     );
                 });
 
                 console.info(
-                    `📦 Se colocaron ${catalogo.posiciones.length} unidades de ${catalogo.nombre} en racks.`
+                    `Se colocaron ${ubicacion.posiciones.length} unidades de ${catalogo.nombre} en ${ubicacion.idRack}.`
                 );
             }
         );
