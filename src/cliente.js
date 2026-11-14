@@ -489,6 +489,14 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         quaternionPadreTemporal: new THREE.Quaternion()
     };
 
+    const animacionDeposito = {
+        preparada: false,
+        alturaProducto: 0,
+        centroDesdePalmaLocal: new THREE.Vector3(),
+        objetivoCentro: new THREE.Vector3(),
+        objetivoPalma: new THREE.Vector3()
+    };
+
     
     
     
@@ -1026,7 +1034,12 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         return true;
     }
 
-    function ajustarBrazoAlProducto(producto, correccion = 0) {
+    function ajustarBrazoAlProducto(
+        producto,
+        correccion = 0,
+        objetivoPalmaMundo = null,
+        progresoIK = null
+    ) {
         const hombro = rig.brazoDerecho;
         const codo = rig.antebrazoDerecho;
         const mano = rig.manoDerecha;
@@ -1149,12 +1162,18 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             )
         );
 
-        ikAgarre.objetivoContacto
-            .copy(ikAgarre.puntoContacto)
-            .addScaledVector(
-                ikAgarre.normalContacto,
-                distanciaContacto
+        if (objetivoPalmaMundo) {
+            ikAgarre.objetivoContacto.copy(
+                objetivoPalmaMundo
             );
+        } else {
+            ikAgarre.objetivoContacto
+                .copy(ikAgarre.puntoContacto)
+                .addScaledVector(
+                    ikAgarre.normalContacto,
+                    distanciaContacto
+                );
+        }
 
         ikAgarre.offsetPalmaMundo
             .copy(ikAgarre.offsetPalmaLocal)
@@ -1176,9 +1195,11 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             0.88
         );
 
-        const pesoIK = suavizar(
-            limitar(progreso / progresoExtension, 0, 1)
-        );
+        const pesoIK = progresoIK === null
+            ? suavizar(
+                limitar(progreso / progresoExtension, 0, 1)
+            )
+            : suavizar(limitar(progresoIK, 0, 1));
 
         if (pesoIK <= 0.0001) return false;
 
@@ -1327,7 +1348,12 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         grupo.updateMatrixWorld(true);
 
         if (correccion === 0) {
-            return ajustarBrazoAlProducto(producto, 1);
+            return ajustarBrazoAlProducto(
+                producto,
+                1,
+                objetivoPalmaMundo,
+                progresoIK
+            );
         }
 
         return true;
@@ -1409,6 +1435,96 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     
     
 
+    function prepararDepositoProducto() {
+        const producto = productoEnMano;
+        const mano = rig.manoDerecha;
+
+        if (
+            !producto ||
+            !mano ||
+            typeof config.carrito?.obtenerPuntoDeposito !== 'function'
+        ) {
+            return false;
+        }
+
+        grupo.updateMatrixWorld(true);
+        mano.updateMatrixWorld(true);
+        producto.updateMatrixWorld(true);
+
+        cajaTemporal.setFromObject(producto);
+
+        if (cajaTemporal.isEmpty()) return false;
+
+        cajaTemporal.getCenter(vectorTemporal);
+        cajaTemporal.getSize(tamanoTemporal);
+        mano.worldToLocal(vectorTemporal);
+
+        animacionDeposito.centroDesdePalmaLocal
+            .copy(vectorTemporal)
+            .sub(ikAgarre.offsetPalmaLocal);
+        animacionDeposito.alturaProducto = tamanoTemporal.y;
+        animacionDeposito.preparada = true;
+
+        return true;
+    }
+
+    function animarDepositoProducto() {
+        const producto = productoEnMano;
+        const mano = rig.manoDerecha;
+
+        if (!producto || !mano) return false;
+
+        if (
+            !animacionDeposito.preparada &&
+            !prepararDepositoProducto()
+        ) {
+            return false;
+        }
+
+        const puntoDeposito =
+            config.carrito?.obtenerPuntoDeposito?.();
+
+        if (
+            !puntoDeposito?.isVector3 ||
+            !Number.isFinite(puntoDeposito.x) ||
+            !Number.isFinite(puntoDeposito.y) ||
+            !Number.isFinite(puntoDeposito.z)
+        ) {
+            return false;
+        }
+
+        grupo.updateMatrixWorld(true);
+        mano.getWorldPosition(ikAgarre.muneca);
+
+        animacionDeposito.objetivoCentro
+            .copy(puntoDeposito)
+            .y += animacionDeposito.alturaProducto / 2;
+
+        ikAgarre.offsetPalmaMundo
+            .copy(animacionDeposito.centroDesdePalmaLocal)
+            .applyMatrix4(mano.matrixWorld)
+            .sub(ikAgarre.muneca);
+
+        animacionDeposito.objetivoPalma
+            .copy(animacionDeposito.objetivoCentro)
+            .sub(ikAgarre.offsetPalmaMundo);
+
+        const progreso = suavizar(
+            limitar(
+                tiempoEstado / Math.max(config.tiempoGuardar, 0.01),
+                0,
+                1
+            )
+        );
+
+        return ajustarBrazoAlProducto(
+            producto,
+            0,
+            animacionDeposito.objetivoPalma,
+            progreso
+        );
+    }
+
     function animarGuardarProcedural() {
         const progreso = limitar(tiempoEstado / Math.max(config.tiempoGuardar, 0.01), 0, 1);
         const bajar = suavizar(limitar(progreso / 0.72, 0, 1));
@@ -1430,6 +1546,8 @@ export function crearClienteSupermercado(scene, opciones = {}) {
         aplicarRotacionEuler(rig.torso, 0.08 + bajar * 0.16, 0, -0.025);
         aplicarRotacionEuler(rig.cabeza, 0.14 + bajar * 0.10,
             -0.08, Math.sin(tiempoEstado * 2.3) * 0.02);
+
+        animarDepositoProducto();
     }
 
     
@@ -1831,6 +1949,10 @@ export function crearClienteSupermercado(scene, opciones = {}) {
 
         estado = nuevoEstado;
         tiempoEstado = 0;
+
+        if (nuevoEstado !== ESTADOS.GUARDANDO) {
+            animacionDeposito.preparada = false;
+        }
 
         if (
             nuevoEstado !== ESTADOS.INSPECCIONANDO &&
@@ -3358,6 +3480,8 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     
 
     function guardarProducto() {
+        animacionDeposito.preparada = false;
+
         if (!productoEnMano) {
             liberarReserva();
             cambiarEstado(ESTADOS.BUSCANDO);
