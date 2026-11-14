@@ -330,7 +330,7 @@ export function crearProductosLacteos(scene) {
         }
 
         const dimensionMaximaEstandar =
-            categoria === 'Ropa' ? 0.46 : 0.32;
+            categoria === 'Ropa' ? 0.52 : 0.32;
         const escala = dimensionMaximaEstandar / Math.max(
             dimensionesRotadas.x,
             dimensionesRotadas.y,
@@ -532,7 +532,7 @@ export function crearProductosLacteos(scene) {
             idRack: `Gondola_${String(indiceGondola + 1).padStart(2, '0')}_Lado_${lado}`,
             rotacionY: lado * Math.PI / 2,
             posiciones: offsetsZGondola.map((offsetZ) => ({
-                x: centroX + lado * 0.30,
+                x: centroX + lado * 0.40,
                 y: nivelesGondola[nivel],
                 z: centroZ + offsetZ
             }))
@@ -546,9 +546,10 @@ export function crearProductosLacteos(scene) {
         { x: -21.7, z: 10.8, rack: 'Mesa_frescos_04' }
     ];
     const offsetsMesaFrutas = [
-        [-0.9, -0.42], [-0.3, -0.42], [0.3, -0.42], [0.9, -0.42],
-        [-0.9, 0], [-0.3, 0], [0.3, 0], [0.9, 0],
-        [-0.9, 0.42], [-0.3, 0.42], [0.3, 0.42], [0.9, 0.42]
+        [-1.0, -0.55], [-0.6, -0.55], [-0.2, -0.55],
+        [0.2, -0.55], [0.6, -0.55], [1.0, -0.55],
+        [-1.0, 0.55], [-0.6, 0.55], [-0.2, 0.55],
+        [0.2, 0.55], [0.6, 0.55], [1.0, 0.55]
     ];
     const usoMesasFrutas = new Map();
 
@@ -580,7 +581,7 @@ export function crearProductosLacteos(scene) {
             posiciones: offsetsXRefrigerador.map((offsetX) => ({
                 x: x + offsetX,
                 y: nivelesRefrigerador[nivel],
-                z: -26.5 + 0.18
+                z: -26.5 + 0.30
             }))
         };
     }
