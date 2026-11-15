@@ -838,59 +838,99 @@ console.log('[HUESO]', obj.name, '=>', normalizarNombre(obj.name));
         };
     }
 
-    function seleccionarBrazoAgarre(producto) {
-        ladoAgarre = 'derecho';
+function seleccionarBrazoAgarre(producto) {
+    if (!producto) return false;
 
-        if (!producto) return false;
+    producto.updateMatrixWorld(true);
+    grupo.updateMatrixWorld(true);
+    cajaTemporal.setFromObject(producto);
 
-        producto.updateMatrixWorld(true);
-        grupo.updateMatrixWorld(true);
-        cajaTemporal.setFromObject(producto);
+    if (cajaTemporal.isEmpty()) return false;
 
-        if (cajaTemporal.isEmpty()) return false;
+    const brazoDerecho = obtenerRigBrazo('derecho');
+    const brazoIzquierdo = obtenerRigBrazo('izquierdo');
 
-        const brazoDerecho = obtenerRigBrazo('derecho');
-        const brazoIzquierdo = obtenerRigBrazo('izquierdo');
-        const alcanceDerecho = medirAlcanceBrazo(
-            brazoDerecho,
-            cajaTemporal
-        );
-        const alcanceIzquierdo = medirAlcanceBrazo(
-            brazoIzquierdo,
-            cajaTemporal
-        );
+    const alcanceDerecho = medirAlcanceBrazo(
+        brazoDerecho,
+        cajaTemporal
+    );
 
-        if (!alcanceDerecho && !alcanceIzquierdo) {
-            return false;
+    const alcanceIzquierdo = medirAlcanceBrazo(
+        brazoIzquierdo,
+        cajaTemporal
+    );
+
+    const candidatos = [
+        {
+            lado: 'derecho',
+            alcance: alcanceDerecho
+        },
+        {
+            lado: 'izquierdo',
+            alcance: alcanceIzquierdo
+        }
+    ].filter(candidato =>
+        candidato.alcance &&
+        candidato.alcance.contacto
+    );
+
+    if (!candidatos.length) return false;
+
+    candidatos.sort((a, b) => {
+        if (
+            a.alcance.alcanzable !==
+            b.alcance.alcanzable
+        ) {
+            return a.alcance.alcanzable ? -1 : 1;
         }
 
-        if (!alcanceDerecho) {
-            ladoAgarre = 'izquierdo';
-        } else if (
-            !alcanceDerecho.alcanzable &&
-            alcanceIzquierdo?.alcanzable
+        if (
+            Math.abs(
+                a.alcance.deficit - b.alcance.deficit
+            ) > 0.001
         ) {
-            ladoAgarre = 'izquierdo';
-        } else if (
-            !alcanceDerecho.alcanzable &&
-            alcanceIzquierdo &&
-            alcanceIzquierdo.deficit < alcanceDerecho.deficit
-        ) {
-            ladoAgarre = 'izquierdo';
-        } else {
-            ladoAgarre = 'derecho';
+            return a.alcance.deficit -
+                b.alcance.deficit;
         }
 
-        const distancia = ladoAgarre === 'izquierdo'
-            ? alcanceIzquierdo?.distanciaMano
-            : alcanceDerecho.distanciaMano;
+        return a.alcance.distanciaMano -
+            b.alcance.distanciaMano;
+    });
 
-        console.info(
-            `[CLIENTE ${id}] Usará la mano ${ladoAgarre} para recoger el producto (${distancia?.toFixed(2) ?? 'N/D'} m).`
-        );
+    const elegido = candidatos[0];
 
-        return true;
+    ladoAgarre = elegido.lado;
+
+    // Guardar el producto y el punto exacto seleccionado.
+    if (!ikAgarre.puntoContactoFijado) {
+        ikAgarre.puntoContactoFijado =
+            new THREE.Vector3();
     }
+
+    ikAgarre.puntoContactoFijado.copy(
+        elegido.alcance.contacto
+    );
+
+    ikAgarre.productoContactoFijado = producto;
+
+    console.info(
+        `[CLIENTE ${id}] Usará la mano ${ladoAgarre}.`,
+        {
+            distanciaMano: Number(
+                elegido.alcance.distanciaMano.toFixed(3)
+            ),
+            alcanzable: elegido.alcance.alcanzable,
+            deficit: Number(
+                elegido.alcance.deficit.toFixed(3)
+            ),
+            contacto: ikAgarre.puntoContactoFijado.toArray()
+                .map(v => Number(v.toFixed(3)))
+        }
+    );
+
+    return true;
+}
+
 
     function cancelarReubicacion() {
         const origen = productoOriginal?.origen;
@@ -1441,44 +1481,57 @@ function ajustarBrazoAlProducto(
 
     cajaAgarreProducto.getCenter(ikAgarre.centroProducto);
 
-    const puntoManual = producto.userData?.puntoAgarreLocal;
+const puntoManual = producto.userData?.puntoAgarreLocal;
 
-    if (
-        puntoManual &&
-        Number.isFinite(puntoManual.x) &&
-        Number.isFinite(puntoManual.y) &&
-        Number.isFinite(puntoManual.z)
-    ) {
-        ikAgarre.puntoContacto.set(
-            puntoManual.x,
-            puntoManual.y,
-            puntoManual.z
-        );
+if (
+    puntoManual &&
+    Number.isFinite(puntoManual.x) &&
+    Number.isFinite(puntoManual.y) &&
+    Number.isFinite(puntoManual.z)
+) {
+    // Respetar puntos de agarre definidos manualmente.
+    ikAgarre.puntoContacto.set(
+        puntoManual.x,
+        puntoManual.y,
+        puntoManual.z
+    );
 
-        producto.localToWorld(ikAgarre.puntoContacto);
+    producto.localToWorld(ikAgarre.puntoContacto);
+
+} else if (
+    ikAgarre.productoContactoFijado === producto &&
+    ikAgarre.puntoContactoFijado
+) {
+    // Reutilizar exactamente el punto seleccionado
+    // al terminar el acercamiento al producto.
+    ikAgarre.puntoContacto.copy(
+        ikAgarre.puntoContactoFijado
+    );
+
+} else {
+    // Respaldo para productos sin selección previa.
+    const diferenciaX =
+        ikAgarre.muneca.x - ikAgarre.centroProducto.x;
+
+    const diferenciaZ =
+        ikAgarre.muneca.z - ikAgarre.centroProducto.z;
+
+    ikAgarre.puntoContacto.copy(
+        ikAgarre.centroProducto
+    );
+
+    if (Math.abs(diferenciaX) > Math.abs(diferenciaZ)) {
+        ikAgarre.puntoContacto.x =
+            diferenciaX >= 0
+                ? cajaAgarreProducto.max.x
+                : cajaAgarreProducto.min.x;
     } else {
-        const diferenciaX =
-            ikAgarre.muneca.x - ikAgarre.centroProducto.x;
-
-        const diferenciaZ =
-            ikAgarre.muneca.z - ikAgarre.centroProducto.z;
-
-        ikAgarre.puntoContacto.copy(
-            ikAgarre.centroProducto
-        );
-
-        if (Math.abs(diferenciaX) > Math.abs(diferenciaZ)) {
-            ikAgarre.puntoContacto.x =
-                diferenciaX >= 0
-                    ? cajaAgarreProducto.max.x
-                    : cajaAgarreProducto.min.x;
-        } else {
-            ikAgarre.puntoContacto.z =
-                diferenciaZ >= 0
-                    ? cajaAgarreProducto.max.z
-                    : cajaAgarreProducto.min.z;
-        }
+        ikAgarre.puntoContacto.z =
+            diferenciaZ >= 0
+                ? cajaAgarreProducto.max.z
+                : cajaAgarreProducto.min.z;
     }
+}
 
     const normalManual = producto.userData?.normalAgarreLocal;
 
@@ -3613,7 +3666,7 @@ if (destino) {
     
  
 
-function tomarProducto() {
+function tomarProducto(agarreResuelto = false) {
     if (
         !productoObjetivo ||
         !productoDisponible(productoObjetivo)
@@ -3670,9 +3723,6 @@ function tomarProducto() {
     // Resolver por última vez la posición del brazo
     // respecto al punto real de contacto.
 
-const agarreResuelto =
-    ajustarBrazoAlProducto(producto);
-
 if (!agarreResuelto) {
     console.warn(
         `[CLIENTE ${id}] No se pudo resolver el contacto del producto.`
@@ -3694,6 +3744,49 @@ const palmaMundo = mano.localToWorld(
 const errorContacto = palmaMundo.distanceTo(
     ikAgarre.objetivoContacto
 );
+
+grupo.updateMatrixWorld(true);
+mano.updateMatrixWorld(true);
+producto.updateMatrixWorld(true);
+
+const centroProductoDiagnostico = new THREE.Box3()
+    .setFromObject(producto)
+    .getCenter(new THREE.Vector3());
+
+const munecaDiagnostico = new THREE.Vector3();
+mano.getWorldPosition(munecaDiagnostico);
+
+console.log(`[DIAGNÓSTICO CONTACTO CLIENTE ${id}]`, {
+    errorContacto: Number(errorContacto.toFixed(3)),
+
+    palma: {
+        x: Number(palmaMundo.x.toFixed(3)),
+        y: Number(palmaMundo.y.toFixed(3)),
+        z: Number(palmaMundo.z.toFixed(3))
+    },
+
+    objetivoPalma: {
+        x: Number(ikAgarre.objetivoContacto.x.toFixed(3)),
+        y: Number(ikAgarre.objetivoContacto.y.toFixed(3)),
+        z: Number(ikAgarre.objetivoContacto.z.toFixed(3))
+    },
+
+    muneca: {
+        x: Number(munecaDiagnostico.x.toFixed(3)),
+        y: Number(munecaDiagnostico.y.toFixed(3)),
+        z: Number(munecaDiagnostico.z.toFixed(3))
+    },
+
+    centroProducto: {
+        x: Number(centroProductoDiagnostico.x.toFixed(3)),
+        y: Number(centroProductoDiagnostico.y.toFixed(3)),
+        z: Number(centroProductoDiagnostico.z.toFixed(3))
+    },
+
+    distanciaPalmaProducto: Number(
+        palmaMundo.distanceTo(centroProductoDiagnostico).toFixed(3)
+    )
+});
 
 const toleranciaContacto = limitar(
     numero(config.toleranciaContactoProducto, 0.10),
@@ -5051,26 +5144,21 @@ function devolverProductoAlEstante() {
 
             
             
-            
+case ESTADOS.RECOGIENDO: {
+    animarRecogerProcedural();
 
-            case ESTADOS.RECOGIENDO: {
-                animarRecogerProcedural();
-                ajustarBrazoAlProducto(productoObjetivo);
+    const agarreResuelto =
+        ajustarBrazoAlProducto(productoObjetivo);
 
-                if (
-                    tiempoEstado >=
-                    Math.max(numero(config.tiempoRecoger, 1.1), 0.01)
-                ) {
-                    tomarProducto();
-                }
+    if (
+        tiempoEstado >=
+        Math.max(numero(config.tiempoRecoger, 1.1), 0.01)
+    ) {
+        tomarProducto(agarreResuelto);
+    }
 
-                break;
-            }
-
-            
-            
-            
-
+    break;
+}    
             case ESTADOS.INSPECCIONANDO: {
                 animarInspeccionarProcedural();
 if (productoEnMano) {
