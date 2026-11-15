@@ -5169,38 +5169,41 @@ function devolverProductoAlEstante() {
             }
 
             
-            
+    
 case ESTADOS.RECOGIENDO: {
-    console.log(
-    `[PRUEBA RECOGIDA CLIENTE ${id}]`,
-    {
-        estado: estadoActual,
-        producto: productoObjetivo?.userData?.nombre ??
-            productoObjetivo?.name,
-        tiempoEstado: Number(tiempoEstado.toFixed(2))
-    }
-);
     animarRecogerProcedural();
-const agarreResuelto =
-    ajustarBrazoAlProducto(productoObjetivo);
 
-if (
-    tiempoEstado >=
-    Math.max(numero(config.tiempoRecoger, 1.1), 0.01)
-) {
+    const agarreResuelto =
+        ajustarBrazoAlProducto(productoObjetivo);
+
     console.log(
-        `[PRUEBA LLAMADA TOMAR PRODUCTO ${id}]`,
+        `[PRUEBA RECOGIDA CLIENTE ${id}]`,
         {
+            producto: productoObjetivo?.userData?.nombre ??
+                productoObjetivo?.name,
             agarreResuelto,
             tiempoEstado: Number(tiempoEstado.toFixed(2))
         }
     );
 
-    tomarProducto(agarreResuelto);
-}
+    if (
+        tiempoEstado >=
+        Math.max(numero(config.tiempoRecoger, 1.1), 0.01)
+    ) {
+        console.log(
+            `[PRUEBA LLAMADA TOMAR PRODUCTO ${id}]`,
+            {
+                agarreResuelto,
+                tiempoEstado: Number(tiempoEstado.toFixed(2))
+            }
+        );
+
+        tomarProducto(agarreResuelto);
+    }
 
     break;
-}    
+}
+
             case ESTADOS.INSPECCIONANDO: {
                 animarInspeccionarProcedural();
 if (productoEnMano) {
