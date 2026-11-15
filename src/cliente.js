@@ -3738,11 +3738,11 @@ function recuperarMovimiento(forzar = false) {
     }
 
 
+
 function obtenerPuntoFrenteProducto(producto) {
     if (!producto) return null;
 
     producto.updateMatrixWorld(true);
-
     cajaTemporal.setFromObject(producto);
 
     if (cajaTemporal.isEmpty()) return null;
@@ -3750,85 +3750,78 @@ function obtenerPuntoFrenteProducto(producto) {
     cajaTemporal.getCenter(vectorTemporal2);
     cajaTemporal.getSize(tamanoTemporal);
 
-    const centroX = vectorTemporal2.x;
-    const centroZ = vectorTemporal2.z;
+    const cx = vectorTemporal2.x;
+    const cz = vectorTemporal2.z;
 
-    const mitadX = tamanoTemporal.x * 0.5;
-    const mitadZ = tamanoTemporal.z * 0.5;
+    const hx = tamanoTemporal.x * 0.5;
+    const hz = tamanoTemporal.z * 0.5;
 
-    // Distancia corta desde la superficie del producto.
-    const separacion = 0.12;
+    const separaciones = [0.18, 0.25, 0.35, 0.45, 0.55];
+
+    const lados = [
+        { x: 1, z: 0 },
+        { x: -1, z: 0 },
+        { x: 0, z: 1 },
+        { x: 0, z: -1 }
+    ];
 
     const candidatos = [];
 
-    // Buscamos alrededor de todo el producto.
-    for (
-        let angulo = 0;
-        angulo < Math.PI * 2;
-        angulo += Math.PI / 48
-    ) {
-        const dx = Math.cos(angulo);
-        const dz = Math.sin(angulo);
+    for (const lado of lados) {
+        const borde = lado.x !== 0 ? hx : hz;
 
-        // Intersección del rayo con el rectángulo
-        // que representa las dimensiones del producto.
-        const escalaX = Math.abs(dx) > 0.0001
-            ? mitadX / Math.abs(dx)
-            : Infinity;
+        for (const separacion of separaciones) {
+            const x = cx + lado.x * (borde + separacion);
+            const z = cz + lado.z * (borde + separacion);
 
-        const escalaZ = Math.abs(dz) > 0.0001
-            ? mitadZ / Math.abs(dz)
-            : Infinity;
+            // Comprobamos límites y obstáculos.
+            if (
+                x < -config.limiteX ||
+                x > config.limiteX ||
+                z < config.limiteZMin ||
+                z > config.limiteZMax
+            ) {
+                continue;
+            }
 
-        const distanciaBorde = Math.min(
-            escalaX,
-            escalaZ
-        );
+            if (!puntoLibre(x, z, producto)) continue;
 
-        const x =
-            centroX +
-            dx * (distanciaBorde + separacion);
+            const destino = { x, z };
 
-        const z =
-            centroZ +
-            dz * (distanciaBorde + separacion);
-
-        // Comprobamos que el punto sea transitable.
-        if (!puntoLibre(x, z, producto)) continue;
-
-        const destino = { x, z };
-
-        const camino = encontrarCamino(
-            grupo.position,
-            destino
-        );
-
-        if (!camino || !camino.length) continue;
-
-        candidatos.push({
-            x,
-            z,
-            distancia: distanciaXZ(
+            const camino = encontrarCamino(
                 grupo.position,
                 destino
-            ),
-            separacion
-        });
+            );
+
+            if (!camino || !camino.length) continue;
+
+            candidatos.push({
+                x,
+                z,
+                recorrido: distanciaXZ(grupo.position, destino),
+                separacion
+            });
+        }
     }
 
-    if (!candidatos.length) {
+    if (candidatos.length === 0) {
         return null;
     }
 
-    candidatos.sort(
-        (a, b) => a.distancia - b.distancia
-    );
+    candidatos.sort((a, b) => {
+        if (Math.abs(a.separacion - b.separacion) > 0.001) {
+            return a.separacion - b.separacion;
+        }
+
+        return a.recorrido - b.recorrido;
+    });
 
     return {
         x: candidatos[0].x,
         z: candidatos[0].z
     };
 }
+
 
 
     function acercarseAProducto(producto) {
