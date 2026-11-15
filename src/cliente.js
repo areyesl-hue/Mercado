@@ -31,10 +31,10 @@ const CONFIG_BASE = {
     modelo: '/modelos/Cliente2.glb',
     posicion: { x: 0, y: 0, z: 20 },
 
-    altura: 1.75,
+    altura: 1.05,
     escala: 1,
 
-    velocidad: 1.95,
+    velocidad: 2.25,
     velocidadEntrada: 2.05,
     velocidadRegreso: 2.05,
 
@@ -53,15 +53,15 @@ const CONFIG_BASE = {
     puertaZExterior: 31.5,
 
     probabilidadCompra: 0.85,
-    probabilidadDejarEnOtroRack: 0.22,
+    probabilidadDejarEnOtroRack: 0.32,
 
     distanciaProducto: 0.30,
     distanciaFrenteProducto: 1.0,
-    distanciaContactoMano: 0.003,
+    distanciaContactoMano: 0.009,
 
     tiempoRecoger: 1.1,
     progresoContactoProducto: 0.78,
-    tiempoInspeccionar: 2.2,
+    tiempoInspeccionar: 2.5,
     tiempoGuardar: 1.4,
     tiempoDevolver: 1.4,
     tiempoPago: 3.0,
