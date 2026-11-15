@@ -12,6 +12,7 @@ const CONFIG_DEFAULT = {
     posicion: { x: 0, y: 0, z: 0 },
     escala: 1,
     distancia: 0.25,
+    desplazamientoLateral: 0.85,
     suavizado: 9,
     velocidadMaxima: 5,
     correccionModelo: Math.PI,
@@ -95,6 +96,7 @@ export function crearCarrito(scene, opciones = {}) {
         siguiendo: false,
         objetivo: null,
         distancia: config.distancia,
+        desplazamientoLateral: 0,
         productos: [],
         baseCestaLocal: null
     };
@@ -653,28 +655,37 @@ export function crearCarrito(scene, opciones = {}) {
     // SEGUIMIENTO DEL CLIENTE
     // ========================================================
 
-    function seguirObjetivo(
-        objetivo,
-        distancia = config.distancia
-    ) {
-        if (estado.eliminado) return false;
+function seguirObjetivo(
+    objetivo,
+    distancia = config.distancia,
+    desplazamientoLateral = 0
+) {
+    if (estado.eliminado) return false;
 
-        const objetivoReal = objetivo?.isObject3D
-            ? objetivo
-            : objetivo?.grupo;
+    const objetivoReal = objetivo?.isObject3D
+        ? objetivo
+        : objetivo?.grupo;
 
-        if (!objetivoReal?.isObject3D) {
-            console.warn('[CARRITO] Objetivo no válido.');
-            return false;
-        }
-
-        estado.objetivo = objetivoReal;
-        estado.distancia = Math.max(0.5, distancia);
-        estado.siguiendo = true;
-
-        return true;
+    if (!objetivoReal?.isObject3D) {
+        return false;
     }
 
+    estado.objetivo = objetivoReal;
+
+    estado.distancia = Math.max(
+        0.1,
+        distancia
+    );
+
+    estado.desplazamientoLateral =
+        Number.isFinite(desplazamientoLateral)
+            ? desplazamientoLateral
+            : 0;
+
+    estado.siguiendo = true;
+
+    return true;
+}
     function detenerSeguimiento() {
         estado.siguiendo = false;
         estado.objetivo = null;
@@ -735,60 +746,85 @@ export function crearCarrito(scene, opciones = {}) {
     const posicionDeseada = new THREE.Vector3();
     const haciaCliente = new THREE.Vector3();
 
-    function actualizar(delta) {
-        if (
-            estado.eliminado ||
-            !estado.siguiendo ||
-            !estado.objetivo
-        ) {
-            return;
-        }
-
-        const dt = Math.min(
-            Math.max(delta || 0, 0),
-            0.05
-        );
-
-        estado.objetivo.getWorldPosition(posicionObjetivo);
-
-        direccion.set(0, 0, 1);
-        estado.objetivo.getWorldDirection(direccion);
-        direccion.y = 0;
-
-        if (direccion.lengthSq() < 0.0001) {
-            direccion.set(0, 0, 1);
-        }
-
-        direccion.normalize();
-
-        posicionDeseada.copy(posicionObjetivo);
-
-        posicionDeseada.addScaledVector(
-            direccion,
-            estado.distancia * config.ladoDelante
-        );
-
-        posicionDeseada.y = config.posicion.y;
-
-        grupo.position.lerp(
-            posicionDeseada,
-            1 - Math.exp(-config.suavizado * dt)
-        );
-
-        haciaCliente.subVectors(
-            posicionObjetivo,
-            grupo.position
-        );
-
-        haciaCliente.y = 0;
-
-        if (haciaCliente.lengthSq() > 0.0001) {
-            grupo.rotation.y = Math.atan2(
-                haciaCliente.x,
-                haciaCliente.z
-            );
-        }
+function actualizar(delta) {
+    if (
+        estado.eliminado ||
+        !estado.siguiendo ||
+        !estado.objetivo
+    ) {
+        return;
     }
+
+    const dt = Math.min(
+        Math.max(delta || 0, 0),
+        0.05
+    );
+
+    estado.objetivo.getWorldPosition(
+        posicionObjetivo
+    );
+
+    // Dirección hacia donde mira el cliente.
+    direccion.set(0, 0, 1);
+
+    estado.objetivo.getWorldDirection(
+        direccion
+    );
+
+    direccion.y = 0;
+
+    if (direccion.lengthSq() < 0.0001) {
+        direccion.set(0, 0, 1);
+    }
+
+    direccion.normalize();
+
+    // Vector lateral derecho del cliente.
+    const lateral = new THREE.Vector3(
+        direccion.z,
+        0,
+        -direccion.x
+    ).normalize();
+
+    // Posición longitudinal.
+    posicionDeseada.copy(posicionObjetivo);
+
+    posicionDeseada.addScaledVector(
+        direccion,
+        estado.distancia * config.ladoDelante
+    );
+
+    // Desplazamiento hacia el lado de la mano utilizada.
+    posicionDeseada.addScaledVector(
+        lateral,
+        estado.desplazamientoLateral
+    );
+
+    posicionDeseada.y = config.posicion.y;
+
+    // Movimiento suave, sin teletransportes.
+    grupo.position.lerp(
+        posicionDeseada,
+        1 - Math.exp(
+            config.suavizado * -dt
+        )
+    );
+
+    // Orientar el carrito hacia el cliente.
+    haciaCliente.subVectors(
+        posicionObjetivo,
+        grupo.position
+    );
+
+    haciaCliente.y = 0;
+
+    if (haciaCliente.lengthSq() > 0.0001) {
+        grupo.rotation.y = Math.atan2(
+            haciaCliente.x,
+            haciaCliente.z
+        );
+    }
+}
 
     // ========================================================
     // POSICIÓN DE LOS PRODUCTOS
