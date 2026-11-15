@@ -4961,12 +4961,35 @@ function devolverProductoAlEstante() {
 if (productoEnMano) {
     const mano = obtenerRigBrazo()?.mano;
 
-    console.log(`[INSPECCION CLIENTE ${id}]`, {
-        unidoALaMano: productoEnMano.parent === mano,
-        producto: productoEnMano.position.toArray().map(
-            v => Number(v.toFixed(3))
-        )
-    });
+    if (mano) {
+        grupo.updateMatrixWorld(true);
+        mano.updateMatrixWorld(true);
+        productoEnMano.updateMatrixWorld(true);
+
+        const palma = mano.localToWorld(
+            ikAgarre.offsetPalmaLocal.clone()
+        );
+
+        const centroProducto = new THREE.Box3()
+            .setFromObject(productoEnMano)
+            .getCenter(new THREE.Vector3());
+
+        console.log(`[INSPECCION CLIENTE ${id}]`, {
+            unidoALaMano: productoEnMano.parent === mano,
+
+            distanciaPalmaCentro: Number(
+                palma.distanceTo(centroProducto).toFixed(3)
+            ),
+
+            palma: palma.toArray().map(
+                v => Number(v.toFixed(3))
+            ),
+
+            centroProducto: centroProducto.toArray().map(
+                v => Number(v.toFixed(3))
+            )
+        });
+    }
 }
                 if (
                     tiempoEstado >=
