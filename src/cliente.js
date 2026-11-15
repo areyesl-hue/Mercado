@@ -2666,30 +2666,54 @@ function actualizarSeguimientoCarrito() {
 
     if (!carrito) return;
 
-    const debeSeguir = [
+    const estadosSeguimiento = [
         ESTADOS.ENTRANDO,
         ESTADOS.ACERCANDO,
         ESTADOS.RUTA,
         ESTADOS.CAJA,
         ESTADOS.REGRESANDO
-    ].includes(estado);
+    ];
 
-    if (debeSeguir) {
-        carrito.seguirObjetivo?.(grupo);
-    } else if (carrito.siguiendo) {
+    const estadosJuntoAlCliente = [
+        ESTADOS.RECOGIENDO,
+        ESTADOS.INSPECCIONANDO
+    ];
 
-        // Guardar dónde quedó el cliente cuando
-        // el carrito deja de seguirlo.
-        posicionClienteAntesDeReubicar.copy(
-            grupo.position
+    // Seguimiento normal: detrás o delante del cliente,
+    // según la configuración que ya tienes.
+    if (estadosSeguimiento.includes(estado)) {
+        carrito.seguirObjetivo?.(
+            grupo,
+            0.25,
+            0
         );
 
-        tienePosicionClienteAntesDeReubicar = true;
+        return;
+    }
 
-        // Detener el carrito sin modificar su posición.
+    // Seguimiento lateral durante la interacción.
+    if (estadosJuntoAlCliente.includes(estado)) {
+
+        const desplazamiento =
+            ladoAgarre === 'derecho'
+                ? config.carrito.desplazamientoLateral
+                : -config.carrito.desplazamientoLateral;
+
+        carrito.seguirObjetivo?.(
+            grupo,
+            0.15,
+            desplazamiento
+        );
+
+        return;
+    }
+
+    // En otros estados, conservar la posición actual.
+    if (carrito.siguiendo) {
         carrito.detenerSeguimiento?.();
     }
 }
+
 function estaCaminando() {
     return [
         ESTADOS.ENTRANDO,
