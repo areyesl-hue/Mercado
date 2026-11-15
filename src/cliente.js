@@ -608,7 +608,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             if (!obj.isBone) return;
 
             huesos[normalizarNombre(obj.name)] = obj;
-
+console.log('[HUESO]', obj.name, '=>', normalizarNombre(obj.name));
             huesosBase.set(obj, {
                 quaternion: obj.quaternion.clone(),
                 posicion: obj.position.clone()
