@@ -3486,7 +3486,7 @@ function finalizarDevolucionProducto() {
 
     
     
-   
+ 
 function tomarProducto() {
     if (
         !productoObjetivo ||
@@ -3509,7 +3509,6 @@ function tomarProducto() {
     const tamanoProducto = new THREE.Vector3();
     cajaTemporal.getSize(tamanoProducto);
 
-    // Guardar la transformación original para poder devolverlo.
     productoOriginal = {
         parent: producto.parent,
         posicion: producto.position.clone(),
@@ -3528,13 +3527,11 @@ function tomarProducto() {
         );
 
         productoOriginal = null;
-
         liberarReserva();
         cambiarEstado(ESTADOS.BUSCANDO);
         return;
     }
 
-    // Orientar al cliente hacia el producto.
     producto.getWorldPosition(vectorTemporal);
 
     orientarHaciaPunto({
@@ -3543,28 +3540,121 @@ function tomarProducto() {
     });
 
     grupo.updateMatrixWorld(true);
+
+    // Resolver el punto real de contacto antes de transferir
+    // el producto a la mano.
+    const agarreResuelto =
+        ajustarBrazoAlProducto(producto);
+
+    const puntoSujecionLocal = agarreResuelto
+        ? ikAgarre.puntoContacto.clone()
+        : null;
+
+    const normalSujecion = agarreResuelto
+        ? ikAgarre.normalContacto.clone()
+        : null;
+
+    if (puntoSujecionLocal) {
+        producto.worldToLocal(puntoSujecionLocal);
+    }
+
+    // Conservar la transformación mundial al cambiar de padre.
     mano.updateMatrixWorld(true);
     producto.updateMatrixWorld(true);
 
-    // Transferir el producto a la mano conservando
-    // exactamente su transformación mundial.
     mano.attach(producto);
 
     mano.updateMatrixWorld(true);
     producto.updateMatrixWorld(true);
 
-    // No desplazar el producto manualmente.
-    // La mano ya conserva la posición mundial del producto.
-
     productoConCajaAgarre = null;
 
-    animacionAgarre.activa = false;
-    animacionAgarre.tiempo = 0;
+    // Guardar la posición local actual: esta será el inicio
+    // de la animación, sin ningún desplazamiento instantáneo.
+    animacionAgarre.posicionInicial.copy(
+        producto.position
+    );
+
+    animacionAgarre.quaternionInicial.copy(
+        producto.quaternion
+    );
+
+    animacionAgarre.escalaInicial.copy(
+        producto.scale
+    );
+
+    // Calcular la posición final del punto de agarre
+    // respecto a la palma.
+    animacionAgarre.posicionFinal.copy(
+        producto.position
+    );
+
+    if (puntoSujecionLocal && normalSujecion) {
+        mano.updateMatrixWorld(true);
+        producto.updateMatrixWorld(true);
+
+        const puntoPalmaMundo = mano.localToWorld(
+            ikAgarre.offsetPalmaLocal.clone()
+        );
+
+        const distanciaContacto = Math.max(
+            0,
+            numero(
+                producto.userData?.distanciaContactoMano,
+                config.distanciaContactoMano
+            )
+        );
+
+        puntoPalmaMundo.addScaledVector(
+            normalSujecion,
+            -distanciaContacto
+        );
+
+        // Convertir el objetivo mundial a coordenadas de la mano.
+        const puntoObjetivoEnMano = mano.worldToLocal(
+            puntoPalmaMundo.clone()
+        );
+
+        // Calcular cuánto se separa el punto de contacto
+        // del origen local del producto.
+        const desplazamientoContacto =
+            puntoSujecionLocal.clone()
+                .multiply(producto.scale)
+                .applyQuaternion(producto.quaternion);
+
+        // Posición necesaria para que el punto de contacto
+        // coincida con la palma.
+        animacionAgarre.posicionFinal.copy(
+            puntoObjetivoEnMano.sub(
+                desplazamientoContacto
+            )
+        );
+    }
+
+    // No modificar orientación ni escala durante el agarre.
+    animacionAgarre.quaternionFinal.copy(
+        producto.quaternion
+    );
+
+    animacionAgarre.escalaFinal.copy(
+        producto.scale
+    );
 
     producto.visible = true;
     productoEnMano = producto;
 
-    // Preparar la pose de agarre para la inspección.
+    // Iniciar el ajuste gradual hacia la palma.
+    animacionAgarre.tiempo = 0;
+
+    animacionAgarre.duracion = Math.max(
+        numero(config.tiempoAnimacionAgarre, 0.38),
+        0.05
+    );
+
+    animacionAgarre.activa =
+        !!puntoSujecionLocal && !!normalSujecion;
+
+    // Preparar la postura de inspección.
     poseAgarreInspeccion.huesos.length = 0;
 
     for (const [hueso] of huesosBase) {
@@ -3598,7 +3688,6 @@ function tomarProducto() {
         }.`
     );
 }
-
 
     function buscarUbicacionOtroRack(producto) {
         if (!producto || !productoOriginal) return null;
