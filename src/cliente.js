@@ -2718,7 +2718,6 @@ function finalizarDevolucionProducto() {
 function obtenerObstaculos() {
     const obstaculos = [];
 
-    // Primero utilizamos las colisiones calculadas del mobiliario.
     if (
         Array.isArray(config.colisiones) &&
         config.colisiones.length > 0
@@ -2769,14 +2768,17 @@ function obtenerObstaculos() {
                 x,
                 z,
                 ancho,
-                profundidad
+                profundidad,
+                origen: colision,
+                id: colision.id ?? null,
+                nombre: colision.nombre ?? colision.name ?? null,
+                rackId: colision.rackId ?? colision.idRack ?? null
             });
         }
 
         return obstaculos;
     }
 
-    // Solo como alternativa, recorremos los Mesh del mobiliario.
     if (config.mobiliario?.traverse) {
         config.mobiliario.updateMatrixWorld(true);
 
@@ -2808,7 +2810,14 @@ function obtenerObstaculos() {
                 x: vectorTemporal.x,
                 z: vectorTemporal.z,
                 ancho: tamanoTemporal.x,
-                profundidad: tamanoTemporal.z
+                profundidad: tamanoTemporal.z,
+                origen: obj,
+                id: obj.uuid,
+                nombre: obj.name,
+                rackId:
+                    obj.userData?.rackId ??
+                    obj.userData?.idRack ??
+                    null
             });
         });
     }
