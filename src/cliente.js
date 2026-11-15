@@ -3486,156 +3486,119 @@ function finalizarDevolucionProducto() {
 
     
     
-    
-
-    function tomarProducto() {
-        if (
-            !productoObjetivo ||
-            !productoDisponible(productoObjetivo)
-        ) {
-            liberarReserva();
-            cambiarEstado(ESTADOS.BUSCANDO);
-            return;
-        }
-
-        const producto = productoObjetivo;
-
-        producto.updateMatrixWorld(true);
-
-        productoEsInferior =
-            productoEstaEnEstanteInferior(producto);
-
-        cajaTemporal.setFromObject(producto);
-
-        const tamanoProducto = new THREE.Vector3();
-
-        cajaTemporal.getSize(tamanoProducto);
-
-        productoOriginal = {
-            parent: producto.parent,
-
-            posicion: producto.position.clone(),
-            quaternion: producto.quaternion.clone(),
-            escala: producto.scale.clone(),
-
-            visible: producto.visible,
-            tamanoMundo: tamanoProducto.clone()
-        };
-
-        const mano = obtenerRigBrazo().mano;
-
-        if (!mano) {
-            console.warn(
-                `[CLIENTE ${id}] No se encontró la mano seleccionada para agarrar.`
-            );
-
-            productoOriginal = null;
-
-            liberarReserva();
-            cambiarEstado(ESTADOS.BUSCANDO);
-
-            return;
-        }
-
-        producto.getWorldPosition(vectorTemporal);
-
-        orientarHaciaPunto({
-            x: vectorTemporal.x,
-            z: vectorTemporal.z
-        });
-
-        grupo.updateMatrixWorld(true);
-        const agarreResuelto = ajustarBrazoAlProducto(producto);
-        const puntoSujecionLocal = agarreResuelto
-            ? ikAgarre.puntoContacto.clone()
-            : null;
-        const normalSujecion = agarreResuelto
-            ? ikAgarre.normalContacto.clone()
-            : null;
-
-        if (puntoSujecionLocal) {
-            producto.worldToLocal(puntoSujecionLocal);
-        }
-
-        mano.updateMatrixWorld(true);
-        producto.updateMatrixWorld(true);
-
-        mano.attach(producto);
-
-        if (puntoSujecionLocal && normalSujecion) {
-            mano.updateMatrixWorld(true);
-            producto.updateMatrixWorld(true);
-
-            const puntoPalmaMundo = mano.localToWorld(
-                ikAgarre.offsetPalmaLocal.clone()
-            );
-            const distanciaContacto = Math.max(
-                0,
-                numero(
-                    producto.userData?.distanciaContactoMano,
-                    config.distanciaContactoMano
-                )
-            );
-
-            puntoPalmaMundo.addScaledVector(
-                normalSujecion,
-                -distanciaContacto
-            );
-
-            const puntoProductoEnMano = mano.worldToLocal(
-                producto.localToWorld(puntoSujecionLocal.clone())
-            );
-            const puntoObjetivoEnMano =
-                mano.worldToLocal(puntoPalmaMundo);
-
-            producto.position.add(
-                puntoObjetivoEnMano.sub(puntoProductoEnMano)
-            );
-        }
-
-        producto.updateMatrixWorld(true);
-        productoConCajaAgarre = null;
-
-        animacionAgarre.activa = false;
-        animacionAgarre.tiempo = 0;
-
-        producto.visible = true;
-        productoEnMano = producto;
-
-        poseAgarreInspeccion.huesos.length = 0;
-
-        for (const [hueso] of huesosBase) {
-            poseAgarreInspeccion.huesos.push({
-                hueso,
-                inicial: hueso.quaternion.clone(),
-                objetivo: new THREE.Quaternion()
-            });
-        }
-
-        poseAgarreInspeccion.posicionGrupoY = grupo.position.y;
-        poseAgarreInspeccion.duracion = Math.max(
-            numero(animacionAgarre.duracion, 0.38),
-            0.05
-        );
-        poseAgarreInspeccion.activa =
-            poseAgarreInspeccion.huesos.length > 0;
-
-        productosExaminados.add(producto);
-
-        cambiarEstado(ESTADOS.INSPECCIONANDO);
-
-        console.log(
-            `[CLIENTE ${id}] Agarró ${
-                producto.userData?.nombre ??
-                producto.name ??
-                'producto'
-            }.`
-        );
+   
+function tomarProducto() {
+    if (
+        !productoObjetivo ||
+        !productoDisponible(productoObjetivo)
+    ) {
+        liberarReserva();
+        cambiarEstado(ESTADOS.BUSCANDO);
+        return;
     }
 
-    
-    
-    
+    const producto = productoObjetivo;
+
+    producto.updateMatrixWorld(true);
+
+    productoEsInferior =
+        productoEstaEnEstanteInferior(producto);
+
+    cajaTemporal.setFromObject(producto);
+
+    const tamanoProducto = new THREE.Vector3();
+    cajaTemporal.getSize(tamanoProducto);
+
+    // Guardar la transformación original para poder devolverlo.
+    productoOriginal = {
+        parent: producto.parent,
+        posicion: producto.position.clone(),
+        quaternion: producto.quaternion.clone(),
+        escala: producto.scale.clone(),
+        visible: producto.visible,
+        tamanoMundo: tamanoProducto.clone()
+    };
+
+    const brazo = obtenerRigBrazo();
+    const mano = brazo?.mano;
+
+    if (!mano) {
+        console.warn(
+            `[CLIENTE ${id}] No se encontró la mano seleccionada para agarrar.`
+        );
+
+        productoOriginal = null;
+
+        liberarReserva();
+        cambiarEstado(ESTADOS.BUSCANDO);
+        return;
+    }
+
+    // Orientar al cliente hacia el producto.
+    producto.getWorldPosition(vectorTemporal);
+
+    orientarHaciaPunto({
+        x: vectorTemporal.x,
+        z: vectorTemporal.z
+    });
+
+    grupo.updateMatrixWorld(true);
+    mano.updateMatrixWorld(true);
+    producto.updateMatrixWorld(true);
+
+    // Transferir el producto a la mano conservando
+    // exactamente su transformación mundial.
+    mano.attach(producto);
+
+    mano.updateMatrixWorld(true);
+    producto.updateMatrixWorld(true);
+
+    // No desplazar el producto manualmente.
+    // La mano ya conserva la posición mundial del producto.
+
+    productoConCajaAgarre = null;
+
+    animacionAgarre.activa = false;
+    animacionAgarre.tiempo = 0;
+
+    producto.visible = true;
+    productoEnMano = producto;
+
+    // Preparar la pose de agarre para la inspección.
+    poseAgarreInspeccion.huesos.length = 0;
+
+    for (const [hueso] of huesosBase) {
+        poseAgarreInspeccion.huesos.push({
+            hueso,
+            inicial: hueso.quaternion.clone(),
+            objetivo: new THREE.Quaternion()
+        });
+    }
+
+    poseAgarreInspeccion.posicionGrupoY =
+        grupo.position.y;
+
+    poseAgarreInspeccion.duracion = Math.max(
+        numero(animacionAgarre.duracion, 0.38),
+        0.05
+    );
+
+    poseAgarreInspeccion.activa =
+        poseAgarreInspeccion.huesos.length > 0;
+
+    productosExaminados.add(producto);
+
+    cambiarEstado(ESTADOS.INSPECCIONANDO);
+
+    console.log(
+        `[CLIENTE ${id}] Agarró ${
+            producto.userData?.nombre ??
+            producto.name ??
+            'producto'
+        }.`
+    );
+}
+
 
     function buscarUbicacionOtroRack(producto) {
         if (!producto || !productoOriginal) return null;
