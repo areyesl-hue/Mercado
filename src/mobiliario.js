@@ -181,8 +181,8 @@ registrarColision(
     nombre,
     x,
     z,
-    1.30,
-    5.95,
+    1.10,
+    5.45,
     { tipo: 'gondola' }
 );
         g.userData.esGondola = true;
