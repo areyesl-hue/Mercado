@@ -1267,159 +1267,220 @@ function seleccionarBrazoAgarre(producto) {
         return true;
     }
 
-    function resolverIKBrazo(brazo, objetivo) {
-        const hombro = brazo?.hombro;
-        const codo = brazo?.codo;
-        const mano = brazo?.mano;
 
-        if (!hombro || !codo || !mano || !objetivo) return false;
+function resolverIKBrazo(brazo, objetivo) {
+    const hombro = brazo?.hombro;
+    const codo = brazo?.codo;
+    const mano = brazo?.mano;
 
-        grupo.updateMatrixWorld(true);
-        hombro.getWorldPosition(ikAgarre.hombro);
-        codo.getWorldPosition(ikAgarre.codo);
-        mano.getWorldPosition(ikAgarre.muneca);
-
-        ikAgarre.direccion.subVectors(
-            objetivo,
-            ikAgarre.hombro
-        );
-
-        const distanciaObjetivo = ikAgarre.direccion.length();
-        const longitudBrazo = ikAgarre.hombro.distanceTo(
-            ikAgarre.codo
-        );
-        const longitudAntebrazo = ikAgarre.codo.distanceTo(
-            ikAgarre.muneca
-        );
-
-        if (
-            distanciaObjetivo < 0.0001 ||
-            longitudBrazo < 0.0001 ||
-            longitudAntebrazo < 0.0001
-        ) {
-            return false;
-        }
-
-        const distanciaMinima = Math.abs(
-            longitudBrazo - longitudAntebrazo
-        ) + 0.005;
-        const distanciaMaxima = Math.max(
-            distanciaMinima + 0.001,
-            longitudBrazo + longitudAntebrazo - 0.005
-        );
-        const distanciaAjustada = limitar(
-            distanciaObjetivo,
-            distanciaMinima,
-            distanciaMaxima
-        );
-
-        ikAgarre.direccion.multiplyScalar(
-            1 / distanciaObjetivo
-        );
-
-        ikAgarre.objetivo
-            .copy(ikAgarre.hombro)
-            .addScaledVector(
-                ikAgarre.direccion,
-                distanciaAjustada
-            );
-
-        ikAgarre.codoActual.subVectors(
-            ikAgarre.codo,
-            ikAgarre.hombro
-        );
-
-        const proyeccionCodo = ikAgarre.codoActual.dot(
-            ikAgarre.direccion
-        );
-
-        ikAgarre.perpendicular
-            .copy(ikAgarre.codoActual)
-            .addScaledVector(
-                ikAgarre.direccion,
-                -proyeccionCodo
-            );
-
-        if (ikAgarre.perpendicular.lengthSq() < 0.000001) {
-            ikAgarre.perpendicular
-                .set(0, 1, 0)
-                .cross(ikAgarre.direccion);
-        }
-
-        if (ikAgarre.perpendicular.lengthSq() < 0.000001) {
-            ikAgarre.perpendicular
-                .set(1, 0, 0)
-                .cross(ikAgarre.direccion);
-        }
-
-        ikAgarre.perpendicular.normalize();
-
-        const distanciaCodo =
-            (
-                longitudBrazo * longitudBrazo -
-                longitudAntebrazo * longitudAntebrazo +
-                distanciaAjustada * distanciaAjustada
-            ) / (2 * distanciaAjustada);
-
-        const alturaCodo = Math.sqrt(Math.max(
-            0,
-            longitudBrazo * longitudBrazo -
-            distanciaCodo * distanciaCodo
-        ));
-
-        ikAgarre.codoObjetivo
-            .copy(ikAgarre.hombro)
-            .addScaledVector(
-                ikAgarre.direccion,
-                distanciaCodo
-            )
-            .addScaledVector(
-                ikAgarre.perpendicular,
-                alturaCodo
-            );
-
-        ikAgarre.direccionActual.subVectors(
-            ikAgarre.codo,
-            ikAgarre.hombro
-        );
-        ikAgarre.direccionDeseada.subVectors(
-            ikAgarre.codoObjetivo,
-            ikAgarre.hombro
-        );
-
-        if (!orientarHuesoHaciaDireccion(
-            hombro,
-            ikAgarre.direccionActual,
-            ikAgarre.direccionDeseada
-        )) {
-            return false;
-        }
-
-        grupo.updateMatrixWorld(true);
-        codo.getWorldPosition(ikAgarre.codo);
-        mano.getWorldPosition(ikAgarre.muneca);
-
-        ikAgarre.direccionActual.subVectors(
-            ikAgarre.muneca,
-            ikAgarre.codo
-        );
-        ikAgarre.direccionDeseada.subVectors(
-            ikAgarre.objetivo,
-            ikAgarre.codo
-        );
-
-        if (!orientarHuesoHaciaDireccion(
-            codo,
-            ikAgarre.direccionActual,
-            ikAgarre.direccionDeseada
-        )) {
-            return false;
-        }
-
-        grupo.updateMatrixWorld(true);
-        
-        return true;
+    if (!hombro || !codo || !mano || !objetivo) {
+        return false;
     }
+
+    grupo.updateMatrixWorld(true);
+
+    hombro.getWorldPosition(ikAgarre.hombro);
+    codo.getWorldPosition(ikAgarre.codo);
+    mano.getWorldPosition(ikAgarre.muneca);
+
+    ikAgarre.direccion.subVectors(
+        objetivo,
+        ikAgarre.hombro
+    );
+
+    const distanciaObjetivo =
+        ikAgarre.direccion.length();
+
+    const longitudBrazo =
+        ikAgarre.hombro.distanceTo(ikAgarre.codo);
+
+    const longitudAntebrazo =
+        ikAgarre.codo.distanceTo(ikAgarre.muneca);
+
+    if (
+        distanciaObjetivo < 0.0001 ||
+        longitudBrazo < 0.0001 ||
+        longitudAntebrazo < 0.0001
+    ) {
+        return false;
+    }
+
+    const distanciaMinima =
+        Math.abs(longitudBrazo - longitudAntebrazo) + 0.005;
+
+    const distanciaMaxima = Math.max(
+        distanciaMinima + 0.001,
+        longitudBrazo + longitudAntebrazo - 0.005
+    );
+
+    const distanciaAjustada = limitar(
+        distanciaObjetivo,
+        distanciaMinima,
+        distanciaMaxima
+    );
+
+    ikAgarre.direccion.multiplyScalar(
+        1 / distanciaObjetivo
+    );
+
+    ikAgarre.objetivo
+        .copy(ikAgarre.hombro)
+        .addScaledVector(
+            ikAgarre.direccion,
+            distanciaAjustada
+        );
+
+    ikAgarre.codoActual.subVectors(
+        ikAgarre.codo,
+        ikAgarre.hombro
+    );
+
+    const proyeccionCodo =
+        ikAgarre.codoActual.dot(ikAgarre.direccion);
+
+    ikAgarre.perpendicular
+        .copy(ikAgarre.codoActual)
+        .addScaledVector(
+            ikAgarre.direccion,
+            -proyeccionCodo
+        );
+
+    if (
+        ikAgarre.perpendicular.lengthSq() <
+        0.000001
+    ) {
+        ikAgarre.perpendicular
+            .set(0, 1, 0)
+            .cross(ikAgarre.direccion);
+    }
+
+    if (
+        ikAgarre.perpendicular.lengthSq() <
+        0.000001
+    ) {
+        ikAgarre.perpendicular
+            .set(1, 0, 0)
+            .cross(ikAgarre.direccion);
+    }
+
+    ikAgarre.perpendicular.normalize();
+
+    const distanciaCodo =
+        (
+            longitudBrazo * longitudBrazo -
+            longitudAntebrazo * longitudAntebrazo +
+            distanciaAjustada * distanciaAjustada
+        ) / (2 * distanciaAjustada);
+
+    const alturaCodo = Math.sqrt(Math.max(
+        0,
+        longitudBrazo * longitudBrazo -
+        distanciaCodo * distanciaCodo
+    ));
+
+    ikAgarre.codoObjetivo
+        .copy(ikAgarre.hombro)
+        .addScaledVector(
+            ikAgarre.direccion,
+            distanciaCodo
+        )
+        .addScaledVector(
+            ikAgarre.perpendicular,
+            alturaCodo
+        );
+
+    ikAgarre.direccionActual.subVectors(
+        ikAgarre.codo,
+        ikAgarre.hombro
+    );
+
+    ikAgarre.direccionDeseada.subVectors(
+        ikAgarre.codoObjetivo,
+        ikAgarre.hombro
+    );
+
+    if (!orientarHuesoHaciaDireccion(
+        hombro,
+        ikAgarre.direccionActual,
+        ikAgarre.direccionDeseada
+    )) {
+        return false;
+    }
+
+    grupo.updateMatrixWorld(true);
+
+    codo.getWorldPosition(ikAgarre.codo);
+    mano.getWorldPosition(ikAgarre.muneca);
+
+    ikAgarre.direccionActual.subVectors(
+        ikAgarre.muneca,
+        ikAgarre.codo
+    );
+
+    ikAgarre.direccionDeseada.subVectors(
+        ikAgarre.objetivo,
+        ikAgarre.codo
+    );
+
+    if (!orientarHuesoHaciaDireccion(
+        codo,
+        ikAgarre.direccionActual,
+        ikAgarre.direccionDeseada
+    )) {
+        return false;
+    }
+
+    grupo.updateMatrixWorld(true);
+    mano.updateMatrixWorld(true);
+
+    // Medir dónde terminó realmente la muñeca.
+    mano.getWorldPosition(ikAgarre.muneca);
+
+    const errorIK = ikAgarre.muneca.distanceTo(
+        ikAgarre.objetivo
+    );
+
+    console.log(
+        `[DIAGNÓSTICO IK CLIENTE ${id}]`,
+        {
+            lado: ladoAgarre,
+
+            objetivo: ikAgarre.objetivo.toArray().map(
+                v => Number(v.toFixed(3))
+            ),
+
+            muñecaFinal: ikAgarre.muneca.toArray().map(
+                v => Number(v.toFixed(3))
+            ),
+
+            errorIK: Number(errorIK.toFixed(3)),
+
+            distanciaSolicitada: Number(
+                distanciaObjetivo.toFixed(3)
+            ),
+
+            distanciaAjustada: Number(
+                distanciaAjustada.toFixed(3)
+            ),
+
+            longitudBrazo: Number(
+                longitudBrazo.toFixed(3)
+            ),
+
+            longitudAntebrazo: Number(
+                longitudAntebrazo.toFixed(3)
+            ),
+
+            objetivoLimitado:
+                Math.abs(
+                    distanciaObjetivo - distanciaAjustada
+                ) > 0.001
+        }
+    );
+
+    return true;
+}
+
 
     function animarEmpujarCarrito() {
         const carrito = config.carrito;
@@ -1470,6 +1531,7 @@ function ajustarBrazoAlProducto(
     progresoIK = null
 ) {
     const brazo = obtenerRigBrazo();
+
     const hombro = brazo?.hombro;
     const codo = brazo?.codo;
     const mano = brazo?.mano;
@@ -1486,67 +1548,82 @@ function ajustarBrazoAlProducto(
 
     if (productoConCajaAgarre !== producto) {
         producto.updateMatrixWorld(true);
+
         cajaAgarreProducto.setFromObject(producto);
+
         productoConCajaAgarre = producto;
     }
 
-    if (cajaAgarreProducto.isEmpty()) return false;
+    if (cajaAgarreProducto.isEmpty()) {
+        return false;
+    }
 
-    cajaAgarreProducto.getCenter(ikAgarre.centroProducto);
-
-const puntoManual = producto.userData?.puntoAgarreLocal;
-
-if (
-    puntoManual &&
-    Number.isFinite(puntoManual.x) &&
-    Number.isFinite(puntoManual.y) &&
-    Number.isFinite(puntoManual.z)
-) {
-    // Respetar puntos de agarre definidos manualmente.
-    ikAgarre.puntoContacto.set(
-        puntoManual.x,
-        puntoManual.y,
-        puntoManual.z
-    );
-
-    producto.localToWorld(ikAgarre.puntoContacto);
-
-} else if (
-    ikAgarre.productoContactoFijado === producto &&
-    ikAgarre.puntoContactoFijado
-) {
-    // Reutilizar exactamente el punto seleccionado
-    // al terminar el acercamiento al producto.
-    ikAgarre.puntoContacto.copy(
-        ikAgarre.puntoContactoFijado
-    );
-
-} else {
-    // Respaldo para productos sin selección previa.
-    const diferenciaX =
-        ikAgarre.muneca.x - ikAgarre.centroProducto.x;
-
-    const diferenciaZ =
-        ikAgarre.muneca.z - ikAgarre.centroProducto.z;
-
-    ikAgarre.puntoContacto.copy(
+    cajaAgarreProducto.getCenter(
         ikAgarre.centroProducto
     );
 
-    if (Math.abs(diferenciaX) > Math.abs(diferenciaZ)) {
-        ikAgarre.puntoContacto.x =
-            diferenciaX >= 0
-                ? cajaAgarreProducto.max.x
-                : cajaAgarreProducto.min.x;
-    } else {
-        ikAgarre.puntoContacto.z =
-            diferenciaZ >= 0
-                ? cajaAgarreProducto.max.z
-                : cajaAgarreProducto.min.z;
-    }
-}
+    const puntoManual =
+        producto.userData?.puntoAgarreLocal;
 
-    const normalManual = producto.userData?.normalAgarreLocal;
+    if (
+        puntoManual &&
+        Number.isFinite(puntoManual.x) &&
+        Number.isFinite(puntoManual.y) &&
+        Number.isFinite(puntoManual.z)
+    ) {
+        // Respetar puntos de agarre definidos manualmente.
+        ikAgarre.puntoContacto.set(
+            puntoManual.x,
+            puntoManual.y,
+            puntoManual.z
+        );
+
+        producto.localToWorld(
+            ikAgarre.puntoContacto
+        );
+
+    } else if (
+        ikAgarre.productoContactoFijado === producto &&
+        ikAgarre.puntoContactoFijado
+    ) {
+        // Reutilizar el punto seleccionado al acercarse.
+        ikAgarre.puntoContacto.copy(
+            ikAgarre.puntoContactoFijado
+        );
+
+    } else {
+        // Respaldo para productos sin selección previa.
+        const diferenciaX =
+            ikAgarre.muneca.x -
+            ikAgarre.centroProducto.x;
+
+        const diferenciaZ =
+            ikAgarre.muneca.z -
+            ikAgarre.centroProducto.z;
+
+        ikAgarre.puntoContacto.copy(
+            ikAgarre.centroProducto
+        );
+
+        if (
+            Math.abs(diferenciaX) >
+            Math.abs(diferenciaZ)
+        ) {
+            ikAgarre.puntoContacto.x =
+                diferenciaX >= 0
+                    ? cajaAgarreProducto.max.x
+                    : cajaAgarreProducto.min.x;
+
+        } else {
+            ikAgarre.puntoContacto.z =
+                diferenciaZ >= 0
+                    ? cajaAgarreProducto.max.z
+                    : cajaAgarreProducto.min.z;
+        }
+    }
+
+    const normalManual =
+        producto.userData?.normalAgarreLocal;
 
     if (
         normalManual &&
@@ -1561,6 +1638,7 @@ if (
                 normalManual.z
             )
             .transformDirection(producto.matrixWorld);
+
     } else {
         ikAgarre.normalContacto.subVectors(
             ikAgarre.puntoContacto,
@@ -1568,19 +1646,26 @@ if (
         );
     }
 
-    if (ikAgarre.normalContacto.lengthSq() < 0.000001) {
+    if (
+        ikAgarre.normalContacto.lengthSq() <
+        0.000001
+    ) {
         ikAgarre.normalContacto.subVectors(
             ikAgarre.hombro,
             ikAgarre.centroProducto
         );
     }
 
-    if (ikAgarre.normalContacto.lengthSq() < 0.000001) {
+    if (
+        ikAgarre.normalContacto.lengthSq() <
+        0.000001
+    ) {
         ikAgarre.normalContacto.set(0, 0, 1);
     }
 
     ikAgarre.normalContacto.normalize();
 
+    // Obtener el offset de la palma según el brazo elegido.
     ikAgarre.offsetPalmaLocal.copy(
         ladoAgarre === 'izquierdo'
             ? offsetPalmaIzquierdaLocal
@@ -1611,11 +1696,12 @@ if (
         )
     );
 
-    // Este vector siempre representa el objetivo REAL de la palma.
+    // El objetivo representa la posición REAL de la palma.
     if (objetivoPalmaMundo) {
         ikAgarre.objetivoContacto.copy(
             objetivoPalmaMundo
         );
+
     } else {
         ikAgarre.objetivoContacto
             .copy(ikAgarre.puntoContacto)
@@ -1625,42 +1711,58 @@ if (
             );
     }
 
-    // Calcular cuánto se desplaza la palma respecto a la muñeca.
+    // Calcular el offset local de la palma como dirección mundial.
+    mano.updateMatrixWorld(true);
+
+    mano.getWorldQuaternion(
+        ikAgarre.quaternionMano
+    );
+
     ikAgarre.offsetPalmaMundo
         .copy(ikAgarre.offsetPalmaLocal)
-        .applyMatrix4(mano.matrixWorld)
-        .sub(ikAgarre.muneca);
+        .applyQuaternion(
+            ikAgarre.quaternionMano
+        );
 
+    // Calcular el objetivo de la muñeca.
     const progreso = limitar(
-        tiempoEstado / Math.max(config.tiempoRecoger, 0.01),
+        tiempoEstado /
+            Math.max(config.tiempoRecoger, 0.01),
         0,
         1
     );
 
     const progresoExtension = limitar(
-        numero(config.progresoContactoProducto, 0.78),
+        numero(
+            config.progresoContactoProducto,
+            0.78
+        ),
         0.55,
         0.88
     );
 
     const pesoIK = progresoIK === null
         ? suavizar(
-            limitar(progreso / progresoExtension, 0, 1)
+            limitar(
+                progreso / progresoExtension,
+                0,
+                1
+            )
         )
         : suavizar(
             limitar(progresoIK, 0, 1)
         );
 
-    if (pesoIK <= 0.0001) return false;
+    if (pesoIK <= 0.0001) {
+        return false;
+    }
 
-    // Convertir el objetivo de la palma en objetivo de muñeca.
-    // No modificar objetivoContacto: debe seguir siendo el punto
-    // contra el que comprobaremos el contacto real.
+    // Convertir objetivo de palma en objetivo de muñeca.
     ikAgarre.objetivo
         .copy(ikAgarre.objetivoContacto)
         .sub(ikAgarre.offsetPalmaMundo);
 
-    // Interpolar la muñeca desde su posición actual hasta el objetivo.
+    // Interpolar desde la posición actual de la muñeca.
     ikAgarre.objetivo
         .multiplyScalar(pesoIK)
         .addScaledVector(
@@ -1668,10 +1770,16 @@ if (
             1 - pesoIK
         );
 
-    if (!resolverIKBrazo(brazo, ikAgarre.objetivo)) {
+    if (
+        !resolverIKBrazo(
+            brazo,
+            ikAgarre.objetivo
+        )
+    ) {
         return false;
     }
 
+    // Aplicar la corrección final del IK.
     if (correccion === 0) {
         return ajustarBrazoAlProducto(
             producto,
@@ -1683,8 +1791,6 @@ if (
 
     return true;
 }
-
-    
 
     function animarInspeccionarProcedural() {
         const entrada = suavizar(Math.min(tiempoEstado / 0.55, 1));
