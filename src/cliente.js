@@ -2583,43 +2583,59 @@ function obtenerObstaculos() {
         tiempoActualizarObstaculos = 0;
     }
 
-    function puntoLibre(x, z) {
+function puntoLibre(x, z) {
+    if (
+        x < -config.limiteX ||
+        x > config.limiteX ||
+        z < config.limiteZMin ||
+        z > config.limiteZMax
+    ) {
+        return false;
+    }
+
+    // Radio real del cliente más un margen pequeño.
+    const margen = Math.max(
+        0.05,
+        numero(config.radioColision, 0.38) +
+        numero(config.margenObstaculos, 0.12)
+    );
+
+    const dentroPuerta = estaEnCorredorPuerta(x, z);
+
+    for (const obstaculo of obstaculosCache) {
         if (
-            x < -config.limiteX ||
-            x > config.limiteX ||
-            z < config.limiteZMin ||
-            z > config.limiteZMax
+            dentroPuerta &&
+            esObstaculoDeFachada(obstaculo)
+        ) {
+            continue;
+        }
+
+        const mitadX = obstaculo.ancho / 2;
+        const mitadZ = obstaculo.profundidad / 2;
+
+        // Distancia desde el punto hasta el rectángulo.
+        const distanciaX = Math.max(
+            Math.abs(x - obstaculo.x) - mitadX,
+            0
+        );
+
+        const distanciaZ = Math.max(
+            Math.abs(z - obstaculo.z) - mitadZ,
+            0
+        );
+
+        if (
+            distanciaX * distanciaX +
+            distanciaZ * distanciaZ <
+            margen * margen
         ) {
             return false;
         }
-
-        const margen =
-            config.radioColision +
-            config.margenObstaculos;
-
-        const dentroPuerta = estaEnCorredorPuerta(x, z);
-
-        for (const obstaculo of obstaculosCache) {
-            if (
-                dentroPuerta &&
-                esObstaculoDeFachada(obstaculo)
-            ) {
-                continue;
-            }
-
-            const mitadX = obstaculo.ancho / 2 + margen;
-            const mitadZ = obstaculo.profundidad / 2 + margen;
-
-            if (
-                Math.abs(x - obstaculo.x) < mitadX &&
-                Math.abs(z - obstaculo.z) < mitadZ
-            ) {
-                return false;
-            }
-        }
-
-        return true;
     }
+
+    return true;
+}
+
 
     function segmentoLibre(a, b) {
         const distancia = distanciaXZ(a, b);
@@ -2840,9 +2856,17 @@ function obtenerObstaculos() {
             actual = actual.padre;
         }
 
-        camino.shift();
-        camino.push(fin);
+camino.shift();
 
+if (
+    camino.length === 0 ||
+    distanciaXZ(camino[camino.length - 1], fin) > 0.01
+) {
+    camino.push({
+        x: fin.x,
+        z: fin.z
+    });
+}
         const suavizado = [];
 
         let puntoActual = inicio;
