@@ -3699,7 +3699,6 @@ function recuperarMovimiento(forzar = false) {
         return rackElegido?.producto ?? null;
     }
 
-  
 function obtenerPuntoFrenteProducto(producto) {
     if (!producto) return null;
 
