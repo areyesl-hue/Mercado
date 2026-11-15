@@ -3781,10 +3781,11 @@ function recuperarMovimiento(forzar = false) {
     }
 
 
+
 function obtenerPuntoFrenteProducto(producto) {
     if (!producto) return null;
 
-    producto.updateMatrixWorld(true);
+    producto.updateWorldMatrix(true, false);
     cajaTemporal.setFromObject(producto);
 
     if (cajaTemporal.isEmpty()) return null;
@@ -3798,8 +3799,6 @@ function obtenerPuntoFrenteProducto(producto) {
     const hx = tamanoTemporal.x * 0.5;
     const hz = tamanoTemporal.z * 0.5;
 
-    const separaciones = [0.05, 0.08, 0.12, 0.18, 0.25];
-
     const lados = [
         { x: 1, z: 0 },
         { x: -1, z: 0 },
@@ -3809,10 +3808,12 @@ function obtenerPuntoFrenteProducto(producto) {
 
     const candidatos = [];
 
+    // Buscar alrededor del producto, aumentando la separación
+    // hasta encontrar un punto realmente transitable.
     for (const lado of lados) {
         const borde = lado.x !== 0 ? hx : hz;
 
-        for (const separacion of separaciones) {
+        for (let separacion = 0.06; separacion <= 1.20; separacion += 0.06) {
             const x = cx + lado.x * (borde + separacion);
             const z = cz + lado.z * (borde + separacion);
 
@@ -3825,7 +3826,9 @@ function obtenerPuntoFrenteProducto(producto) {
                 continue;
             }
 
-            if (!puntoLibre(x, z, producto)) continue;
+            if (!puntoLibre(x, z)) {
+                continue;
+            }
 
             const destino = { x, z };
 
@@ -3834,20 +3837,33 @@ function obtenerPuntoFrenteProducto(producto) {
                 destino
             );
 
-            if (!camino || !camino.length) continue;
+            if (!camino || camino.length === 0) {
+                continue;
+            }
 
             candidatos.push({
                 x,
                 z,
                 separacion,
-                recorrido: distanciaXZ(grupo.position, destino)
+                recorrido: distanciaXZ(
+                    grupo.position,
+                    destino
+                ),
+                lado
             });
+
+            // Ya encontramos el punto transitable más cercano
+            // de este lado. No hace falta alejarlo más.
+            break;
         }
     }
 
-    if (!candidatos.length) return null;
+    if (candidatos.length === 0) {
+        return null;
+    }
 
-    // Priorizar acercamiento y después recorrido.
+    // Primero elegir el punto más cercano al producto.
+    // En caso de empate, elegir el recorrido más corto.
     candidatos.sort((a, b) =>
         a.separacion - b.separacion ||
         a.recorrido - b.recorrido
