@@ -5181,16 +5181,23 @@ case ESTADOS.RECOGIENDO: {
     }
 );
     animarRecogerProcedural();
+const agarreResuelto =
+    ajustarBrazoAlProducto(productoObjetivo);
 
-    const agarreResuelto =
-        ajustarBrazoAlProducto(productoObjetivo);
+if (
+    tiempoEstado >=
+    Math.max(numero(config.tiempoRecoger, 1.1), 0.01)
+) {
+    console.log(
+        `[PRUEBA LLAMADA TOMAR PRODUCTO ${id}]`,
+        {
+            agarreResuelto,
+            tiempoEstado: Number(tiempoEstado.toFixed(2))
+        }
+    );
 
-    if (
-        tiempoEstado >=
-        Math.max(numero(config.tiempoRecoger, 1.1), 0.01)
-    ) {
-        tomarProducto(agarreResuelto);
-    }
+    tomarProducto(agarreResuelto);
+}
 
     break;
 }    
