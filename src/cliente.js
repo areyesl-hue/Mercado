@@ -1571,7 +1571,6 @@ function ajustarBrazoAlProducto(
         Number.isFinite(puntoManual.y) &&
         Number.isFinite(puntoManual.z)
     ) {
-        // Respetar puntos de agarre definidos manualmente.
         ikAgarre.puntoContacto.set(
             puntoManual.x,
             puntoManual.y,
@@ -1586,13 +1585,11 @@ function ajustarBrazoAlProducto(
         ikAgarre.productoContactoFijado === producto &&
         ikAgarre.puntoContactoFijado
     ) {
-        // Reutilizar el punto seleccionado al acercarse.
         ikAgarre.puntoContacto.copy(
             ikAgarre.puntoContactoFijado
         );
 
     } else {
-        // Respaldo para productos sin selección previa.
         const diferenciaX =
             ikAgarre.muneca.x -
             ikAgarre.centroProducto.x;
@@ -1665,7 +1662,6 @@ function ajustarBrazoAlProducto(
 
     ikAgarre.normalContacto.normalize();
 
-    // Obtener el offset de la palma según el brazo elegido.
     ikAgarre.offsetPalmaLocal.copy(
         ladoAgarre === 'izquierdo'
             ? offsetPalmaIzquierdaLocal
@@ -1696,7 +1692,7 @@ function ajustarBrazoAlProducto(
         )
     );
 
-    // El objetivo representa la posición REAL de la palma.
+    // Definir el objetivo real de la palma.
     if (objetivoPalmaMundo) {
         ikAgarre.objetivoContacto.copy(
             objetivoPalmaMundo
@@ -1711,20 +1707,30 @@ function ajustarBrazoAlProducto(
             );
     }
 
-    // Calcular el offset local de la palma como dirección mundial.
-    mano.updateMatrixWorld(true);
+    // Asegurar que el quaternion exista.
+    if (
+        !ikAgarre.quaternionMano ||
+        !ikAgarre.quaternionMano.isQuaternion
+    ) {
+        ikAgarre.quaternionMano =
+            new THREE.Quaternion();
+    }
+
+    // Obtener la orientación mundial de la mano.
+    mano.updateWorldMatrix(true, false);
 
     mano.getWorldQuaternion(
         ikAgarre.quaternionMano
     );
 
+    // Transformar el offset local de la palma
+    // en una dirección mundial.
     ikAgarre.offsetPalmaMundo
         .copy(ikAgarre.offsetPalmaLocal)
         .applyQuaternion(
             ikAgarre.quaternionMano
         );
 
-    // Calcular el objetivo de la muñeca.
     const progreso = limitar(
         tiempoEstado /
             Math.max(config.tiempoRecoger, 0.01),
@@ -1757,12 +1763,12 @@ function ajustarBrazoAlProducto(
         return false;
     }
 
-    // Convertir objetivo de palma en objetivo de muñeca.
+    // Convertir el objetivo de palma en objetivo de muñeca.
     ikAgarre.objetivo
         .copy(ikAgarre.objetivoContacto)
         .sub(ikAgarre.offsetPalmaMundo);
 
-    // Interpolar desde la posición actual de la muñeca.
+    // Interpolar la muñeca desde su posición actual.
     ikAgarre.objetivo
         .multiplyScalar(pesoIK)
         .addScaledVector(
@@ -1770,6 +1776,7 @@ function ajustarBrazoAlProducto(
             1 - pesoIK
         );
 
+    // Resolver el brazo mediante IK.
     if (
         !resolverIKBrazo(
             brazo,
@@ -1779,7 +1786,7 @@ function ajustarBrazoAlProducto(
         return false;
     }
 
-    // Aplicar la corrección final del IK.
+    // Aplicar la corrección final.
     if (correccion === 0) {
         return ajustarBrazoAlProducto(
             producto,
