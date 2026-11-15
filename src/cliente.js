@@ -3741,26 +3741,26 @@ function obtenerPuntoFrenteProducto(producto) {
     const semianchoX = tamanoTemporal.x * 0.5;
     const semianchoZ = tamanoTemporal.z * 0.5;
 
-    // Separación reducida respecto al rack.
+    // Aproximación mucho más cercana al rack.
     const margen = Math.max(
-        numero(config.radioColision, 0.38) * 0.72,
-        0.22
+        numero(config.radioColision, 0.38) * 0.40,
+        0.12
     );
 
-    const radioMinimo = margen + 0.025;
-    const radioMaximo = radioMinimo + 0.40;
+    const radioMinimo = margen + 0.015;
+    const radioMaximo = radioMinimo + 0.25;
 
     const candidatos = [];
 
     for (
         let radio = radioMinimo;
         radio <= radioMaximo;
-        radio += 0.025
+        radio += 0.015
     ) {
         for (
             let angulo = 0;
             angulo < Math.PI * 2;
-            angulo += Math.PI / 32
+            angulo += Math.PI / 48
         ) {
             const x =
                 centroX +
@@ -3770,7 +3770,6 @@ function obtenerPuntoFrenteProducto(producto) {
                 centroZ +
                 Math.sin(angulo) * (semianchoZ + radio);
 
-            // Mantener las comprobaciones de colisión.
             if (!puntoLibre(x, z)) continue;
 
             const destino = { x, z };
@@ -3792,10 +3791,9 @@ function obtenerPuntoFrenteProducto(producto) {
                 destino
             );
 
-            // Priorizar acercarse al rack.
             const puntuacion =
                 distanciaProducto +
-                distanciaRecorrido * 0.015;
+                distanciaRecorrido * 0.008;
 
             candidatos.push({
                 x,
@@ -3810,7 +3808,7 @@ function obtenerPuntoFrenteProducto(producto) {
 
     if (!candidatos.length) {
         console.warn(
-            '[APROXIMACIÓN] No se encontró posición libre:',
+            '[APROXIMACIÓN] No hay puntos libres cerca del rack:',
             producto.name
         );
 
@@ -3823,18 +3821,17 @@ function obtenerPuntoFrenteProducto(producto) {
 
     const elegido = candidatos[0];
 
-    console.log('[APROXIMACIÓN CERCANA AL RACK]', {
+    console.log('[APROXIMACIÓN MUY CERCANA]', {
         producto: producto.name,
         destino: {
             x: Number(elegido.x.toFixed(3)),
             z: Number(elegido.z.toFixed(3))
         },
-        separacion: Number(
-            elegido.radio.toFixed(3)
-        ),
+        margen: Number(elegido.radio.toFixed(3)),
         distanciaRecorrido: Number(
             elegido.distanciaRecorrido.toFixed(3)
-        )
+        ),
+        candidatos: candidatos.length
     });
 
     return {
