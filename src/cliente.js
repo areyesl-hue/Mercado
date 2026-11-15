@@ -2683,7 +2683,7 @@ function actualizarSeguimientoCarrito() {
     if (estadosSeguimiento.includes(estado)) {
         carrito.seguirObjetivo?.(
             grupo,
-            0.75,
+            0.95,
             0
         );
         return;
