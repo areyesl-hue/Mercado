@@ -3520,7 +3520,28 @@ function obtenerPuntoFrenteProducto(producto) {
         if (!reservarProducto(producto)) return false;
 
         const destino = obtenerPuntoFrenteProducto(producto);
+if (destino) {
+    producto.updateMatrixWorld(true);
 
+    const posicionProducto = new THREE.Vector3();
+    producto.getWorldPosition(posicionProducto);
+
+    console.log('[DIAGNÓSTICO DE APROXIMACIÓN]', {
+        cliente: grupo.position.clone(),
+        producto: posicionProducto,
+        destino,
+        distanciaDestinoProducto: Math.hypot(
+            destino.x - posicionProducto.x,
+            destino.z - posicionProducto.z
+        ),
+        distanciaClienteDestino: Math.hypot(
+            destino.x - grupo.position.x,
+            destino.z - grupo.position.z
+        )
+    });
+} else {
+    console.warn('[DIAGNÓSTICO] No se encontró un punto libre frente al producto.');
+}
         if (!destino) {
             productosConRutaFallida.add(producto);
             liberarReserva();
