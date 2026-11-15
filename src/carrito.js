@@ -1,3 +1,4 @@
+
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
@@ -12,7 +13,7 @@ const CONFIG_DEFAULT = {
     posicion: { x: 0, y: 0, z: 0 },
     escala: 1,
     distancia: 0.25,
-    desplazamientoLateral: 0.85,
+    desplazamientoLateral: 1.05,
     suavizado: 9,
     velocidadMaxima: 5,
     correccionModelo: Math.PI,
@@ -36,15 +37,10 @@ const CONFIG_CESTA = {
     maxAlturaProducto: 0.28,
     alturaEntreNiveles: 0.18,
     margenBase: 0.015,
-
-    // Desplazamiento de los productos hacia el frente.
     desplazamientoFrontal: 0.35,
-
-    // Elevación adicional para la base detectada.
     elevacionBase: 0.12
 };
 
-// Altura utilizada cuando no se detecta el fondo del carrito.
 const ALTURA_BASE_RESPALDO = 0.92;
 
 // ============================================================
@@ -100,6 +96,22 @@ export function crearCarrito(scene, opciones = {}) {
         productos: [],
         baseCestaLocal: null
     };
+
+    // ========================================================
+    // VECTORES Y QUATERNIONES REUTILIZABLES
+    // ========================================================
+
+    const posicionObjetivo = new THREE.Vector3();
+    const posicionCarritoMundial = new THREE.Vector3();
+    const direccion = new THREE.Vector3();
+    const lateral = new THREE.Vector3();
+    const posicionDeseada = new THREE.Vector3();
+    const haciaCliente = new THREE.Vector3();
+
+    const quaternionObjetivo = new THREE.Quaternion();
+    const quaternionPadre = new THREE.Quaternion();
+    const quaternionMundo = new THREE.Quaternion();
+    const ejeVertical = new THREE.Vector3(0, 1, 0);
 
     // ========================================================
     // MATERIALES
@@ -187,11 +199,18 @@ export function crearCarrito(scene, opciones = {}) {
             final.z
         );
 
-        const direccion = new THREE.Vector3().subVectors(b, a);
-        const longitud = direccion.length();
+        const direccionBarra = new THREE.Vector3()
+            .subVectors(b, a);
+
+        const longitud = direccionBarra.length();
 
         const mesh = new THREE.Mesh(
-            new THREE.CylinderGeometry(radio, radio, longitud, 8),
+            new THREE.CylinderGeometry(
+                radio,
+                radio,
+                longitud,
+                8
+            ),
             material
         );
 
@@ -200,7 +219,7 @@ export function crearCarrito(scene, opciones = {}) {
 
         mesh.quaternion.setFromUnitVectors(
             new THREE.Vector3(0, 1, 0),
-            direccion.normalize()
+            direccionBarra.normalize()
         );
 
         padre.add(mesh);
@@ -362,7 +381,12 @@ export function crearCarrito(scene, opciones = {}) {
 
         for (const [x, y, z] of posicionesRuedas) {
             const rueda = new THREE.Mesh(
-                new THREE.CylinderGeometry(0.105, 0.105, 0.055, 16),
+                new THREE.CylinderGeometry(
+                    0.105,
+                    0.105,
+                    0.055,
+                    16
+                ),
                 materiales.goma
             );
 
@@ -372,7 +396,12 @@ export function crearCarrito(scene, opciones = {}) {
             modelo.add(rueda);
 
             const centro = new THREE.Mesh(
-                new THREE.CylinderGeometry(0.035, 0.035, 0.06, 12),
+                new THREE.CylinderGeometry(
+                    0.035,
+                    0.035,
+                    0.06,
+                    12
+                ),
                 materiales.detalle
             );
 
@@ -451,8 +480,17 @@ export function crearCarrito(scene, opciones = {}) {
 
         if (cajaMundial.isEmpty()) return null;
 
-        const min = new THREE.Vector3(Infinity, Infinity, Infinity);
-        const max = new THREE.Vector3(-Infinity, -Infinity, -Infinity);
+        const min = new THREE.Vector3(
+            Infinity,
+            Infinity,
+            Infinity
+        );
+
+        const max = new THREE.Vector3(
+            -Infinity,
+            -Infinity,
+            -Infinity
+        );
 
         for (let x = 0; x <= 1; x++) {
             for (let y = 0; y <= 1; y++) {
@@ -611,6 +649,7 @@ export function crearCarrito(scene, opciones = {}) {
                 }
 
                 const cajaFinal = new THREE.Box3().setFromObject(modelo);
+
                 const altura = cajaFinal.getSize(
                     new THREE.Vector3()
                 ).y || 1;
@@ -655,46 +694,55 @@ export function crearCarrito(scene, opciones = {}) {
     // SEGUIMIENTO DEL CLIENTE
     // ========================================================
 
-function seguirObjetivo(
-    objetivo,
-    distancia = config.distancia,
-    desplazamientoLateral = 0
-) {
-    if (estado.eliminado) return false;
+    function seguirObjetivo(
+        objetivo,
+        distancia = config.distancia,
+        desplazamientoLateral = 0
+    ) {
+        if (estado.eliminado) return false;
 
-    const objetivoReal = objetivo?.isObject3D
-        ? objetivo
-        : objetivo?.grupo;
+        const objetivoReal = objetivo?.isObject3D
+            ? objetivo
+            : objetivo?.grupo;
 
-    if (!objetivoReal?.isObject3D) {
-        return false;
+        if (!objetivoReal?.isObject3D) {
+            return false;
+        }
+
+        estado.objetivo = objetivoReal;
+
+        estado.distancia = Math.max(
+            0.1,
+            Number.isFinite(distancia)
+                ? distancia
+                : config.distancia
+        );
+
+        estado.desplazamientoLateral =
+            Number.isFinite(desplazamientoLateral)
+                ? desplazamientoLateral
+                : 0;
+
+        estado.siguiendo = true;
+
+        return true;
     }
 
-    estado.objetivo = objetivoReal;
-
-    estado.distancia = Math.max(
-        0.1,
-        distancia
-    );
-
-    estado.desplazamientoLateral =
-        Number.isFinite(desplazamientoLateral)
-            ? desplazamientoLateral
-            : 0;
-
-    estado.siguiendo = true;
-
-    return true;
-}
     function detenerSeguimiento() {
         estado.siguiendo = false;
         estado.objetivo = null;
+        estado.desplazamientoLateral = 0;
     }
+
+    // ========================================================
+    // OBTENER PUNTO DEL MANUBRIO
+    // ========================================================
 
     function obtenerPuntoManubrio() {
         grupo.updateMatrixWorld(true);
 
         let manubrio = null;
+
         grupoModelo.traverse(objeto => {
             const nombre = objeto.name
                 .toLowerCase()
@@ -710,11 +758,17 @@ function seguirObjetivo(
         });
 
         if (manubrio) {
-            const cajaManubrio = new THREE.Box3().setFromObject(manubrio);
+            const cajaManubrio = new THREE.Box3()
+                .setFromObject(manubrio);
 
             if (!cajaManubrio.isEmpty()) {
-                const centro = cajaManubrio.getCenter(new THREE.Vector3());
-                const tamano = cajaManubrio.getSize(new THREE.Vector3());
+                const centro = cajaManubrio.getCenter(
+                    new THREE.Vector3()
+                );
+
+                const tamano = cajaManubrio.getSize(
+                    new THREE.Vector3()
+                );
 
                 estado.objetivo?.updateMatrixWorld(true);
 
@@ -723,6 +777,7 @@ function seguirObjetivo(
                         .transformDirection(estado.objetivo.matrixWorld)
                     : new THREE.Vector3(-1, 0, 0)
                         .transformDirection(grupoModelo.matrixWorld);
+
                 const radio = (
                     Math.abs(izquierda.x) * tamano.x +
                     Math.abs(izquierda.y) * tamano.y +
@@ -741,90 +796,137 @@ function seguirObjetivo(
         );
     }
 
-    const posicionObjetivo = new THREE.Vector3();
-    const direccion = new THREE.Vector3();
-    const posicionDeseada = new THREE.Vector3();
-    const haciaCliente = new THREE.Vector3();
+    // ========================================================
+    // ACTUALIZAR POSICIÓN DEL CARRITO
+    // ========================================================
 
-function actualizar(delta) {
-    if (
-        estado.eliminado ||
-        !estado.siguiendo ||
-        !estado.objetivo
-    ) {
-        return;
-    }
+    function actualizar(delta) {
+        if (
+            estado.eliminado ||
+            !estado.siguiendo ||
+            !estado.objetivo
+        ) {
+            return;
+        }
 
-    const dt = Math.min(
-        Math.max(delta || 0, 0),
-        0.05
-    );
-
-    estado.objetivo.getWorldPosition(
-        posicionObjetivo
-    );
-
-    // Dirección hacia donde mira el cliente.
-    direccion.set(0, 0, 1);
-
-    estado.objetivo.getWorldDirection(
-        direccion
-    );
-
-    direccion.y = 0;
-
-    if (direccion.lengthSq() < 0.0001) {
-        direccion.set(0, 0, 1);
-    }
-
-    direccion.normalize();
-
-    // Vector lateral derecho del cliente.
-    const lateral = new THREE.Vector3(
-        direccion.z,
-        0,
-        -direccion.x
-    ).normalize();
-
-    // Posición longitudinal.
-    posicionDeseada.copy(posicionObjetivo);
-
-    posicionDeseada.addScaledVector(
-        direccion,
-        estado.distancia * config.ladoDelante
-    );
-
-    // Desplazamiento hacia el lado de la mano utilizada.
-    posicionDeseada.addScaledVector(
-        lateral,
-        estado.desplazamientoLateral
-    );
-
-    posicionDeseada.y = config.posicion.y;
-
-    // Movimiento suave, sin teletransportes.
-    grupo.position.lerp(
-        posicionDeseada,
-        1 - Math.exp(
-            config.suavizado * -dt
-        )
-    );
-
-    // Orientar el carrito hacia el cliente.
-    haciaCliente.subVectors(
-        posicionObjetivo,
-        grupo.position
-    );
-
-    haciaCliente.y = 0;
-
-    if (haciaCliente.lengthSq() > 0.0001) {
-        grupo.rotation.y = Math.atan2(
-            haciaCliente.x,
-            haciaCliente.z
+        const dt = Math.min(
+            Math.max(delta || 0, 0),
+            0.05
         );
+
+        const objetivo = estado.objetivo;
+
+        objetivo.updateWorldMatrix(true, false);
+
+        // Posición mundial del cliente.
+        objetivo.getWorldPosition(posicionObjetivo);
+
+        // Rotación mundial del cliente.
+        objetivo.getWorldQuaternion(quaternionObjetivo);
+
+        // Dirección frontal del cliente.
+        direccion
+            .set(0, 0, 1)
+            .applyQuaternion(quaternionObjetivo);
+
+        direccion.y = 0;
+
+        if (direccion.lengthSq() < 0.0001) {
+            direccion.set(0, 0, 1);
+        }
+
+        direccion.normalize();
+
+        // Eje lateral derecho del cliente.
+        lateral
+            .set(1, 0, 0)
+            .applyQuaternion(quaternionObjetivo);
+
+        lateral.y = 0;
+
+        if (lateral.lengthSq() < 0.0001) {
+            lateral.set(
+                direccion.z,
+                0,
+                -direccion.x
+            );
+        }
+
+        lateral.normalize();
+
+        // Posición deseada del carrito.
+        posicionDeseada.copy(posicionObjetivo);
+
+        // Distancia frontal.
+        posicionDeseada.addScaledVector(
+            direccion,
+            estado.distancia * config.ladoDelante
+        );
+
+        // Desplazamiento lateral.
+        posicionDeseada.addScaledVector(
+            lateral,
+            estado.desplazamientoLateral
+        );
+
+        // Mantener la altura configurada.
+        posicionDeseada.y = config.posicion.y;
+
+        // Convertir la posición mundial a local
+        // si el carrito tiene un padre transformado.
+        if (grupo.parent) {
+            grupo.parent.updateWorldMatrix(true, false);
+            grupo.parent.worldToLocal(posicionDeseada);
+        }
+
+        // Movimiento suave.
+        const factorMovimiento = 1 - Math.exp(
+            -Math.max(0.1, config.suavizado) * dt
+        );
+
+        grupo.position.lerp(
+            posicionDeseada,
+            factorMovimiento
+        );
+
+        // Obtener posición mundial actual del carrito.
+        grupo.updateWorldMatrix(true, false);
+        grupo.getWorldPosition(posicionCarritoMundial);
+
+        // Orientar el carrito hacia el cliente.
+        haciaCliente.subVectors(
+            posicionObjetivo,
+            posicionCarritoMundial
+        );
+
+        haciaCliente.y = 0;
+
+        if (haciaCliente.lengthSq() > 0.0001) {
+            const anguloMundial = Math.atan2(
+                haciaCliente.x,
+                haciaCliente.z
+            );
+
+            quaternionMundo.setFromAxisAngle(
+                ejeVertical,
+                anguloMundial
+            );
+
+            if (grupo.parent) {
+                grupo.parent.getWorldQuaternion(
+                    quaternionPadre
+                );
+
+                quaternionPadre.invert();
+
+                grupo.quaternion
+                    .copy(quaternionPadre)
+                    .multiply(quaternionMundo);
+            } else {
+                grupo.quaternion.copy(quaternionMundo);
+            }
+        }
     }
-}
 
     // ========================================================
     // POSICIÓN DE LOS PRODUCTOS
