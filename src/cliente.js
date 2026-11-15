@@ -1868,7 +1868,6 @@ function ajustarBrazoAlProducto(
     return true;
 }
 
-
     function animarInspeccionarProcedural() {
         const entrada = suavizar(Math.min(tiempoEstado / 0.55, 1));
         const salida = suavizar(Math.min((config.tiempoInspeccionar - tiempoEstado) / 0.45, 1));
