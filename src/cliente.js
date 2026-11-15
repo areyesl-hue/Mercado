@@ -2830,7 +2830,7 @@ function obtenerObstaculos() {
         tiempoActualizarObstaculos = 0;
     }
 
-function puntoLibre(x, z) {
+function puntoLibre(x, z, productoObjetivo = null) {
     if (
         x < -config.limiteX ||
         x > config.limiteX ||
@@ -2840,12 +2840,17 @@ function puntoLibre(x, z) {
         return false;
     }
 
-    // Radio real del cliente más un margen pequeño.
-    const margen = Math.max(
+    const margenNormal = Math.max(
         0.05,
         numero(config.radioColision, 0.38) +
         numero(config.margenObstaculos, 0.12)
     );
+
+    // Durante la aproximación reducimos el margen,
+    // pero no desactivamos las colisiones.
+    const margen = productoObjetivo
+        ? 0.055
+        : margenNormal;
 
     const dentroPuerta = estaEnCorredorPuerta(x, z);
 
@@ -2857,10 +2862,9 @@ function puntoLibre(x, z) {
             continue;
         }
 
-        const mitadX = obstaculo.ancho / 2;
-        const mitadZ = obstaculo.profundidad / 2;
+        const mitadX = obstaculo.ancho * 0.5;
+        const mitadZ = obstaculo.profundidad * 0.5;
 
-        // Distancia desde el punto hasta el rectángulo.
         const distanciaX = Math.max(
             Math.abs(x - obstaculo.x) - mitadX,
             0
@@ -3733,10 +3737,12 @@ function recuperarMovimiento(forzar = false) {
         return rackElegido?.producto ?? null;
     }
 
+
 function obtenerPuntoFrenteProducto(producto) {
     if (!producto) return null;
 
     producto.updateMatrixWorld(true);
+
     cajaTemporal.setFromObject(producto);
 
     if (cajaTemporal.isEmpty()) return null;
@@ -3747,112 +3753,87 @@ function obtenerPuntoFrenteProducto(producto) {
     const centroX = vectorTemporal2.x;
     const centroZ = vectorTemporal2.z;
 
-    const semianchoX = tamanoTemporal.x * 0.5;
-    const semianchoZ = tamanoTemporal.z * 0.5;
+    const mitadX = tamanoTemporal.x * 0.5;
+    const mitadZ = tamanoTemporal.z * 0.5;
 
-    // Aproximación mucho más cercana al rack.
-    const margen = Math.max(
-        numero(config.radioColision, 0.38) * 0.40,
-        0.12
-    );
-
-    const radioMinimo = margen + 0.015;
-    const radioMaximo = radioMinimo + 0.25;
+    // Distancia corta desde la superficie del producto.
+    const separacion = 0.12;
 
     const candidatos = [];
 
+    // Buscamos alrededor de todo el producto.
     for (
-        let radio = radioMinimo;
-        radio <= radioMaximo;
-        radio += 0.015
+        let angulo = 0;
+        angulo < Math.PI * 2;
+        angulo += Math.PI / 48
     ) {
-        for (
-            let angulo = 0;
-            angulo < Math.PI * 2;
-            angulo += Math.PI / 48
-        ) {
-            const x =
-                centroX +
-                Math.cos(angulo) * (semianchoX + radio);
+        const dx = Math.cos(angulo);
+        const dz = Math.sin(angulo);
 
-            const z =
-                centroZ +
-                Math.sin(angulo) * (semianchoZ + radio);
+        // Intersección del rayo con el rectángulo
+        // que representa las dimensiones del producto.
+        const escalaX = Math.abs(dx) > 0.0001
+            ? mitadX / Math.abs(dx)
+            : Infinity;
 
-            if (!puntoLibre(x, z)) continue;
+        const escalaZ = Math.abs(dz) > 0.0001
+            ? mitadZ / Math.abs(dz)
+            : Infinity;
 
-            const destino = { x, z };
+        const distanciaBorde = Math.min(
+            escalaX,
+            escalaZ
+        );
 
-            const camino = encontrarCamino(
+        const x =
+            centroX +
+            dx * (distanciaBorde + separacion);
+
+        const z =
+            centroZ +
+            dz * (distanciaBorde + separacion);
+
+        // Comprobamos que el punto sea transitable.
+        if (!puntoLibre(x, z, producto)) continue;
+
+        const destino = { x, z };
+
+        const camino = encontrarCamino(
+            grupo.position,
+            destino
+        );
+
+        if (!camino || !camino.length) continue;
+
+        candidatos.push({
+            x,
+            z,
+            distancia: distanciaXZ(
                 grupo.position,
                 destino
-            );
-
-            if (!camino || !camino.length) continue;
-
-            const distanciaProducto = Math.hypot(
-                x - centroX,
-                z - centroZ
-            );
-
-            const distanciaRecorrido = distanciaXZ(
-                grupo.position,
-                destino
-            );
-
-            const puntuacion =
-                distanciaProducto +
-                distanciaRecorrido * 0.008;
-
-            candidatos.push({
-                x,
-                z,
-                radio,
-                distanciaProducto,
-                distanciaRecorrido,
-                puntuacion
-            });
-        }
+            ),
+            separacion
+        });
     }
 
     if (!candidatos.length) {
-        console.warn(
-            '[APROXIMACIÓN] No hay puntos libres cerca del rack:',
-            producto.name
-        );
-
         return null;
     }
 
     candidatos.sort(
-        (a, b) => a.puntuacion - b.puntuacion
+        (a, b) => a.distancia - b.distancia
     );
 
-    const elegido = candidatos[0];
-
-    console.log('[APROXIMACIÓN MUY CERCANA]', {
-        producto: producto.name,
-        destino: {
-            x: Number(elegido.x.toFixed(3)),
-            z: Number(elegido.z.toFixed(3))
-        },
-        margen: Number(elegido.radio.toFixed(3)),
-        distanciaRecorrido: Number(
-            elegido.distanciaRecorrido.toFixed(3)
-        ),
-        candidatos: candidatos.length
-    });
-
     return {
-        x: elegido.x,
-        z: elegido.z
+        x: candidatos[0].x,
+        z: candidatos[0].z
     };
 }
 
+
     function acercarseAProducto(producto) {
         if (!reservarProducto(producto)) return false;
-
-        const destino = obtenerPuntoFrenteProducto(producto);
+const destino = obtenerPuntoFrenteProducto(producto);
 if (destino) {
     producto.updateMatrixWorld(true);
 
