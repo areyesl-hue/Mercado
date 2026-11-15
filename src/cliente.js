@@ -3833,13 +3833,10 @@ function tomarProducto(agarreResuelto = false) {
         return;
     }
 
-    // Orientar al cliente hacia el producto.
-    producto.getWorldPosition(vectorTemporal);
-
-    orientarHaciaPunto({
-        x: vectorTemporal.x,
-        z: vectorTemporal.z
-    });
+    // IMPORTANTE:
+    // No volver a orientar al cliente aquí.
+    // El IK ya posicionó el brazo hacia el producto.
+    // Girar el grupo en este punto desplazaría la palma.
 
     grupo.updateMatrixWorld(true);
     mano.updateMatrixWorld(true);
@@ -3881,7 +3878,7 @@ function tomarProducto(agarreResuelto = false) {
         0.18
     );
 
-    // Obtener información geométrica del producto.
+    // Información geométrica del producto.
     const centroProductoDiagnostico = new THREE.Box3()
         .setFromObject(producto)
         .getCenter(new THREE.Vector3());
@@ -3893,7 +3890,10 @@ function tomarProducto(agarreResuelto = false) {
     console.log(
         `[DIAGNÓSTICO CONTACTO CLIENTE ${id}]`,
         {
-            errorMetros: Number(errorContacto.toFixed(3)),
+            errorMetros: Number(
+                errorContacto.toFixed(3)
+            ),
+
             tolerancia: toleranciaContacto,
 
             palma: {
@@ -3949,8 +3949,8 @@ function tomarProducto(agarreResuelto = false) {
             0.01
         ) + 0.75;
 
-        // Dar tiempo adicional al brazo para alcanzar
-        // el producto. Todavía NO se une a la mano.
+        // Dar tiempo adicional al brazo.
+        // El producto todavía permanece en el estante.
         if (tiempoEstado < tiempoMaximo) {
             return;
         }
@@ -3972,7 +3972,9 @@ function tomarProducto(agarreResuelto = false) {
     }
 
     console.log(`[CONTACTO CLIENTE ${id}]`, {
-        errorMetros: Number(errorContacto.toFixed(4)),
+        errorMetros: Number(
+            errorContacto.toFixed(4)
+        ),
 
         palma: palmaMundo.toArray().map(
             v => Number(v.toFixed(3))
@@ -3996,7 +3998,7 @@ function tomarProducto(agarreResuelto = false) {
             producto.matrixWorld.clone().invert()
         );
 
-    // Actualizar matrices después del IK.
+    // Actualizar matrices antes de cambiar el padre.
     grupo.updateMatrixWorld(true);
     mano.updateMatrixWorld(true);
     producto.updateMatrixWorld(true);
