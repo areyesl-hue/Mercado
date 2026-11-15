@@ -1989,72 +1989,68 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     
     
 
-function actualizarAnimacionAgarre(delta) {
-    if (!animacionAgarre.activa || !productoEnMano) {
+    function actualizarAnimacionAgarre(delta) {
+        if (!animacionAgarre.activa || !productoEnMano) {
+            return false;
+        }
+
+        const producto = productoEnMano;
+
+        animacionAgarre.tiempo += delta;
+
+        const duracion = Math.max(
+            animacionAgarre.duracion,
+            0.01
+        );
+
+        const t = limitar(
+            animacionAgarre.tiempo / duracion,
+            0,
+            1
+        );
+
+        const inicioMovimiento = limitar((t - 0.22) / 0.78, 0, 1);
+        const suave = suavizar(inicioMovimiento);
+
+        producto.position.lerpVectors(
+            animacionAgarre.posicionInicial,
+            animacionAgarre.posicionFinal,
+            suave
+        );
+
+        producto.quaternion.slerpQuaternions(
+            animacionAgarre.quaternionInicial,
+            animacionAgarre.quaternionFinal,
+            suave
+        );
+
+        producto.scale.lerpVectors(
+            animacionAgarre.escalaInicial,
+            animacionAgarre.escalaFinal,
+            suave
+        );
+
+        if (t >= 1) {
+            producto.position.copy(
+                animacionAgarre.posicionFinal
+            );
+
+            producto.quaternion.copy(
+                animacionAgarre.quaternionFinal
+            );
+
+            producto.scale.copy(
+                animacionAgarre.escalaFinal
+            );
+
+            animacionAgarre.activa = false;
+            animacionAgarre.tiempo = 0;
+
+            return true;
+        }
+
         return false;
     }
-
-    const producto = productoEnMano;
-
-    animacionAgarre.tiempo += delta;
-
-    const duracion = Math.max(
-        animacionAgarre.duracion,
-        0.01
-    );
-
-    const t = limitar(
-        animacionAgarre.tiempo / duracion,
-        0,
-        1
-    );
-
-    // El producto comienza a moverse desde el primer instante.
-    const suave = suavizar(t);
-
-    producto.position.lerpVectors(
-        animacionAgarre.posicionInicial,
-        animacionAgarre.posicionFinal,
-        suave
-    );
-
-    producto.quaternion.slerpQuaternions(
-        animacionAgarre.quaternionInicial,
-        animacionAgarre.quaternionFinal,
-        suave
-    );
-
-    producto.scale.lerpVectors(
-        animacionAgarre.escalaInicial,
-        animacionAgarre.escalaFinal,
-        suave
-    );
-
-    producto.updateMatrix();
-
-    if (t >= 1) {
-        producto.position.copy(
-            animacionAgarre.posicionFinal
-        );
-
-        producto.quaternion.copy(
-            animacionAgarre.quaternionFinal
-        );
-
-        producto.scale.copy(
-            animacionAgarre.escalaFinal
-        );
-
-        producto.updateMatrix();
-
-        animacionAgarre.activa = false;
-        animacionAgarre.tiempo = 0;
-
-        return true;
-    }
-
-    return false;
-}
 
     
     
