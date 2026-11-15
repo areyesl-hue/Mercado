@@ -5586,6 +5586,20 @@ function actualizar(delta) {
     }
 }
 
+    
+    
+    
+
+    function animacionProceduralActiva() {
+        return [
+            ESTADOS.RECOGIENDO,
+            ESTADOS.INSPECCIONANDO,
+            ESTADOS.GUARDANDO,
+            ESTADOS.DEVOLVIENDO,
+            ESTADOS.PAGANDO
+        ].includes(estado);
+    }
+
     function configurarCompras(opcionesCompras = {}) {
         if (
             typeof opcionesCompras.probabilidadCompra === 'number'
