@@ -5171,6 +5171,15 @@ function devolverProductoAlEstante() {
             
             
 case ESTADOS.RECOGIENDO: {
+    console.log(
+    `[PRUEBA RECOGIDA CLIENTE ${id}]`,
+    {
+        estado: estadoActual,
+        producto: productoObjetivo?.userData?.nombre ??
+            productoObjetivo?.name,
+        tiempoEstado: Number(tiempoEstado.toFixed(2))
+    }
+);
     animarRecogerProcedural();
 
     const agarreResuelto =
