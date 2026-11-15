@@ -1655,33 +1655,51 @@ function ajustarBrazoAlProducto(
             ikAgarre.puntoContacto
         );
     } else {
-        // Determinar el lado del producto más cercano
-        // a la muñeca del cliente.
-        const diferenciaX =
-            ikAgarre.muneca.x -
-            ikAgarre.centroProducto.x;
+        const caja = cajaAgarreProducto;
 
-        const diferenciaZ =
-            ikAgarre.muneca.z -
-            ikAgarre.centroProducto.z;
-
-        ikAgarre.puntoContacto.copy(
-            ikAgarre.centroProducto
+        // Limitar las coordenadas de la muñeca
+        // al volumen real del producto.
+        const px = THREE.MathUtils.clamp(
+            ikAgarre.muneca.x,
+            caja.min.x,
+            caja.max.x
         );
 
-        if (
-            Math.abs(diferenciaX) >
-            Math.abs(diferenciaZ)
-        ) {
-            ikAgarre.puntoContacto.x =
-                diferenciaX >= 0
-                    ? cajaAgarreProducto.max.x
-                    : cajaAgarreProducto.min.x;
-        } else {
-            ikAgarre.puntoContacto.z =
-                diferenciaZ >= 0
-                    ? cajaAgarreProducto.max.z
-                    : cajaAgarreProducto.min.z;
+        const py = THREE.MathUtils.clamp(
+            ikAgarre.muneca.y,
+            caja.min.y,
+            caja.max.y
+        );
+
+        const pz = THREE.MathUtils.clamp(
+            ikAgarre.muneca.z,
+            caja.min.z,
+            caja.max.z
+        );
+
+        const candidatos = [
+            new THREE.Vector3(caja.min.x, py, pz),
+            new THREE.Vector3(caja.max.x, py, pz),
+            new THREE.Vector3(px, caja.min.y, pz),
+            new THREE.Vector3(px, caja.max.y, pz),
+            new THREE.Vector3(px, py, caja.min.z),
+            new THREE.Vector3(px, py, caja.max.z)
+        ];
+
+        let menorDistancia = Infinity;
+
+        for (const candidato of candidatos) {
+            const distancia = candidato.distanceToSquared(
+                ikAgarre.muneca
+            );
+
+            if (distancia < menorDistancia) {
+                menorDistancia = distancia;
+
+                ikAgarre.puntoContacto.copy(
+                    candidato
+                );
+            }
         }
     }
 
@@ -1896,10 +1914,13 @@ function ajustarBrazoAlProducto(
 
     // Resolver IK no garantiza que el brazo haya
     // alcanzado el objetivo solicitado.
-    const toleranciaContacto = 0.045;
+const toleranciaContacto = limitar(
+    numero(config.toleranciaAgarre, 0.10),
+    0.04,
+    0.18
+);
 
-    return errorContacto <= toleranciaContacto;
-}
+return errorContacto <= toleranciaContacto;
 
     function animarInspeccionarProcedural() {
         const entrada = suavizar(Math.min(tiempoEstado / 0.55, 1));
