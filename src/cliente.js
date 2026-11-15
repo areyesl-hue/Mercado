@@ -626,83 +626,129 @@ console.log('[HUESO]', obj.name, '=>', normalizarNombre(obj.name));
         return null;
     }
 
-    function actualizarRig() {
-        rig.cadera = buscarHueso('hips', 'pelvis');
+function actualizarRig() {
+    rig.cadera = buscarHueso('hips', 'pelvis');
 
-        rig.torso = buscarHueso(
-            'spine2',
-            'spine1',
-            'spine',
-            'chest'
+    rig.torso = buscarHueso(
+        'spine2',
+        'spine1',
+        'spine',
+        'chest'
+    );
+
+    rig.cuello = buscarHueso('neck', 'cuello');
+    rig.cabeza = buscarHueso('head', 'cabeza');
+
+    rig.brazoIzquierdo = buscarHueso(
+        'leftupperarm',
+        'upperarml',
+        'leftarm'
+    );
+
+    rig.brazoDerecho = buscarHueso(
+        'rightupperarm',
+        'upperarmr',
+        'rightarm'
+    );
+
+    rig.antebrazoIzquierdo = buscarHueso(
+        'leftforearm',
+        'forearml',
+        'lowerarml'
+    );
+
+    rig.antebrazoDerecho = buscarHueso(
+        'rightforearm',
+        'forearmr',
+        'lowerarmr'
+    );
+
+    rig.manoIzquierda = buscarHueso(
+        'lefthand',
+        'handl',
+        'handleft'
+    );
+
+    rig.manoDerecha = buscarHueso(
+        'righthand',
+        'handr',
+        'handright'
+    );
+
+    rig.piernaIzquierda = buscarHueso(
+        'leftupleg',
+        'uplegleft',
+        'leftthigh',
+        'thighl'
+    );
+
+    rig.piernaDerecha = buscarHueso(
+        'rightupleg',
+        'uplegright',
+        'rightthigh',
+        'thighr'
+    );
+
+    rig.pantorrillaIzquierda = buscarHueso(
+        'leftleg',
+        'lowerlegleft',
+        'calfl',
+        'leftcalf'
+    );
+
+    rig.pantorrillaDerecha = buscarHueso(
+        'rightleg',
+        'lowerlegright',
+        'calfr',
+        'rightcalf'
+    );
+
+    // Actualizar matrices mundiales del rig.
+    grupo.updateMatrixWorld(true);
+
+    // Diagnosticar la posición de ambas palmas.
+    for (const [lado, mano] of [
+        ['izquierdo', rig.manoIzquierda],
+        ['derecho', rig.manoDerecha]
+    ]) {
+        if (!mano) {
+            console.warn(
+                `[RIG ${id}] No se encontró la mano ${lado}.`
+            );
+            continue;
+        }
+
+        // Posición mundial del hueso de la mano.
+        const posicionMano = mano.getWorldPosition(
+            new THREE.Vector3()
         );
 
-        rig.cuello = buscarHueso('neck', 'cuello');
-        rig.cabeza = buscarHueso('head', 'cabeza');
-
-        rig.brazoIzquierdo = buscarHueso(
-            'leftupperarm',
-            'upperarml',
-            'leftarm'
+        // Posición mundial estimada de la palma.
+        const posicionPalma = mano.localToWorld(
+            offsetPalmaLocal.clone()
         );
 
-        rig.brazoDerecho = buscarHueso(
-            'rightupperarm',
-            'upperarmr',
-            'rightarm'
-        );
+        console.log(
+            `[DIAGNÓSTICO PALMA ${id}]`,
+            {
+                lado,
+                hueso: mano.name,
 
-        rig.antebrazoIzquierdo = buscarHueso(
-            'leftforearm',
-            'forearml',
-            'lowerarml'
-        );
+                posicionMano: posicionMano.toArray().map(
+                    v => Number(v.toFixed(3))
+                ),
 
-        rig.antebrazoDerecho = buscarHueso(
-            'rightforearm',
-            'forearmr',
-            'lowerarmr'
-        );
+                posicionPalma: posicionPalma.toArray().map(
+                    v => Number(v.toFixed(3))
+                ),
 
-        rig.manoIzquierda = buscarHueso(
-            'lefthand',
-            'handl',
-            'handleft'
-        );
-
-        rig.manoDerecha = buscarHueso(
-            'righthand',
-            'handr',
-            'handright'
-        );
-
-        rig.piernaIzquierda = buscarHueso(
-            'leftupleg',
-            'uplegleft',
-            'leftthigh',
-            'thighl'
-        );
-
-        rig.piernaDerecha = buscarHueso(
-            'rightupleg',
-            'uplegright',
-            'rightthigh',
-            'thighr'
-        );
-
-        rig.pantorrillaIzquierda = buscarHueso(
-            'leftleg',
-            'lowerlegleft',
-            'calfl',
-            'leftcalf'
-        );
-
-        rig.pantorrillaDerecha = buscarHueso(
-            'rightleg',
-            'lowerlegright',
-            'calfr',
-            'rightcalf'
+                offset: offsetPalmaLocal.toArray().map(
+                    v => Number(v.toFixed(3))
+                )
+            }
         );
     }
+}
 
     function calcularOffsetPalmaDesdeEsqueleto(mano, destino) {
         if (!mano || !modelo) return false;
