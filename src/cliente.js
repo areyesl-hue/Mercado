@@ -3589,7 +3589,25 @@ function tomarProducto() {
     // respecto al punto real de contacto.
     const agarreResuelto =
         ajustarBrazoAlProducto(producto);
+grupo.updateMatrixWorld(true);
+mano.updateMatrixWorld(true);
 
+const palmaMundo = mano.localToWorld(
+    ikAgarre.offsetPalmaLocal.clone()
+);
+
+const errorContacto = palmaMundo.distanceTo(
+    ikAgarre.objetivoContacto
+);
+
+console.log(`[CONTACTO CLIENTE ${id}]`, {
+    errorMetros: Number(errorContacto.toFixed(4)),
+    palma: palmaMundo.toArray().map(v => Number(v.toFixed(3))),
+    objetivo: ikAgarre.objetivoContacto.toArray().map(
+        v => Number(v.toFixed(3))
+    ),
+    productoEnMano: producto.parent === mano
+});
     if (
         !agarreResuelto ||
         !ikAgarre.puntoContacto ||
@@ -4940,7 +4958,16 @@ function devolverProductoAlEstante() {
 
             case ESTADOS.INSPECCIONANDO: {
                 animarInspeccionarProcedural();
+if (productoEnMano) {
+    const mano = obtenerRigBrazo()?.mano;
 
+    console.log(`[INSPECCION CLIENTE ${id}]`, {
+        unidoALaMano: productoEnMano.parent === mano,
+        producto: productoEnMano.position.toArray().map(
+            v => Number(v.toFixed(3))
+        )
+    });
+}
                 if (
                     tiempoEstado >=
                     config.tiempoInspeccionar
