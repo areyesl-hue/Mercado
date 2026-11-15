@@ -3836,8 +3836,7 @@ if (destino) {
 
     
     
- 
-function tomarProducto(agarreResuelto = false) {
+ function tomarProducto(agarreResuelto = false) {
     if (
         !productoObjetivo ||
         !productoDisponible(productoObjetivo)
@@ -3859,7 +3858,6 @@ function tomarProducto(agarreResuelto = false) {
     const tamanoProducto = new THREE.Vector3();
     cajaTemporal.getSize(tamanoProducto);
 
-    // Guardar la transformación original del producto.
     productoOriginal = {
         parent: producto.parent,
         posicion: producto.position.clone(),
@@ -3879,16 +3877,10 @@ function tomarProducto(agarreResuelto = false) {
         return;
     }
 
-    // IMPORTANTE:
-    // No volver a orientar al cliente aquí.
-    // El IK ya posicionó el brazo hacia el producto.
-    // Girar el grupo en este punto desplazaría la palma.
-
     grupo.updateMatrixWorld(true);
-    mano.updateMatrixWorld(true);
+    mano.updateWorldMatrix(true, false);
     producto.updateMatrixWorld(true);
 
-    // Comprobar que el IK se resolvió durante actualizar().
     if (!agarreResuelto) {
         console.warn(
             `[CLIENTE ${id}] No se pudo resolver el contacto del producto.`
@@ -3900,39 +3892,75 @@ function tomarProducto(agarreResuelto = false) {
         return;
     }
 
-    // Obtener la posición mundial de la palma.
+    // Actualizar matrices antes de medir la palma.
     grupo.updateMatrixWorld(true);
-    mano.updateMatrixWorld(true);
+    mano.updateWorldMatrix(true, false);
+    producto.updateMatrixWorld(true);
 
+    // Posición de la palma calculada mediante localToWorld.
     const palmaMundo = mano.localToWorld(
         ikAgarre.offsetPalmaLocal.clone()
     );
 
+    // Comparación independiente usando la matriz mundial.
     grupo.updateMatrixWorld(true);
-    mano.updateMatrixWorld(true);
-    producto.updateMatrixWorld(true);
+    mano.updateWorldMatrix(true, false);
 
-    // Calcular el error real entre palma y contacto.
-    const errorContacto = palmaMundo.distanceTo(
-        ikAgarre.objetivoContacto
+    const palmaDesdeMatriz =
+        ikAgarre.offsetPalmaLocal
+            .clone()
+            .applyMatrix4(mano.matrixWorld);
+
+    const munecaDiagnostico = mano.getWorldPosition(
+        new THREE.Vector3()
     );
 
-    // Tolerancia única de contacto.
+    const centroProductoDiagnostico =
+        new THREE.Box3()
+            .setFromObject(producto)
+            .getCenter(new THREE.Vector3());
+
+    // Diferencia entre los dos cálculos de la palma.
+    const diferenciaCalculos =
+        palmaMundo.distanceTo(palmaDesdeMatriz);
+
+    // Distancia real entre la palma y el objetivo de contacto.
+    const errorContacto =
+        palmaMundo.distanceTo(
+            ikAgarre.objetivoContacto
+        );
+
     const toleranciaContacto = limitar(
         numero(config.toleranciaAgarre, 0.10),
         0.04,
         0.18
     );
 
-    // Información geométrica del producto.
-    const centroProductoDiagnostico = new THREE.Box3()
-        .setFromObject(producto)
-        .getCenter(new THREE.Vector3());
+    console.log(`[COMPARACIÓN PALMA ${id}]`, {
+        lado: ladoAgarre,
+        mano: mano.name,
 
-    const munecaDiagnostico = new THREE.Vector3();
-    mano.getWorldPosition(munecaDiagnostico);
+        palmaCalculada: palmaMundo.toArray().map(
+            v => Number(v.toFixed(3))
+        ),
 
-    // Diagnóstico completo.
+        palmaDesdeMatriz: palmaDesdeMatriz.toArray().map(
+            v => Number(v.toFixed(3))
+        ),
+
+        muñeca: munecaDiagnostico.toArray().map(
+            v => Number(v.toFixed(3))
+        ),
+
+        offset: ikAgarre.offsetPalmaLocal.toArray().map(
+            v => Number(v.toFixed(3))
+        ),
+
+        diferenciaCalculos: Number(
+            diferenciaCalculos.toFixed(4)
+        )
+    });
+
     console.log(
         `[DIAGNÓSTICO CONTACTO CLIENTE ${id}]`,
         {
@@ -3960,10 +3988,16 @@ function tomarProducto(agarreResuelto = false) {
                 )
             },
 
-            muneca: {
-                x: Number(munecaDiagnostico.x.toFixed(3)),
-                y: Number(munecaDiagnostico.y.toFixed(3)),
-                z: Number(munecaDiagnostico.z.toFixed(3))
+            muñeca: {
+                x: Number(
+                    munecaDiagnostico.x.toFixed(3)
+                ),
+                y: Number(
+                    munecaDiagnostico.y.toFixed(3)
+                ),
+                z: Number(
+                    munecaDiagnostico.z.toFixed(3)
+                )
             },
 
             centroProducto: {
@@ -3979,24 +4013,24 @@ function tomarProducto(agarreResuelto = false) {
             },
 
             distanciaPalmaProducto: Number(
-                palmaMundo
-                    .distanceTo(centroProductoDiagnostico)
-                    .toFixed(3)
+                palmaMundo.distanceTo(
+                    centroProductoDiagnostico
+                ).toFixed(3)
             ),
 
             productoEnMano: producto.parent === mano
         }
     );
 
-    // Comprobar si la palma alcanzó el contacto.
+    // No permitir que el producto se mueva si todavía
+    // no existe contacto físico suficiente.
     if (errorContacto > toleranciaContacto) {
-        const tiempoMaximo = Math.max(
-            numero(config.tiempoRecoger, 1.1),
-            0.01
-        ) + 0.75;
+        const tiempoMaximo =
+            Math.max(
+                numero(config.tiempoRecoger, 1.1),
+                0.01
+            ) + 0.75;
 
-        // Dar tiempo adicional al brazo.
-        // El producto todavía permanece en el estante.
         if (tiempoEstado < tiempoMaximo) {
             return;
         }
@@ -4017,48 +4051,48 @@ function tomarProducto(agarreResuelto = false) {
         return;
     }
 
-    console.log(`[CONTACTO CLIENTE ${id}]`, {
-        errorMetros: Number(
-            errorContacto.toFixed(4)
-        ),
+    console.log(
+        `[CONTACTO CLIENTE ${id}]`,
+        {
+            producto: producto.userData?.nombre ??
+                producto.name ??
+                'producto',
 
-        palma: palmaMundo.toArray().map(
-            v => Number(v.toFixed(3))
-        ),
+            errorContacto: Number(
+                errorContacto.toFixed(3)
+            )
+        }
+    );
 
-        objetivo: ikAgarre.objetivoContacto.toArray().map(
-            v => Number(v.toFixed(3))
-        ),
-
-        productoEnMano: producto.parent === mano
-    });
-
-    // Guardar el punto de contacto en coordenadas locales.
+    // Guardar el punto de contacto en coordenadas locales
+    // antes de unir el producto a la mano.
     const puntoContactoLocal =
         producto.worldToLocal(
             ikAgarre.puntoContacto.clone()
         );
 
     const normalContactoLocal =
-        ikAgarre.normalContacto.clone().transformDirection(
-            producto.matrixWorld.clone().invert()
-        );
+        ikAgarre.normalContacto
+            .clone()
+            .transformDirection(
+                producto.matrixWorld.clone().invert()
+            );
 
-    // Actualizar matrices antes de cambiar el padre.
+    // Actualizar transformaciones antes del attach.
     grupo.updateMatrixWorld(true);
-    mano.updateMatrixWorld(true);
+    mano.updateWorldMatrix(true, false);
     producto.updateMatrixWorld(true);
 
-    // Cambiar el padre conservando la transformación mundial.
+    // El producto pasa a ser hijo de la mano únicamente
+    // después de comprobar el contacto.
     mano.attach(producto);
 
     grupo.updateMatrixWorld(true);
-    mano.updateMatrixWorld(true);
+    mano.updateWorldMatrix(true, false);
     producto.updateMatrixWorld(true);
 
     productoConCajaAgarre = null;
 
-    // Desactivar la antigua interpolación artificial.
     animacionAgarre.activa = false;
     animacionAgarre.tiempo = 0;
 
@@ -4089,14 +4123,13 @@ function tomarProducto(agarreResuelto = false) {
     producto.visible = true;
     productoEnMano = producto;
 
-    // Guardar los datos de contacto para el seguimiento.
     animacionAgarre.puntoContactoLocal =
         puntoContactoLocal.clone();
 
     animacionAgarre.normalContactoLocal =
         normalContactoLocal.clone();
 
-    // Preparar la transición hacia la postura de inspección.
+    // Preparar la pose de inspección.
     poseAgarreInspeccion.huesos.length = 0;
 
     for (const [hueso] of huesosBase) {
@@ -4130,7 +4163,6 @@ function tomarProducto(agarreResuelto = false) {
         }.`
     );
 }
-
     function buscarUbicacionOtroRack(producto) {
         if (!producto || !productoOriginal) return null;
 
