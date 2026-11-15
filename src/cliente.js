@@ -2477,88 +2477,106 @@ function finalizarDevolucionProducto() {
 
     let obstaculosCache = [];
 
-    function obtenerObstaculos() {
-        const obstaculos = [];
+function obtenerObstaculos() {
+    const obstaculos = [];
 
-        if (Array.isArray(config.colisiones)) {
-            for (const colision of config.colisiones) {
-                if (!colision) continue;
+    // Primero utilizamos las colisiones calculadas del mobiliario.
+    if (
+        Array.isArray(config.colisiones) &&
+        config.colisiones.length > 0
+    ) {
+        for (const colision of config.colisiones) {
+            if (!colision) continue;
 
-                const minX = numero(colision.minX, NaN);
-                const maxX = numero(colision.maxX, NaN);
-                const minZ = numero(colision.minZ, NaN);
-                const maxZ = numero(colision.maxZ, NaN);
+            const minX = numero(colision.minX, NaN);
+            const maxX = numero(colision.maxX, NaN);
+            const minZ = numero(colision.minZ, NaN);
+            const maxZ = numero(colision.maxZ, NaN);
 
-                const x = numero(
-                    colision.x,
-                    (minX + maxX) / 2
-                );
-                const z = numero(
-                    colision.z,
-                    (minZ + maxZ) / 2
-                );
-                const ancho = numero(
-                    colision.ancho,
-                    numero(colision.width, maxX - minX)
-                );
-                const profundidad = numero(
-                    colision.profundidad,
-                    numero(
-                        colision.fondo,
-                        numero(colision.depth, maxZ - minZ)
-                    )
-                );
+            const x = numero(
+                colision.x,
+                (minX + maxX) / 2
+            );
 
-                if (
-                    !Number.isFinite(x) ||
-                    !Number.isFinite(z) ||
-                    !Number.isFinite(ancho) ||
-                    !Number.isFinite(profundidad) ||
-                    ancho <= 0 ||
-                    profundidad <= 0
-                ) {
-                    continue;
-                }
+            const z = numero(
+                colision.z,
+                (minZ + maxZ) / 2
+            );
 
-                obstaculos.push({ x, z, ancho, profundidad });
+            const ancho = numero(
+                colision.ancho,
+                numero(colision.width, maxX - minX)
+            );
+
+            const profundidad = numero(
+                colision.profundidad,
+                numero(
+                    colision.fondo,
+                    numero(colision.depth, maxZ - minZ)
+                )
+            );
+
+            if (
+                !Number.isFinite(x) ||
+                !Number.isFinite(z) ||
+                !Number.isFinite(ancho) ||
+                !Number.isFinite(profundidad) ||
+                ancho <= 0 ||
+                profundidad <= 0
+            ) {
+                continue;
             }
-        }
 
-        if (config.mobiliario?.traverse) {
-            config.mobiliario.updateMatrixWorld(true);
-
-            config.mobiliario.traverse(obj => {
-                if (
-                    !obj.isMesh ||
-                    obj.userData?.sinColision ||
-                    obj.userData?.esProducto
-                ) {
-                    return;
-                }
-
-                cajaTemporal.setFromObject(obj);
-
-                if (cajaTemporal.isEmpty()) return;
-
-                cajaTemporal.getCenter(vectorTemporal);
-                cajaTemporal.getSize(tamanoTemporal);
-
-                if (tamanoTemporal.y > 3.5) return;
-                if (tamanoTemporal.x < 0.08 || tamanoTemporal.z < 0.08) {
-                    return;
-                }
-
-                obstaculos.push({
-                    x: vectorTemporal.x,
-                    z: vectorTemporal.z,
-                    ancho: tamanoTemporal.x,
-                    profundidad: tamanoTemporal.z
-                });
+            obstaculos.push({
+                x,
+                z,
+                ancho,
+                profundidad
             });
         }
 
         return obstaculos;
     }
+
+    // Solo como alternativa, recorremos los Mesh del mobiliario.
+    if (config.mobiliario?.traverse) {
+        config.mobiliario.updateMatrixWorld(true);
+
+        config.mobiliario.traverse(obj => {
+            if (
+                !obj.isMesh ||
+                obj.userData?.sinColision ||
+                obj.userData?.esProducto
+            ) {
+                return;
+            }
+
+            cajaTemporal.setFromObject(obj);
+
+            if (cajaTemporal.isEmpty()) return;
+
+            cajaTemporal.getCenter(vectorTemporal);
+            cajaTemporal.getSize(tamanoTemporal);
+
+            if (
+                tamanoTemporal.y > 3.5 ||
+                tamanoTemporal.x < 0.08 ||
+                tamanoTemporal.z < 0.08
+            ) {
+                return;
+            }
+
+            obstaculos.push({
+                x: vectorTemporal.x,
+                z: vectorTemporal.z,
+                ancho: tamanoTemporal.x,
+                profundidad: tamanoTemporal.z
+            });
+        });
+    }
+
+    return obstaculos;
+}
 
     function actualizarColisiones() {
         obstaculosCache = obtenerObstaculos();
@@ -2942,31 +2960,36 @@ function finalizarDevolucionProducto() {
         return true;
     }
 
-    function recuperarMovimiento(forzar = false) {
-        if (!objetivo) return false;
+function recuperarMovimiento(forzar = false) {
+    if (!objetivo) return false;
 
-        if (!forzar && tiempoRecalculoRuta < config.intervaloRecalculoRuta) {
-            return false;
-        }
-
-        tiempoRecalculoRuta = 0;
-        intentosMovimiento++;
-
-        const nuevoCamino = encontrarCamino(
-            grupo.position,
-            objetivo
-        );
-
-        if (nuevoCamino.length) {
-            ruta = nuevoCamino;
-            indiceRuta = 0;
-            intentosMovimiento = 0;
-
-            return true;
-        }
-
+    if (
+        !forzar &&
+        tiempoRecalculoRuta < config.intervaloRecalculoRuta
+    ) {
         return false;
     }
+
+    tiempoRecalculoRuta = 0;
+    intentosMovimiento++;
+
+    const nuevoCamino = encontrarCamino(
+        grupo.position,
+        objetivo
+    );
+
+    if (nuevoCamino.length) {
+        ruta = nuevoCamino;
+        indiceRuta = 0;
+
+        // No reiniciar intentosMovimiento aquí.
+        // La ruta puede volver a bloquearse.
+        return true;
+    }
+
+    return false;
+}
+
 
     function resolverClienteAtascado() {
         console.warn(
