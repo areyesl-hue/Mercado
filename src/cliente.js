@@ -1364,6 +1364,18 @@ console.log('[HUESO]', obj.name, '=>', normalizarNombre(obj.name));
         }
 
         grupo.updateMatrixWorld(true);
+        grupo.updateMatrixWorld(true);
+
+const manoFinal = new THREE.Vector3();
+const objetivoFinal = objetivo.clone();
+
+brazo.mano.getWorldPosition(manoFinal);
+
+console.log('[DIAGNOSTICO IK]', {
+    mano: manoFinal.toArray().map(n => Number(n.toFixed(3))),
+    objetivo: objetivoFinal.toArray().map(n => Number(n.toFixed(3))),
+    distancia: Number(manoFinal.distanceTo(objetivoFinal).toFixed(3))
+});
         return true;
     }
 
