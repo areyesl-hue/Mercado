@@ -2056,148 +2056,163 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     
     
 
-    function actualizarAnimacionProducto(delta) {
-        if (!animacionProducto.activa || !productoEnMano) {
-            return false;
-        }
-
-        const producto = productoEnMano;
-
-        animacionProducto.tiempo += delta;
-
-        const duracion = Math.max(
-            animacionProducto.duracion,
-            0.01
-        );
-
-        const t = limitar(
-            animacionProducto.tiempo / duracion,
-            0,
-            1
-        );
-
-        const suave = suavizar(t);
-
-        const posicion = animacionProducto.posicionTemporal;
-        const quaternion = animacionProducto.quaternionTemporal;
-
-        posicion.lerpVectors(
-            animacionProducto.posicionInicial,
-            animacionProducto.posicionFinal,
-            suave
-        );
-
-        quaternion.slerpQuaternions(
-            animacionProducto.quaternionInicial,
-            animacionProducto.quaternionFinal,
-            suave
-        );
-
-        const padre = producto.parent;
-
-        if (padre) {
-            padre.updateMatrixWorld(true);
-
-            const posicionLocal =
-                animacionProducto.posicionLocalTemporal.copy(posicion);
-
-            padre.worldToLocal(posicionLocal);
-
-            producto.position.copy(posicionLocal);
-
-            padre.getWorldQuaternion(
-                animacionProducto.quaternionPadreTemporal
-            );
-
-            producto.quaternion
-                .copy(animacionProducto.quaternionPadreTemporal)
-                .invert()
-                .multiply(quaternion);
-
-            producto.scale.lerpVectors(
-                animacionProducto.escalaInicial,
-                animacionProducto.escalaFinal,
-                suave
-            );
-        }
-
-        if (t >= 1) {
-            finalizarDevolucionProducto();
-            return true;
-        }
-
+function actualizarAnimacionProducto(delta) {
+    if (
+        !animacionProducto.activa ||
+        !productoEnMano ||
+        animacionProducto.fase !== 'ALCANCE'
+    ) {
         return false;
     }
 
-    
-    
-    
+    const producto = productoEnMano;
+    const brazo = obtenerRigBrazo();
+    const mano = brazo?.mano;
 
-    function finalizarDevolucionProducto() {
-        if (!productoEnMano || !productoOriginal) {
-            animacionProducto.activa = false;
-            animacionProducto.tipo = null;
-            animacionProducto.fase = null;
+    if (!mano || producto.parent !== mano) {
+        finalizarDevolucionProducto();
+        return true;
+    }
 
-            animacionAgarre.activa = false;
-            animacionAgarre.tiempo = 0;
+    animacionProducto.tiempo += delta;
 
-            return;
-        }
+    const duracion = Math.max(
+        numero(animacionProducto.duracion, 1.4),
+        0.01
+    );
 
-        const producto = productoEnMano;
-        const original = productoOriginal;
-        const tipoDevolucion = animacionProducto.tipo;
+    const t = limitar(
+        animacionProducto.tiempo / duracion,
+        0,
+        1
+    );
+
+    const suave = suavizar(t);
+
+    // Actualizar las matrices de la mano.
+    grupo.updateMatrixWorld(true);
+
+    mano.updateMatrixWorld(true);
+
+    // Obtener la orientación y escala actuales de la mano.
+    const quaternionMano = new THREE.Quaternion();
+    const escalaMano = new THREE.Vector3();
+
+    mano.getWorldQuaternion(quaternionMano);
+    mano.getWorldScale(escalaMano);
+
+    // El producto conserva su posición local respecto
+    // a la mano. Calculamos ese desplazamiento en mundo.
+    const desplazamientoProducto = producto.position
+        .clone()
+        .multiply(escalaMano)
+        .applyQuaternion(quaternionMano);
+
+    // Calcular dónde debe estar la muñeca para que
+    // el producto llegue al destino sin separarse.
+    const objetivoManoFinal =
+        animacionProducto.posicionFinal
+            .clone()
+            .sub(desplazamientoProducto);
+
+    // Interpolar el objetivo de la muñeca.
+    const objetivoMano =
+        new THREE.Vector3().lerpVectors(
+            animacionProducto.manoInicial,
+            objetivoManoFinal,
+            suave
+        );
+
+    // Mover el brazo mediante IK.
+    // El producto continúa siendo hijo de la mano.
+    resolverIKBrazo(
+        brazo,
+        objetivoMano
+    );
+
+    grupo.updateMatrixWorld(true);
+
+    // Cuando termina la extensión, colocar el producto
+    // en su ubicación definitiva.
+    if (t >= 1) {
+        finalizarDevolucionProducto();
+        return true;
+    }
+
+    return false;
+}
+
+
+function finalizarDevolucionProducto() {
+    if (!productoEnMano || !productoOriginal) {
+        animacionProducto.activa = false;
+        animacionProducto.tipo = null;
+        animacionProducto.fase = null;
 
         animacionAgarre.activa = false;
         animacionAgarre.tiempo = 0;
 
-        producto.parent?.remove(producto);
-
-        if (original.parent) {
-            original.parent.add(producto);
-        } else {
-            scene.add(producto);
-        }
-
-        producto.position.copy(original.posicion);
-        producto.quaternion.copy(original.quaternion);
-        producto.scale.copy(original.escala);
-        producto.visible = original.visible;
-
-        if (tipoDevolucion === 'REUBICAR') {
-            producto.userData.reubicado = true;
-            producto.userData.rackAnterior =
-                original.rackAnterior ?? null;
-
-            producto.userData.rackNuevo =
-                original.rackNuevo ?? null;
-
-            producto.userData.rackReubicado =
-                original.rackNuevo ?? null;
-        } else {
-            producto.userData.reubicado = false;
-        }
-
-        producto.userData.reservado = false;
-        delete producto.userData.reservadoPor;
-
-        producto.updateMatrixWorld(true);
-
-        productoEnMano = null;
-        productoOriginal = null;
-
-        animacionProducto.activa = false;
-        animacionProducto.tipo = null;
-        animacionProducto.fase = null;
-        animacionProducto.tiempo = 0;
-
-        liberarReserva();
+        return;
     }
 
-    
-    
-    
+    const producto = productoEnMano;
+    const original = productoOriginal;
+    const tipoDevolucion = animacionProducto.tipo;
+
+    animacionAgarre.activa = false;
+    animacionAgarre.tiempo = 0;
+
+    // Separar el producto de la mano.
+    producto.parent?.remove(producto);
+
+    // Recuperar su padre original o el padre
+    // correspondiente al nuevo estante.
+    if (original.parent) {
+        original.parent.add(producto);
+    } else {
+        scene.add(producto);
+    }
+
+    // Colocar el producto en su transformación final.
+    producto.position.copy(original.posicion);
+    producto.quaternion.copy(original.quaternion);
+    producto.scale.copy(original.escala);
+    producto.visible = original.visible;
+
+    // Registrar la reubicación cuando corresponda.
+    if (tipoDevolucion === 'REUBICAR') {
+        producto.userData.reubicado = true;
+
+        producto.userData.rackAnterior =
+            original.rackAnterior ?? null;
+
+        producto.userData.rackNuevo =
+            original.rackNuevo ?? null;
+
+        producto.userData.rackReubicado =
+            original.rackNuevo ?? null;
+    } else {
+        producto.userData.reubicado = false;
+    }
+
+    // Liberar la reserva del producto.
+    producto.userData.reservado = false;
+    delete producto.userData.reservadoPor;
+
+    producto.updateMatrixWorld(true);
+
+    // Limpiar referencias.
+    productoEnMano = null;
+    productoOriginal = null;
+
+    animacionProducto.activa = false;
+    animacionProducto.tipo = null;
+    animacionProducto.fase = null;
+    animacionProducto.tiempo = 0;
+
+    liberarReserva();
+}
+
 
     function cargarModelo() {
         loaderGLTF.load(
@@ -3852,137 +3867,191 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     
     
 
-    function devolverProductoAlEstante() {
-        if (!productoEnMano || !productoOriginal) {
-            productoEnMano = null;
-            productoOriginal = null;
+function devolverProductoAlEstante() {
+    if (!productoEnMano || !productoOriginal) {
+        productoEnMano = null;
+        productoOriginal = null;
 
-            animacionProducto.activa = false;
-            animacionProducto.fase = null;
-            animacionAgarre.activa = false;
-
-            liberarReserva();
-            return;
-        }
-
-        if (animacionProducto.activa) return;
-
-        const producto = productoEnMano;
-        const original = productoOriginal;
-
-        if (!original.parent) {
-            finalizarDevolucionProducto();
-            return;
-        }
-
+        animacionProducto.activa = false;
+        animacionProducto.fase = null;
         animacionAgarre.activa = false;
-        animacionAgarre.tiempo = 0;
 
-        grupo.updateMatrixWorld(true);
-        producto.updateMatrixWorld(true);
-        original.parent.updateMatrixWorld(true);
-
-        const posicionMundo = new THREE.Vector3();
-        const quaternionMundo = new THREE.Quaternion();
-        const escalaMundo = new THREE.Vector3();
-
-        producto.getWorldPosition(posicionMundo);
-        producto.getWorldQuaternion(quaternionMundo);
-        producto.getWorldScale(escalaMundo);
-
-        const matrizOriginal = new THREE.Matrix4();
-
-        matrizOriginal.compose(
-            original.posicion,
-            original.quaternion,
-            original.escala
-        );
-
-        const matrizMundoOriginal = new THREE.Matrix4();
-
-        matrizMundoOriginal.multiplyMatrices(
-            original.parent.matrixWorld,
-            matrizOriginal
-        );
-
-        const posicionFinal = new THREE.Vector3();
-        const quaternionFinal = new THREE.Quaternion();
-        const escalaFinal = new THREE.Vector3();
-
-        matrizMundoOriginal.decompose(
-            posicionFinal,
-            quaternionFinal,
-            escalaFinal
-        );
-
-        if (
-            animacionProducto.tipo === 'REUBICAR' &&
-            animacionProducto.fase === null &&
-            distanciaXZ(grupo.position, posicionFinal) > 1.1
-        ) {
-            vectorTemporal.set(
-                grupo.position.x - posicionFinal.x,
-                0,
-                grupo.position.z - posicionFinal.z
-            );
-
-            if (vectorTemporal.lengthSq() < 0.0001) {
-                grupo.getWorldDirection(vectorTemporal);
-            }
-
-            vectorTemporal.normalize();
-
-            const destino = {
-                x: posicionFinal.x + vectorTemporal.x * 0.62,
-                z: posicionFinal.z + vectorTemporal.z * 0.62
-            };
-
-            animacionProducto.fase = 'CAMINANDO';
-
-            if (establecerObjetivo(
-                destino,
-                ESTADOS.DEVOLVIENDO
-            )) {
-                return;
-            }
-
-            animacionProducto.fase = null;
-
-            if (original.origen) {
-                liberarReserva();
-                productoOriginal = { ...original.origen };
-                animacionProducto.tipo = 'DEVOLVER';
-                devolverProductoAlEstante();
-                return;
-            }
-        }
-
-        animacionProducto.activa = true;
-
-        if (animacionProducto.tipo !== 'REUBICAR') {
-            animacionProducto.tipo = 'DEVOLVER';
-        }
-
-        animacionProducto.tiempo = 0;
-        animacionProducto.fase = 'COLOCANDO';
-        tiempoEstado = 0;
-        animacionProducto.duracion = Math.max(
-            config.tiempoDevolver,
-            0.05
-        );
-
-        animacionProducto.posicionInicial.copy(posicionMundo);
-        animacionProducto.posicionFinal.copy(posicionFinal);
-
-        animacionProducto.quaternionInicial.copy(quaternionMundo);
-        animacionProducto.quaternionFinal.copy(quaternionFinal);
-
-        animacionProducto.escalaInicial.copy(escalaMundo);
-        animacionProducto.escalaFinal.copy(escalaFinal);
+        liberarReserva();
+        return;
     }
 
-    
-    
+    if (animacionProducto.activa) return;
+
+    const producto = productoEnMano;
+    const original = productoOriginal;
+
+    if (!original.parent) {
+        finalizarDevolucionProducto();
+        return;
+    }
+
+    animacionAgarre.activa = false;
+    animacionAgarre.tiempo = 0;
+
+    grupo.updateMatrixWorld(true);
+    producto.updateMatrixWorld(true);
+    original.parent.updateMatrixWorld(true);
+
+    // Calcular la transformación mundial del destino.
+    const matrizOriginal = new THREE.Matrix4();
+
+    matrizOriginal.compose(
+        original.posicion,
+        original.quaternion,
+        original.escala
+    );
+
+    const matrizMundoOriginal = new THREE.Matrix4();
+
+    matrizMundoOriginal.multiplyMatrices(
+        original.parent.matrixWorld,
+        matrizOriginal
+    );
+
+    const posicionFinal = new THREE.Vector3();
+    const quaternionFinal = new THREE.Quaternion();
+    const escalaFinal = new THREE.Vector3();
+
+    matrizMundoOriginal.decompose(
+        posicionFinal,
+        quaternionFinal,
+        escalaFinal
+    );
+
+    // Si se trata de una reubicación, caminar primero
+    // hasta el nuevo estante.
+    if (
+        animacionProducto.tipo === 'REUBICAR' &&
+        animacionProducto.fase === null &&
+        distanciaXZ(grupo.position, posicionFinal) > 1.1
+    ) {
+        vectorTemporal.set(
+            grupo.position.x - posicionFinal.x,
+            0,
+            grupo.position.z - posicionFinal.z
+        );
+
+        if (vectorTemporal.lengthSq() < 0.0001) {
+            grupo.getWorldDirection(vectorTemporal);
+        }
+
+        vectorTemporal.normalize();
+
+        const destino = {
+            x: posicionFinal.x + vectorTemporal.x * 0.62,
+            z: posicionFinal.z + vectorTemporal.z * 0.62
+        };
+
+        animacionProducto.fase = 'CAMINANDO';
+
+        if (
+            establecerObjetivo(
+                destino,
+                ESTADOS.DEVOLVIENDO
+            )
+        ) {
+            return;
+        }
+
+        animacionProducto.fase = null;
+
+        // Si no puede llegar al nuevo estante,
+        // regresar al lugar original.
+        if (original.origen) {
+            liberarReserva();
+
+            productoOriginal = { ...original.origen };
+
+            animacionProducto.tipo = 'DEVOLVER';
+
+            devolverProductoAlEstante();
+            return;
+        }
+    }
+
+    // Obtener la mano que sostiene el producto.
+    const brazo = obtenerRigBrazo();
+    const mano = brazo?.mano;
+
+    if (!mano) {
+        finalizarDevolucionProducto();
+        return;
+    }
+
+    // Asegurar que el producto permanezca unido
+    // a la mano durante toda la colocación.
+    grupo.updateMatrixWorld(true);
+
+    if (producto.parent !== mano) {
+        mano.attach(producto);
+    }
+
+    mano.updateMatrixWorld(true);
+
+    // Guardar la posición inicial de la muñeca.
+    animacionProducto.manoInicial =
+        new THREE.Vector3();
+
+    mano.getWorldPosition(
+        animacionProducto.manoInicial
+    );
+
+    // Guardar el destino mundial del producto.
+    animacionProducto.posicionInicial =
+        new THREE.Vector3();
+
+    producto.getWorldPosition(
+        animacionProducto.posicionInicial
+    );
+
+    animacionProducto.posicionFinal.copy(
+        posicionFinal
+    );
+
+    animacionProducto.quaternionInicial =
+        new THREE.Quaternion();
+
+    producto.getWorldQuaternion(
+        animacionProducto.quaternionInicial
+    );
+
+    animacionProducto.quaternionFinal.copy(
+        quaternionFinal
+    );
+
+    animacionProducto.escalaInicial =
+        new THREE.Vector3();
+
+    producto.getWorldScale(
+        animacionProducto.escalaInicial
+    );
+
+    animacionProducto.escalaFinal.copy(
+        escalaFinal
+    );
+
+    // Comenzar la extensión del brazo.
+    animacionProducto.activa = true;
+    animacionProducto.tiempo = 0;
+    animacionProducto.fase = 'ALCANCE';
+
+    animacionProducto.duracion = Math.max(
+        numero(config.tiempoDevolver, 1.4),
+        0.1
+    );
+
+    tiempoEstado = 0;
+
+    // Reiniciar los temporizadores del gesto.
+    animacionAgarre.activa = false;
+    animacionAgarre.tiempo = 0;
+}
+
     
 
     function guardarProducto() {
@@ -4879,55 +4948,59 @@ export function crearClienteSupermercado(scene, opciones = {}) {
             
             
 
-            case ESTADOS.DEVOLVIENDO: {
-                if (animacionProducto.fase === 'CAMINANDO') {
-                    if (moverHaciaDestino(delta)) {
-                        animacionProducto.fase = 'COLOCANDO';
-                        tiempoEstado = 0;
+case ESTADOS.DEVOLVIENDO: {
 
-                        if (productoOriginal?.parent) {
-                            productoOriginal.parent.updateMatrixWorld(true);
+    // Si el cliente todavía está caminando hacia
+    // el nuevo estante, completar primero el recorrido.
+    if (animacionProducto.fase === 'CAMINANDO') {
 
-                            const destino = productoOriginal.parent
-                                .localToWorld(
-                                    productoOriginal.posicion.clone()
-                                );
+        if (moverHaciaDestino(delta)) {
 
-                            orientarHaciaPunto({
-                                x: destino.x,
-                                z: destino.z
-                            });
-                        }
+            animacionProducto.fase = 'COLOCANDO';
 
-                        devolverProductoAlEstante();
-                    }
+            tiempoEstado = 0;
 
-                    break;
-                }
+            if (productoOriginal?.parent) {
+                productoOriginal.parent.updateMatrixWorld(true);
 
-                animarDevolverProcedural();
+                const destino = productoOriginal.parent.localToWorld(
+                    productoOriginal.posicion.clone()
+                );
 
-                actualizarAnimacionProducto(delta);
-
-                if (productoEnMano && animacionProducto.activa) {
-                    productoConCajaAgarre = null;
-                    ajustarBrazoAlProducto(
-                        productoEnMano,
-                        1,
-                        null,
-                        1
-                    );
-                }
-
-                if (
-                    tiempoEstado >= config.tiempoDevolver &&
-                    !animacionProducto.activa
-                ) {
-                    cambiarEstado(ESTADOS.BUSCANDO);
-                }
-
-                break;
+                orientarHaciaPunto({
+                    x: destino.x,
+                    z: destino.z
+                });
             }
+
+            // Iniciar la colocación cuando llegue.
+            devolverProductoAlEstante();
+        }
+
+        break;
+    }
+
+    // Animación corporal de devolución.
+    animarDevolverProcedural();
+
+    // La mano y el producto se desplazan juntos.
+    actualizarAnimacionProducto(delta);
+
+    // Ya no llamar a ajustarBrazoAlProducto aquí.
+    // El objetivo del brazo ahora lo calcula
+    // actualizarAnimacionProducto mediante IK.
+
+    if (
+        tiempoEstado >= config.tiempoDevolver &&
+        !animacionProducto.activa
+    ) {
+        cambiarEstado(ESTADOS.BUSCANDO);
+    }
+
+    break;
+}
+
+
 
             
             
