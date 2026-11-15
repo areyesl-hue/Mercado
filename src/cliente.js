@@ -3738,84 +3738,110 @@ function obtenerPuntoFrenteProducto(producto) {
     const centroX = vectorTemporal2.x;
     const centroZ = vectorTemporal2.z;
 
-    const semiancho = Math.max(
-        tamanoTemporal.x,
-        tamanoTemporal.z
-    ) * 0.5;
+    // Dimensiones horizontales reales del producto.
+    const semianchoX = tamanoTemporal.x * 0.5;
+    const semianchoZ = tamanoTemporal.z * 0.5;
+
+    // El cliente se aproxima desde fuera del producto.
+    const margen = Math.max(
+        numero(config.radioColision, 0.38) + 0.035,
+        0.40
+    );
 
     const radioMinimo = Math.max(
-        numero(config.radioColision, 0.38) +
-        semiancho +
-        0.06,
-        numero(config.distanciaProducto, 0.30)
+        Math.min(semianchoX, semianchoZ) + margen,
+        0.43
     );
 
-    const radioMaximo = Math.max(
-        radioMinimo + 0.6,
-        numero(config.distanciaFrenteProducto, 1.0) + 0.8
-    );
+    // No permitir aproximaciones excesivamente lejanas.
+    const radioMaximo = radioMinimo + 0.55;
 
     const candidatos = [];
+    const posicionActual = grupo.position;
 
     for (
         let radio = radioMinimo;
         radio <= radioMaximo;
-        radio += 0.08
+        radio += 0.035
     ) {
         for (
             let angulo = 0;
             angulo < Math.PI * 2;
-            angulo += Math.PI / 24
+            angulo += Math.PI / 32
         ) {
-            const x = centroX + Math.cos(angulo) * radio;
-            const z = centroZ + Math.sin(angulo) * radio;
+            const x = centroX + Math.cos(angulo) * (
+                semianchoX + radio
+            );
+
+            const z = centroZ + Math.sin(angulo) * (
+                semianchoZ + radio
+            );
 
             if (!puntoLibre(x, z)) continue;
 
+            const destino = { x, z };
+
             const camino = encontrarCamino(
-                grupo.position,
-                { x, z }
+                posicionActual,
+                destino
             );
 
-            if (!camino.length) continue;
+            if (!camino || !camino.length) continue;
 
-            const distancia = distanciaXZ(
-                grupo.position,
-                { x, z }
+            const distanciaProducto = Math.hypot(
+                x - centroX,
+                z - centroZ
             );
+
+            const distanciaRecorrido = distanciaXZ(
+                posicionActual,
+                destino
+            );
+
+            // Favorecer aproximaciones cercanas sin ignorar
+            // el costo de recorrer el supermercado.
+            const puntuacion =
+                distanciaProducto +
+                distanciaRecorrido * 0.025;
 
             candidatos.push({
                 x,
                 z,
-                radio,
-                distancia
+                distanciaProducto,
+                distanciaRecorrido,
+                puntuacion
             });
         }
     }
 
-    if (!candidatos.length) return null;
+    if (!candidatos.length) {
+        console.warn(
+            '[APROXIMACIÓN] No se encontró un punto libre.',
+            producto.name
+        );
+
+        return null;
+    }
 
     candidatos.sort(
-        (a, b) => a.distancia - b.distancia
+        (a, b) => a.puntuacion - b.puntuacion
     );
 
     const elegido = candidatos[0];
 
-    console.log('[APROXIMACIÓN RECUPERADA]', {
+    console.log('[APROXIMACIÓN FINAL]', {
         producto: producto.name,
-        dimensiones: tamanoTemporal.toArray().map(
-            v => Number(v.toFixed(3))
-        ),
-        radioMinimo: Number(radioMinimo.toFixed(3)),
-        radioElegido: Number(elegido.radio.toFixed(3)),
-        distanciaRecorrido: Number(
-            elegido.distancia.toFixed(3)
-        ),
-        candidatos: candidatos.length,
         destino: {
             x: Number(elegido.x.toFixed(3)),
             z: Number(elegido.z.toFixed(3))
-        }
+        },
+        distanciaProducto: Number(
+            elegido.distanciaProducto.toFixed(3)
+        ),
+        distanciaRecorrido: Number(
+            elegido.distanciaRecorrido.toFixed(3)
+        ),
+        candidatos: candidatos.length
     });
 
     return {
@@ -3823,6 +3849,7 @@ function obtenerPuntoFrenteProducto(producto) {
         z: elegido.z
     };
 }
+
 
     function acercarseAProducto(producto) {
         if (!reservarProducto(producto)) return false;
