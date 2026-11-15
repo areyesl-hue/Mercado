@@ -784,59 +784,72 @@ console.log('[HUESO]', obj.name, '=>', normalizarNombre(obj.name));
         };
     }
 
-    function medirAlcanceBrazo(brazo, cajaProducto) {
-        if (!brazo.mano) return null;
+function medirAlcanceBrazo(brazo, cajaProducto) {
+    if (!brazo?.mano || !cajaProducto) {
+        return null;
+    }
 
-        const posicionMano = brazo.mano.getWorldPosition(
-            new THREE.Vector3()
-        );
-        const contacto = cajaProducto.getCenter(
-            new THREE.Vector3()
-        );
-        const diferenciaX = posicionMano.x - contacto.x;
-        const diferenciaZ = posicionMano.z - contacto.z;
+    const posicionMano = brazo.mano.getWorldPosition(
+        new THREE.Vector3()
+    );
 
-        if (Math.abs(diferenciaX) > Math.abs(diferenciaZ)) {
-            contacto.x = diferenciaX >= 0
-                ? cajaProducto.max.x
-                : cajaProducto.min.x;
-        } else {
-            contacto.z = diferenciaZ >= 0
-                ? cajaProducto.max.z
-                : cajaProducto.min.z;
-        }
+    const contacto = cajaProducto.getCenter(
+        new THREE.Vector3()
+    );
 
-        const distanciaMano = posicionMano.distanceTo(contacto);
+    const diferenciaX = posicionMano.x - contacto.x;
+    const diferenciaZ = posicionMano.z - contacto.z;
 
-        if (!brazo.hombro || !brazo.codo) {
-            return {
-                distanciaMano,
-                alcanzable: false,
-                deficit: Infinity
-            };
-        }
+    // Seleccionar la cara del producto más cercana a la mano.
+    if (Math.abs(diferenciaX) > Math.abs(diferenciaZ)) {
+        contacto.x = diferenciaX >= 0
+            ? cajaProducto.max.x
+            : cajaProducto.min.x;
+    } else {
+        contacto.z = diferenciaZ >= 0
+            ? cajaProducto.max.z
+            : cajaProducto.min.z;
+    }
 
-        const hombro = brazo.hombro.getWorldPosition(
-            new THREE.Vector3()
-        );
-        const codo = brazo.codo.getWorldPosition(
-            new THREE.Vector3()
-        );
-        const alcanceMaximo =
-            hombro.distanceTo(codo) +
-            codo.distanceTo(posicionMano);
-        const distanciaHombro = hombro.distanceTo(contacto);
-        const deficit = Math.max(
-            0,
-            distanciaHombro - alcanceMaximo + 0.02
-        );
+    const distanciaMano = posicionMano.distanceTo(contacto);
 
+    // Comprobar que existan hombro y codo.
+    if (!brazo.hombro || !brazo.codo) {
         return {
+            contacto,
             distanciaMano,
-            alcanzable: deficit === 0,
-            deficit
+            alcanzable: false,
+            deficit: Infinity
         };
     }
+
+    const hombro = brazo.hombro.getWorldPosition(
+        new THREE.Vector3()
+    );
+
+    const codo = brazo.codo.getWorldPosition(
+        new THREE.Vector3()
+    );
+
+    const alcanceMaximo =
+        hombro.distanceTo(codo) +
+        codo.distanceTo(posicionMano);
+
+    const distanciaHombro = hombro.distanceTo(contacto);
+
+    const deficit = Math.max(
+        0,
+        distanciaHombro - alcanceMaximo + 0.02
+    );
+
+    return {
+        contacto,
+        distanciaMano,
+        alcanzable: deficit === 0,
+        deficit
+    };
+}
+
 
 function seleccionarBrazoAgarre(producto) {
     if (!producto) return false;
