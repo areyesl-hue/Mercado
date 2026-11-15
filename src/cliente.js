@@ -2885,9 +2885,9 @@ function puntoLibre(x, z, productoObjetivo = null) {
 
     const margenNormal = Math.max(
         0.05,
-        numero(config.radioColision, 0.38) +
+        numero(config.radioColision, 0.34) +
         numero(config.margenObstaculos, 0.12)
-    );
+    ) * 0.65;
 
     // Durante la aproximación reducimos el margen,
     // pero no desactivamos las colisiones.
