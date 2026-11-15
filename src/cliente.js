@@ -1364,18 +1364,7 @@ console.log('[HUESO]', obj.name, '=>', normalizarNombre(obj.name));
         }
 
         grupo.updateMatrixWorld(true);
-        grupo.updateMatrixWorld(true);
-
-const manoFinal = new THREE.Vector3();
-const objetivoFinal = objetivo.clone();
-
-brazo.mano.getWorldPosition(manoFinal);
-
-console.log('[DIAGNOSTICO IK]', {
-    mano: manoFinal.toArray().map(n => Number(n.toFixed(3))),
-    objetivo: objetivoFinal.toArray().map(n => Number(n.toFixed(3))),
-    distancia: Number(manoFinal.distanceTo(objetivoFinal).toFixed(3))
-});
+        
         return true;
     }
 
@@ -2097,51 +2086,95 @@ function actualizarAnimacionProducto(delta) {
 
     const suave = suavizar(t);
 
-    // Actualizar las matrices de la mano.
     grupo.updateMatrixWorld(true);
-
     mano.updateMatrixWorld(true);
+    producto.updateMatrixWorld(true);
 
-    // Obtener la orientación y escala actuales de la mano.
-    const quaternionMano = new THREE.Quaternion();
-    const escalaMano = new THREE.Vector3();
-
-    mano.getWorldQuaternion(quaternionMano);
-    mano.getWorldScale(escalaMano);
-
-    // El producto conserva su posición local respecto
-    // a la mano. Calculamos ese desplazamiento en mundo.
-    const desplazamientoProducto = producto.position
-        .clone()
-        .multiply(escalaMano)
-        .applyQuaternion(quaternionMano);
-
-    // Calcular dónde debe estar la muñeca para que
-    // el producto llegue al destino sin separarse.
-    const objetivoManoFinal =
-        animacionProducto.posicionFinal
-            .clone()
-            .sub(desplazamientoProducto);
-
-    // Interpolar el objetivo de la muñeca.
-    const objetivoMano =
-        new THREE.Vector3().lerpVectors(
-            animacionProducto.manoInicial,
-            objetivoManoFinal,
+    // Interpolar la posición mundial deseada del pivote.
+    const posicionProductoObjetivo =
+        animacionProducto.posicionTemporal.lerpVectors(
+            animacionProducto.posicionInicial,
+            animacionProducto.posicionFinal,
             suave
         );
 
-    // Mover el brazo mediante IK.
-    // El producto continúa siendo hijo de la mano.
+    // Obtener el origen mundial de la mano.
+    const posicionMano = new THREE.Vector3();
+
+    mano.getWorldPosition(posicionMano);
+
+    // Calcular el desplazamiento completo del pivote
+    // del producto respecto al origen de la mano.
+    const posicionPivoteMundo =
+        producto.position.clone().applyMatrix4(
+            mano.matrixWorld
+        );
+
+    const desplazamientoPivote =
+        posicionPivoteMundo.sub(posicionMano);
+
+    // La muñeca debe llegar a una posición que permita
+    // que el pivote del producto alcance su destino.
+    const objetivoMano =
+        posicionProductoObjetivo.clone().sub(
+            desplazamientoPivote
+        );
+
+    // Resolver el brazo para transportar el producto.
     resolverIKBrazo(
         brazo,
         objetivoMano
     );
 
     grupo.updateMatrixWorld(true);
+    mano.updateMatrixWorld(true);
 
-    // Cuando termina la extensión, colocar el producto
-    // en su ubicación definitiva.
+    // Interpolar la orientación mundial del producto.
+    const quaternionProductoObjetivo =
+        animacionProducto.quaternionTemporal
+            .slerpQuaternions(
+                animacionProducto.quaternionInicial,
+                animacionProducto.quaternionFinal,
+                suave
+            );
+
+    const quaternionMano = new THREE.Quaternion();
+
+    mano.getWorldQuaternion(quaternionMano);
+
+    // Convertir la orientación mundial deseada
+    // a coordenadas locales de la mano.
+    animacionProducto.quaternionPadreTemporal
+        .copy(quaternionMano)
+        .invert();
+
+    producto.quaternion
+        .copy(animacionProducto.quaternionPadreTemporal)
+        .multiply(quaternionProductoObjetivo)
+        .normalize();
+
+    // Interpolar también la escala mundial.
+    const escalaInicial = animacionProducto.escalaInicial;
+    const escalaFinal = animacionProducto.escalaFinal;
+
+    const escalaObjetivo = new THREE.Vector3().lerpVectors(
+        escalaInicial,
+        escalaFinal,
+        suave
+    );
+
+    const escalaMano = new THREE.Vector3();
+
+    mano.getWorldScale(escalaMano);
+
+    producto.scale.set(
+        escalaObjetivo.x / Math.max(Math.abs(escalaMano.x), 0.0001),
+        escalaObjetivo.y / Math.max(Math.abs(escalaMano.y), 0.0001),
+        escalaObjetivo.z / Math.max(Math.abs(escalaMano.z), 0.0001)
+    );
+
+    grupo.updateMatrixWorld(true);
+
     if (t >= 1) {
         finalizarDevolucionProducto();
         return true;
@@ -2149,7 +2182,6 @@ function actualizarAnimacionProducto(delta) {
 
     return false;
 }
-
 
 function finalizarDevolucionProducto() {
     if (!productoEnMano || !productoOriginal) {
@@ -3521,6 +3553,7 @@ function tomarProducto() {
     const tamanoProducto = new THREE.Vector3();
     cajaTemporal.getSize(tamanoProducto);
 
+    // Guardar la transformación original del producto.
     productoOriginal = {
         parent: producto.parent,
         posicion: producto.position.clone(),
@@ -3540,6 +3573,7 @@ function tomarProducto() {
         return;
     }
 
+    // Orientar al cliente hacia el producto.
     producto.getWorldPosition(vectorTemporal);
 
     orientarHaciaPunto({
@@ -3551,24 +3585,18 @@ function tomarProducto() {
     mano.updateMatrixWorld(true);
     producto.updateMatrixWorld(true);
 
-    // Resolver el contacto real antes de cambiar el padre.
+    // Resolver por última vez la posición del brazo
+    // respecto al punto real de contacto.
     const agarreResuelto =
         ajustarBrazoAlProducto(producto);
 
-    const puntoContactoMundo = agarreResuelto
-        ? ikAgarre.puntoContacto.clone()
-        : null;
-
-    const normalContactoMundo = agarreResuelto
-        ? ikAgarre.normalContacto.clone()
-        : null;
-
     if (
-        !puntoContactoMundo ||
-        !normalContactoMundo
+        !agarreResuelto ||
+        !ikAgarre.puntoContacto ||
+        !ikAgarre.normalContacto
     ) {
         console.warn(
-            `[CLIENTE ${id}] No se pudo calcular el contacto del producto.`
+            `[CLIENTE ${id}] No se pudo resolver el contacto del producto.`
         );
 
         productoOriginal = null;
@@ -3577,26 +3605,24 @@ function tomarProducto() {
         return;
     }
 
-    // Convertir el punto de contacto a coordenadas locales
-    // del producto antes de transferirlo a la mano.
+    // Guardar el punto de contacto en coordenadas locales.
     const puntoContactoLocal =
         producto.worldToLocal(
-            puntoContactoMundo.clone()
+            ikAgarre.puntoContacto.clone()
         );
 
     const normalContactoLocal =
-        normalContactoMundo.clone().transformDirection(
+        ikAgarre.normalContacto.clone().transformDirection(
             producto.matrixWorld.clone().invert()
         );
 
-    // Guardar la transformación mundial original.
+    // Actualizar matrices después del IK.
+    grupo.updateMatrixWorld(true);
+    mano.updateMatrixWorld(true);
     producto.updateMatrixWorld(true);
 
-    const matrizProductoMundo =
-        producto.matrixWorld.clone();
-
-    // Cambiar el padre conservando exactamente
-    // la posición, rotación y escala mundiales.
+    // Cambiar el padre conservando la posición,
+    // rotación y escala mundiales del producto.
     mano.attach(producto);
 
     grupo.updateMatrixWorld(true);
@@ -3605,8 +3631,15 @@ function tomarProducto() {
 
     productoConCajaAgarre = null;
 
-    // Guardar el inicio real de la animación.
+    // Desactivar la antigua interpolación artificial.
+    animacionAgarre.activa = false;
+    animacionAgarre.tiempo = 0;
+
     animacionAgarre.posicionInicial.copy(
+        producto.position
+    );
+
+    animacionAgarre.posicionFinal.copy(
         producto.position
     );
 
@@ -3614,72 +3647,12 @@ function tomarProducto() {
         producto.quaternion
     );
 
-    animacionAgarre.escalaInicial.copy(
-        producto.scale
-    );
-
-    // La posición inicial y final coinciden inicialmente.
-    // No se desplazará el producto hasta que exista contacto.
-    animacionAgarre.posicionFinal.copy(
-        producto.position
-    );
-
-    // Calcular la posición final usando la matriz mundial
-    // del producto y la matriz de la palma.
-    const matrizManoInversa =
-        mano.matrixWorld.clone().invert();
-
-    const puntoPalmaMundo = mano.localToWorld(
-        ikAgarre.offsetPalmaLocal.clone()
-    );
-
-    const distanciaContacto = Math.max(
-        0,
-        numero(
-            producto.userData?.distanciaContactoMano,
-            config.distanciaContactoMano
-        )
-    );
-
-    const objetivoContactoMundo =
-        puntoPalmaMundo.clone().addScaledVector(
-            normalContactoMundo,
-            -distanciaContacto
-        );
-
-    // Convertir el objetivo de contacto a coordenadas
-    // locales de la mano.
-    const objetivoContactoMano =
-        objetivoContactoMundo.applyMatrix4(
-            matrizManoInversa
-        );
-
-    // La matriz original del producto permite calcular
-    // la posición de su punto de contacto sin asumir
-    // que el pivote está en el centro de la geometría.
-    const puntoContactoOriginalMundo =
-        puntoContactoLocal.clone().applyMatrix4(
-            matrizProductoMundo
-        );
-
-    const desplazamientoContactoMano =
-        puntoContactoOriginalMundo.applyMatrix4(
-            matrizManoInversa
-        );
-
-    animacionAgarre.posicionFinal.copy(
-        producto.position
-    );
-
-    animacionAgarre.posicionFinal.add(
-        objetivoContactoMano.sub(
-            desplazamientoContactoMano
-        )
-    );
-
-    // Conservar orientación y escala.
     animacionAgarre.quaternionFinal.copy(
         producto.quaternion
+    );
+
+    animacionAgarre.escalaInicial.copy(
+        producto.scale
     );
 
     animacionAgarre.escalaFinal.copy(
@@ -3689,24 +3662,14 @@ function tomarProducto() {
     producto.visible = true;
     productoEnMano = producto;
 
-    animacionAgarre.tiempo = 0;
-
-    animacionAgarre.duracion = Math.max(
-        numero(config.tiempoAnimacionAgarre, 0.38),
-        0.05
-    );
-
-    animacionAgarre.activa = true;
-
-    // Guardar información de contacto para depuración
-    // y futuras correcciones.
+    // Guardar los datos de contacto para el seguimiento.
     animacionAgarre.puntoContactoLocal =
         puntoContactoLocal.clone();
 
     animacionAgarre.normalContactoLocal =
         normalContactoLocal.clone();
 
-    // Preparar la postura de inspección.
+    // Preparar la transición hacia la postura de inspección.
     poseAgarreInspeccion.huesos.length = 0;
 
     for (const [hueso] of huesosBase) {
@@ -3721,7 +3684,7 @@ function tomarProducto() {
         grupo.position.y;
 
     poseAgarreInspeccion.duracion = Math.max(
-        numero(animacionAgarre.duracion, 0.38),
+        numero(config.tiempoAnimacionAgarre, 0.38),
         0.05
     );
 
@@ -3740,6 +3703,7 @@ function tomarProducto() {
         }.`
     );
 }
+
 
     function buscarUbicacionOtroRack(producto) {
         if (!producto || !productoOriginal) return null;
