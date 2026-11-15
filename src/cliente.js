@@ -1639,6 +1639,10 @@ function ajustarBrazoAlProducto(
     // 2. PUNTO DE CONTACTO EN LA SUPERFICIE
     // ---------------------------------------------
 
+    // ---------------------------------------------
+    // 2. PUNTO DE CONTACTO EN LA SUPERFICIE
+    // ---------------------------------------------
+
     if (
         puntoManual &&
         Number.isFinite(puntoManual.x) &&
@@ -6231,4 +6235,6 @@ function actualizar(delta) {
     actualizarColisiones();
 
     return api;
+}
+
 }
