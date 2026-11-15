@@ -20,6 +20,7 @@ const ESTADOS = {
     CAJA: 'CAJA',
     PAGANDO: 'PAGANDO',
     REGRESANDO: 'REGRESANDO',
+    REGRESANDO_CARRITO: 'REGRESANDO_CARRITO',
     FINALIZADO: 'FINALIZADO'
 };
 
@@ -340,7 +341,11 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     let objetivo = null;
     let ruta = [];
     let indiceRuta = 0;
+    let posicionClienteAntesDeReubicar = new THREE.Vector3();
 
+let tienePosicionClienteAntesDeReubicar = false;
+
+let productoReubicadoPendiente = false;
     let tiempoEstado = 0;
     let tiempoActualizarObstaculos = 0;
 
@@ -2502,7 +2507,9 @@ function finalizarDevolucionProducto() {
     const producto = productoEnMano;
     const original = productoOriginal;
     const tipoDevolucion = animacionProducto.tipo;
-
+productoReubicadoPendiente =
+    tipoDevolucion === 'REUBICAR' &&
+    tienePosicionClienteAntesDeReubicar;
     animacionAgarre.activa = false;
     animacionAgarre.tiempo = 0;
 
@@ -2654,39 +2661,48 @@ function finalizarDevolucionProducto() {
     
     
 
-    function actualizarSeguimientoCarrito() {
-        const carrito = config.carrito;
+function actualizarSeguimientoCarrito() {
+    const carrito = config.carrito;
 
-        if (!carrito) return;
+    if (!carrito) return;
 
-        const debeSeguir = [
-            ESTADOS.ENTRANDO,
-            ESTADOS.ACERCANDO,
-            ESTADOS.RUTA,
-            ESTADOS.CAJA,
-            ESTADOS.REGRESANDO
-        ].includes(estado);
+    const debeSeguir = [
+        ESTADOS.ENTRANDO,
+        ESTADOS.ACERCANDO,
+        ESTADOS.RUTA,
+        ESTADOS.CAJA,
+        ESTADOS.REGRESANDO
+    ].includes(estado);
 
-        if (debeSeguir) {
-            carrito.seguirObjetivo?.(grupo);
-        } else if (carrito.siguiendo) {
-            carrito.detenerSeguimiento?.();
-        }
-    }
+    if (debeSeguir) {
+        carrito.seguirObjetivo?.(grupo);
+    } else if (carrito.siguiendo) {
 
-    function estaCaminando() {
-        return [
-            ESTADOS.ENTRANDO,
-            ESTADOS.ACERCANDO,
-            ESTADOS.RUTA,
-            ESTADOS.CAJA,
-            ESTADOS.REGRESANDO
-        ].includes(estado) || (
-            estado === ESTADOS.DEVOLVIENDO &&
-            animacionProducto.fase === 'CAMINANDO'
+        // Guardar dónde quedó el cliente cuando
+        // el carrito deja de seguirlo.
+        posicionClienteAntesDeReubicar.copy(
+            grupo.position
         );
-    }
 
+        tienePosicionClienteAntesDeReubicar = true;
+
+        // Detener el carrito sin modificar su posición.
+        carrito.detenerSeguimiento?.();
+    }
+}
+function estaCaminando() {
+    return [
+        ESTADOS.ENTRANDO,
+        ESTADOS.ACERCANDO,
+        ESTADOS.RUTA,
+        ESTADOS.CAJA,
+        ESTADOS.REGRESANDO,
+        ESTADOS.REGRESANDO_CARRITO
+    ].includes(estado) || (
+        estado === ESTADOS.DEVOLVIENDO &&
+        animacionProducto.fase === 'CAMINANDO'
+    );
+}
     function cambiarEstado(nuevoEstado) {
         if (estado === nuevoEstado) return;
 
@@ -5618,50 +5634,93 @@ function actualizar(delta) {
         // DEVOLVER PRODUCTO
         // =========================================
 
-        case ESTADOS.DEVOLVIENDO: {
+     case ESTADOS.DEVOLVIENDO: {
 
-            if (animacionProducto.fase === 'CAMINANDO') {
+    if (animacionProducto.fase === 'CAMINANDO') {
 
-                if (moverHaciaDestino(delta)) {
+        if (moverHaciaDestino(delta)) {
 
-                    animacionProducto.fase = 'COLOCANDO';
+            animacionProducto.fase = 'COLOCANDO';
 
-                    tiempoEstado = 0;
+            tiempoEstado = 0;
 
-                    if (productoOriginal?.parent) {
+            if (productoOriginal?.parent) {
 
-                        productoOriginal.parent.updateMatrixWorld(true);
+                productoOriginal.parent.updateMatrixWorld(true);
 
-                        const destino =
-                            productoOriginal.parent.localToWorld(
-                                productoOriginal.posicion.clone()
-                            );
+                const destino =
+                    productoOriginal.parent.localToWorld(
+                        productoOriginal.posicion.clone()
+                    );
 
-                        orientarHaciaPunto({
-                            x: destino.x,
-                            z: destino.z
-                        });
-                    }
+                orientarHaciaPunto({
+                    x: destino.x,
+                    z: destino.z
+                });
+            }
 
-                    devolverProductoAlEstante();
-                }
+            devolverProductoAlEstante();
+        }
 
+        break;
+    }
+
+    animarDevolverProcedural();
+
+    actualizarAnimacionProducto(delta);
+
+    if (
+        tiempoEstado >= config.tiempoDevolver &&
+        !animacionProducto.activa
+    ) {
+
+        // Si acaba de colocar un producto en otro rack,
+        // regresar caminando al lugar donde quedó el carrito.
+        if (
+            productoReubicadoPendiente &&
+            tienePosicionClienteAntesDeReubicar
+        ) {
+
+            productoReubicadoPendiente = false;
+
+            const destinoCarrito = {
+                x: posicionClienteAntesDeReubicar.x,
+                z: posicionClienteAntesDeReubicar.z
+            };
+
+            if (
+                establecerObjetivo(
+                    destinoCarrito,
+                    ESTADOS.REGRESANDO_CARRITO
+                )
+            ) {
                 break;
             }
 
-            animarDevolverProcedural();
+            // Si no existe una ruta válida, continuar
+            // con el comportamiento habitual.
+            tienePosicionClienteAntesDeReubicar = false;
 
-            actualizarAnimacionProducto(delta);
-
-            if (
-                tiempoEstado >= config.tiempoDevolver &&
-                !animacionProducto.activa
-            ) {
-                cambiarEstado(ESTADOS.BUSCANDO);
-            }
-
-            break;
         }
+
+        cambiarEstado(ESTADOS.BUSCANDO);
+    }
+
+    break;
+}
+case ESTADOS.REGRESANDO_CARRITO: {
+
+    if (moverHaciaDestino(delta)) {
+
+        tienePosicionClienteAntesDeReubicar = false;
+
+        // El cliente ya llegó al lugar donde dejó el carrito.
+        // El seguimiento se reanudará cuando vuelva a desplazarse.
+        cambiarEstado(ESTADOS.BUSCANDO);
+    }
+
+    break;
+}
 
         // =========================================
         // ESPERAR / REINTENTAR
