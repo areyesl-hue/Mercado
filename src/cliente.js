@@ -2679,25 +2679,16 @@ function actualizarSeguimientoCarrito() {
         ESTADOS.INSPECCIONANDO
     ];
 
-    // Seguimiento normal: detrás o delante del cliente,
-    // según la configuración que ya tienes.
     if (estadosSeguimiento.includes(estado)) {
-        carrito.seguirObjetivo?.(
-            grupo,
-            0.25,
-            0
-        );
-
+        carrito.seguirObjetivo?.(grupo, 0.25, 0);
         return;
     }
 
-    // Seguimiento lateral durante la interacción.
     if (estadosJuntoAlCliente.includes(estado)) {
-
         const desplazamiento =
             ladoAgarre === 'derecho'
-                ? config.carrito.desplazamientoLateral
-                : -config.carrito.desplazamientoLateral;
+                ? distanciaLateralCarrito
+                : -distanciaLateralCarrito;
 
         carrito.seguirObjetivo?.(
             grupo,
@@ -2708,12 +2699,10 @@ function actualizarSeguimientoCarrito() {
         return;
     }
 
-    // En otros estados, conservar la posición actual.
     if (carrito.siguiendo) {
         carrito.detenerSeguimiento?.();
     }
 }
-
 function estaCaminando() {
     return [
         ESTADOS.ENTRANDO,
