@@ -1329,6 +1329,33 @@ function resolverIKBrazo(brazo, objetivo) {
     codo.getWorldPosition(ikAgarre.codo);
     mano.getWorldPosition(ikAgarre.muneca);
 
+    // DIAGNÓSTICO DE GEOMETRÍA ANTES DEL IK.
+    console.log('[GEOMETRÍA DEL AGARRE]', {
+        cliente: grupo.position.toArray().map(
+            v => Number(v.toFixed(3))
+        ),
+
+        hombro: ikAgarre.hombro.toArray().map(
+            v => Number(v.toFixed(3))
+        ),
+
+        codo: ikAgarre.codo.toArray().map(
+            v => Number(v.toFixed(3))
+        ),
+
+        muñeca: ikAgarre.muneca.toArray().map(
+            v => Number(v.toFixed(3))
+        ),
+
+        objetivo: objetivo.toArray().map(
+            v => Number(v.toFixed(3))
+        ),
+
+        distanciaHombroObjetivo: Number(
+            ikAgarre.hombro.distanceTo(objetivo).toFixed(3)
+        )
+    });
+
     ikAgarre.direccion.subVectors(
         objetivo,
         ikAgarre.hombro
@@ -1479,7 +1506,6 @@ function resolverIKBrazo(brazo, objetivo) {
     grupo.updateMatrixWorld(true);
     mano.updateMatrixWorld(true);
 
-    // Medir dónde terminó realmente la muñeca.
     mano.getWorldPosition(ikAgarre.muneca);
 
     const errorIK = ikAgarre.muneca.distanceTo(
@@ -1526,7 +1552,6 @@ function resolverIKBrazo(brazo, objetivo) {
 
     return true;
 }
-
 
     function animarEmpujarCarrito() {
         const carrito = config.carrito;
