@@ -2692,7 +2692,7 @@ function actualizarSeguimientoCarrito() {
 
         carrito.seguirObjetivo?.(
             grupo,
-            0.15,
+            -0.35,
             desplazamiento
         );
 
