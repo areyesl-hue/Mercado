@@ -177,8 +177,14 @@ export function crearMobiliario(scene, mercado = null) {
 
         caja(g, 'Franja_superior', 0, 2.04, 0, ancho, 0.10, largo - 0.1, mat.azul);
 
-        registrarColision(nombre, x, z, 1.5, 6.0, { tipo: 'gondola' });
-
+registrarColision(
+    nombre,
+    x,
+    z,
+    1.30,
+    5.95,
+    { tipo: 'gondola' }
+);
         g.userData.esGondola = true;
         g.userData.ancho = ancho;
         g.userData.largo = largo;
@@ -297,9 +303,14 @@ export function crearMobiliario(scene, mercado = null) {
 
         caja(g, 'Luz_interior', 0, 2.24, 0.12,
             ancho - 0.35, 0.045, 0.06, mat.luz);
-
-        registrarColision(nombre, x, z, 2.85, 1.15, { tipo: 'refrigerador' });
-
+registrarColision(
+    nombre,
+    x,
+    z,
+    2.80,
+    1.05,
+    { tipo: 'refrigerador' }
+);
         g.userData.nivelesProducto = niveles;
         g.userData.frenteZ = z + fondo / 2;
 
