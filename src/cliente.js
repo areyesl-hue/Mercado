@@ -34,7 +34,7 @@ const CONFIG_BASE = {
     altura: 1.75,
     escala: 1,
 
-    velocidad: 1.75,
+    velocidad: 1.95,
     velocidadEntrada: 2.05,
     velocidadRegreso: 2.05,
 
@@ -57,7 +57,7 @@ const CONFIG_BASE = {
 
     distanciaProducto: 0.30,
     distanciaFrenteProducto: 1.0,
-    distanciaContactoMano: 0.005,
+    distanciaContactoMano: 0.003,
 
     tiempoRecoger: 1.1,
     progresoContactoProducto: 0.78,
