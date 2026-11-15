@@ -3703,7 +3703,6 @@ function obtenerPuntoFrenteProducto(producto) {
     if (!producto) return null;
 
     producto.updateMatrixWorld(true);
-
     cajaTemporal.setFromObject(producto);
 
     if (cajaTemporal.isEmpty()) return null;
@@ -3711,17 +3710,13 @@ function obtenerPuntoFrenteProducto(producto) {
     cajaTemporal.getCenter(vectorTemporal2);
     cajaTemporal.getSize(tamanoTemporal);
 
-    const centro = new THREE.Vector3(
-        vectorTemporal2.x,
-        vectorTemporal2.y,
-        vectorTemporal2.z
-    );
+    const centroX = vectorTemporal2.x;
+    const centroZ = vectorTemporal2.z;
 
-    // Radio horizontal real del producto.
     const semiancho = Math.max(
-        tamanoTemporal.x * 0.5,
-        tamanoTemporal.z * 0.5
-    );
+        tamanoTemporal.x,
+        tamanoTemporal.z
+    ) * 0.5;
 
     const radioMinimo = Math.max(
         numero(config.radioColision, 0.38) +
@@ -3731,149 +3726,71 @@ function obtenerPuntoFrenteProducto(producto) {
     );
 
     const radioMaximo = Math.max(
-        radioMinimo + 0.5,
-        numero(config.distanciaFrenteProducto, 1.0) + semiancho
+        radioMinimo + 0.6,
+        numero(config.distanciaFrenteProducto, 1.0) + 0.8
     );
-
-    const brazo = obtenerRigBrazo();
-
-    if (!brazo?.hombro) return null;
 
     const candidatos = [];
 
-    const posicionActual = grupo.position.clone();
-
-    // Alcance máximo calculado con las longitudes reales.
-    grupo.updateMatrixWorld(true);
-
-    brazo.hombro.getWorldPosition(ikAgarre.hombro);
-    brazo.codo.getWorldPosition(ikAgarre.codo);
-    brazo.mano.getWorldPosition(ikAgarre.muneca);
-
-    const longitudBrazo =
-        ikAgarre.hombro.distanceTo(ikAgarre.codo);
-
-    const longitudAntebrazo =
-        ikAgarre.codo.distanceTo(ikAgarre.muneca);
-
-    const alcanceMaximo =
-        longitudBrazo + longitudAntebrazo - 0.035;
-
-    // El punto de contacto se aproxima a la cara del producto
-    // orientada hacia cada candidato.
     for (
         let radio = radioMinimo;
         radio <= radioMaximo;
-        radio += 0.06
+        radio += 0.08
     ) {
         for (
             let angulo = 0;
             angulo < Math.PI * 2;
-            angulo += Math.PI / 32
+            angulo += Math.PI / 24
         ) {
-            const punto = {
-                x: centro.x + Math.cos(angulo) * radio,
-                z: centro.z + Math.sin(angulo) * radio
-            };
+            const x = centroX + Math.cos(angulo) * radio;
+            const z = centroZ + Math.sin(angulo) * radio;
 
-            if (!puntoLibre(punto.x, punto.z)) continue;
+            if (!puntoLibre(x, z)) continue;
 
             const camino = encontrarCamino(
-                posicionActual,
-                punto
+                grupo.position,
+                { x, z }
             );
 
             if (!camino.length) continue;
 
-            // Estimar la posición del hombro cuando el cliente
-            // llegue al candidato, conservando su desplazamiento
-            // actual respecto al centro del cuerpo.
-            const hombroRelativo = new THREE.Vector3(
-                ikAgarre.hombro.x - grupo.position.x,
-                ikAgarre.hombro.y - grupo.position.y,
-                ikAgarre.hombro.z - grupo.position.z
+            const distancia = distanciaXZ(
+                grupo.position,
+                { x, z }
             );
-
-            const hombroEstimado = new THREE.Vector3(
-                punto.x + hombroRelativo.x,
-                ikAgarre.hombro.y,
-                punto.z + hombroRelativo.z
-            );
-
-            // Punto de contacto horizontal en la cara del producto.
-            const normal = new THREE.Vector3(
-                centro.x - punto.x,
-                0,
-                centro.z - punto.z
-            ).normalize();
-
-            const puntoContacto = centro.clone();
-
-            puntoContacto.x -= normal.x * semiancho;
-            puntoContacto.z -= normal.z * semiancho;
-
-            const distanciaBrazo =
-                hombroEstimado.distanceTo(puntoContacto);
-
-            // Evitar candidatos que exijan extender el brazo
-            // más allá de su longitud física.
-            if (distanciaBrazo > alcanceMaximo) continue;
-
-            const distanciaRecorrido = distanciaXZ(
-                posicionActual,
-                punto
-            );
-
-            // Penalizar puntos demasiado cercanos a obstáculos.
-            const puntuacion =
-                distanciaRecorrido +
-                distanciaBrazo * 0.35 +
-                radio * 0.15;
 
             candidatos.push({
-                x: punto.x,
-                z: punto.z,
-                distancia: distanciaRecorrido,
-                distanciaBrazo,
-                puntuacion
+                x,
+                z,
+                radio,
+                distancia
             });
         }
-
-        // Continuar buscando en otros radios para comparar
-        // candidatos, en lugar de detenerse en el primer anillo.
     }
 
-    if (!candidatos.length) {
-        console.warn(
-            '[APROXIMACIÓN] No hay posiciones alcanzables para el producto.',
-            producto.name
-        );
-
-        return null;
-    }
+    if (!candidatos.length) return null;
 
     candidatos.sort(
-        (a, b) => a.puntuacion - b.puntuacion
+        (a, b) => a.distancia - b.distancia
     );
 
     const elegido = candidatos[0];
 
-    console.log('[PUNTO DE APROXIMACIÓN ELEGIDO]', {
+    console.log('[APROXIMACIÓN RECUPERADA]', {
         producto: producto.name,
-        destino: {
-            x: Number(elegido.x.toFixed(3)),
-            z: Number(elegido.z.toFixed(3))
-        },
-        distanciaBrazo: Number(
-            elegido.distanciaBrazo.toFixed(3)
+        dimensiones: tamanoTemporal.toArray().map(
+            v => Number(v.toFixed(3))
         ),
-        alcanceMaximo: Number(
-            alcanceMaximo.toFixed(3)
-        ),
+        radioMinimo: Number(radioMinimo.toFixed(3)),
+        radioElegido: Number(elegido.radio.toFixed(3)),
         distanciaRecorrido: Number(
             elegido.distancia.toFixed(3)
         ),
-        candidatos: candidatos.length
+        candidatos: candidatos.length,
+        destino: {
+            x: Number(elegido.x.toFixed(3)),
+            z: Number(elegido.z.toFixed(3))
+        }
     });
 
     return {
