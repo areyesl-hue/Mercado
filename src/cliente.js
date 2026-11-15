@@ -2679,11 +2679,18 @@ function actualizarSeguimientoCarrito() {
         ESTADOS.INSPECCIONANDO
     ];
 
+    // Seguimiento normal: el carrito acompaña al cliente.
     if (estadosSeguimiento.includes(estado)) {
-        carrito.seguirObjetivo?.(grupo, 0.25, 0);
+        carrito.seguirObjetivo?.(
+            grupo,
+            0.25,
+            0
+        );
         return;
     }
 
+    // Recogida e inspección: el carrito se coloca
+    // al costado de la mano que utiliza el cliente.
     if (estadosJuntoAlCliente.includes(estado)) {
         const desplazamiento =
             ladoAgarre === 'derecho'
@@ -2692,13 +2699,13 @@ function actualizarSeguimientoCarrito() {
 
         carrito.seguirObjetivo?.(
             grupo,
-            -0.35,
+            0.75,
             desplazamiento
         );
-
         return;
     }
 
+    // En los demás estados, el carrito se queda quieto.
     if (carrito.siguiendo) {
         carrito.detenerSeguimiento?.();
     }
