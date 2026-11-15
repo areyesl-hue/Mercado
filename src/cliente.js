@@ -3389,75 +3389,78 @@ function finalizarDevolucionProducto() {
     
     
 
-    function obtenerPuntoFrenteProducto(producto) {
-        producto.updateMatrixWorld(true);
-        cajaTemporal.setFromObject(producto);
+function obtenerPuntoFrenteProducto(producto) {
+    producto.updateMatrixWorld(true);
+    cajaTemporal.setFromObject(producto);
 
-        if (cajaTemporal.isEmpty()) return null;
+    if (cajaTemporal.isEmpty()) return null;
 
-        cajaTemporal.getCenter(vectorTemporal2);
-        cajaTemporal.getSize(tamanoTemporal);
+    cajaTemporal.getCenter(vectorTemporal2);
+    cajaTemporal.getSize(tamanoTemporal);
 
-        const posicionProducto = {
-            x: vectorTemporal2.x,
-            z: vectorTemporal2.z
-        };
+    const posicionProducto = {
+        x: vectorTemporal2.x,
+        z: vectorTemporal2.z
+    };
 
-        const candidatos = [];
+    const candidatos = [];
 
-        const radioMinimo = Math.max(
-            numero(config.radioColision, 0.38) +
-                Math.hypot(tamanoTemporal.x, tamanoTemporal.z) * 0.5 +
-                0.02,
-            numero(config.distanciaProducto, 0.55)
-        );
+    // Distancia mínima desde el centro del producto.
+    // Se reduce el margen diagonal para permitir una
+    // aproximación más cercana al estante.
+    const radioMinimo = Math.max(
+        numero(config.radioColision, 0.38) +
+        Math.min(tamanoTemporal.x, tamanoTemporal.z) * 0.5 +
+        0.08,
+        numero(config.distanciaProducto, 0.30)
+    );
 
-        const radioMaximo = Math.max(
-            radioMinimo + 0.4,
-            numero(config.distanciaFrenteProducto, 1.25) + 1.2
-        );
+    const radioMaximo = Math.max(
+        radioMinimo + 0.6,
+        numero(config.distanciaFrenteProducto, 1.0) + 0.8
+    );
 
+    for (
+        let radio = radioMinimo;
+        radio <= radioMaximo;
+        radio += 0.10
+    ) {
         for (
-            let radio = radioMinimo;
-            radio <= radioMaximo;
-            radio += 0.15
+            let angulo = 0;
+            angulo < Math.PI * 2;
+            angulo += Math.PI / 16
         ) {
-            for (
-                let angulo = 0;
-                angulo < Math.PI * 2;
-                angulo += Math.PI / 8
-            ) {
-                const punto = {
-                    x: posicionProducto.x + Math.cos(angulo) * radio,
-                    z: posicionProducto.z + Math.sin(angulo) * radio
-                };
+            const punto = {
+                x: posicionProducto.x + Math.cos(angulo) * radio,
+                z: posicionProducto.z + Math.sin(angulo) * radio
+            };
 
-                if (!puntoLibre(punto.x, punto.z)) continue;
+            if (!puntoLibre(punto.x, punto.z)) continue;
 
-                const camino = encontrarCamino(
-                    grupo.position,
-                    punto
-                );
+            const camino = encontrarCamino(
+                grupo.position,
+                punto
+            );
 
-                if (!camino.length) continue;
+            if (!camino.length) continue;
 
-                candidatos.push({
-                    ...punto,
-                    distancia: distanciaXZ(grupo.position, punto)
-                });
-            }
-
-            if (candidatos.length) break;
+            candidatos.push({
+                ...punto,
+                distancia: distanciaXZ(grupo.position, punto)
+            });
         }
 
-        if (!candidatos.length) return null;
-
-        candidatos.sort(
-            (a, b) => a.distancia - b.distancia
-        );
-
-        return candidatos[0];
+        if (candidatos.length) break;
     }
+
+    if (!candidatos.length) return null;
+
+    candidatos.sort(
+        (a, b) => a.distancia - b.distancia
+    );
+
+    return candidatos[0];
+}
 
     function acercarseAProducto(producto) {
         if (!reservarProducto(producto)) return false;
