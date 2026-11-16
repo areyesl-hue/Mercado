@@ -1083,16 +1083,50 @@ export function crearCarrito(scene, opciones = {}) {
             z
         );
     }
+function obtenerPuntoDeposito(
+    indice = estado.productos.length,
+    objeto = null
+) {
 
-    function obtenerPuntoDeposito(
-        indice = estado.productos.length
-    ) {
-        const punto = obtenerPosicionLocalDeposito(indice);
+    const punto = obtenerPosicionLocalDeposito(indice);
 
-        return objetosEnCesta.localToWorld(
-            punto.clone()
-        );
+    // Calcular la altura que tendrá el producto
+    // después del ajuste de escala del carrito.
+    if (objeto?.isObject3D) {
+
+        objeto.updateWorldMatrix(true, true);
+
+        const caja = new THREE.Box3().setFromObject(objeto);
+
+        if (!caja.isEmpty()) {
+
+            const dimensiones = caja.getSize(
+                new THREE.Vector3()
+            );
+
+            const factor = Math.min(
+                1,
+
+                CONFIG_CESTA.maxAnchoProducto /
+                    Math.max(dimensiones.x, 0.001),
+
+                CONFIG_CESTA.maxProfundidadProducto /
+                    Math.max(dimensiones.z, 0.001),
+
+                CONFIG_CESTA.maxAlturaProducto /
+                    Math.max(dimensiones.y, 0.001)
+            );
+
+            // Convertir la posición de la base
+            // en la posición del centro del producto.
+            punto.y += dimensiones.y * factor / 2;
+        }
     }
+
+    return objetosEnCesta.localToWorld(
+        punto.clone()
+    );
+}
 
     // ========================================================
     // COLOCAR PRODUCTO DENTRO DE LA CESTA
