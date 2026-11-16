@@ -1939,39 +1939,52 @@ function ajustarBrazoAlProducto(
 
         mezclarPoseAgarreInspeccion();
     }
+function mezclarPoseAgarreInspeccion() {
+    if (!poseAgarreInspeccion.activa) return;
 
-    function mezclarPoseAgarreInspeccion() {
-        if (!poseAgarreInspeccion.activa) return;
+    const duracion = Math.max(
+        numero(poseAgarreInspeccion.duracion, 0.38),
+        0.05
+    );
 
-        const duracion = Math.max(
-            numero(poseAgarreInspeccion.duracion, 0.38),
-            0.05
-        );
-        const progreso = suavizar(
-            limitar(tiempoEstado / duracion, 0, 1)
-        );
-        const posicionObjetivoY = grupo.position.y;
+    const progreso = suavizar(
+        limitar(tiempoEstado / duracion, 0, 1)
+    );
 
-        for (const pose of poseAgarreInspeccion.huesos) {
-            pose.objetivo.copy(pose.hueso.quaternion);
-            pose.hueso.quaternion.slerpQuaternions(
-                pose.inicial,
-                pose.objetivo,
-                progreso
-            );
+    // Huesos que controla exclusivamente el IK.
+    const huesosBrazo = [
+        rig.brazoIzquierdo,
+        rig.antebrazoIzquierdo,
+        rig.manoIzquierda,
+        rig.brazoDerecho,
+        rig.antebrazoDerecho,
+        rig.manoDerecha
+    ];
+
+    for (const pose of poseAgarreInspeccion.huesos) {
+        if (!pose.hueso) continue;
+
+        // No modificar los brazos ni las manos.
+        if (huesosBrazo.includes(pose.hueso)) {
+            continue;
         }
 
-        grupo.position.y = THREE.MathUtils.lerp(
-            poseAgarreInspeccion.posicionGrupoY,
-            posicionObjetivoY,
+        // Mantener un objetivo fijo, sin recalcularlo
+        // a partir de la rotación actual en cada fotograma.
+        pose.hueso.quaternion.slerpQuaternions(
+            pose.inicial,
+            pose.objetivo,
             progreso
         );
-
-        if (progreso >= 1) {
-            poseAgarreInspeccion.activa = false;
-            poseAgarreInspeccion.huesos.length = 0;
-        }
     }
+
+    if (progreso >= 1) {
+        poseAgarreInspeccion.activa = false;
+        poseAgarreInspeccion.huesos.length = 0;
+    }
+
+    grupo.updateMatrixWorld(true);
+}
 
     
     
@@ -4165,15 +4178,17 @@ if (destino) {
     // 8. PREPARAR POSE DE INSPECCIÓN
     // --------------------------------------------------
 
-    poseAgarreInspeccion.huesos.length = 0;
+poseAgarreInspeccion.huesos.length = 0;
 
-    for (const [hueso] of huesosBase) {
-        poseAgarreInspeccion.huesos.push({
-            hueso,
-            inicial: hueso.quaternion.clone(),
-            objetivo: new THREE.Quaternion()
-        });
-    }
+for (const [hueso] of huesosBase) {
+    const rotacionActual = hueso.quaternion.clone();
+
+    poseAgarreInspeccion.huesos.push({
+        hueso,
+        inicial: rotacionActual.clone(),
+        objetivo: rotacionActual.clone()
+    });
+}
 
     poseAgarreInspeccion.posicionGrupoY =
         grupo.position.y;
