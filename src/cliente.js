@@ -2800,79 +2800,99 @@ function estaCaminando() {
         animacionProducto.fase === 'CAMINANDO'
     );
 }
-    function cambiarEstado(nuevoEstado) {
-        if (estado === nuevoEstado) return;
+ 
+function cambiarEstado(nuevoEstado) {
+    if (estado === nuevoEstado) return;
 
-        const anterior = estado;
+    const anterior = estado;
 
-        estado = nuevoEstado;
-        tiempoEstado = 0;
+    // Actualizar el estado antes de modificar el carrito.
+    estado = nuevoEstado;
+    tiempoEstado = 0;
 
-        if (nuevoEstado !== ESTADOS.GUARDANDO) {
-            animacionDeposito.preparada = false;
-        }
+    console.log('[CAMBIO DE ESTADO CLIENTE]', {
+        anterior,
+        nuevo: nuevoEstado,
+        ladoAgarre,
+        tieneCarrito: !!config.carrito
+    });
 
-        if (
-            nuevoEstado !== ESTADOS.INSPECCIONANDO &&
-            poseAgarreInspeccion.activa
-        ) {
-            poseAgarreInspeccion.activa = false;
-            poseAgarreInspeccion.huesos.length = 0;
-        }
-
-        actualizarSeguimientoCarrito();
-
-        intentosMovimiento = 0;
-        tiempoRecalculoRuta = 0;
-        tiempoSinMovimiento = 0;
-        ultimaPosicionMovimiento.set(
-            grupo.position.x,
-            grupo.position.y,
-            grupo.position.z
-        );
-
-        const caminando = estaCaminando();
-
-        const animacionProcedural = [
-            ESTADOS.RECOGIENDO,
-            ESTADOS.INSPECCIONANDO,
-            ESTADOS.GUARDANDO,
-            ESTADOS.DEVOLVIENDO,
-            ESTADOS.PAGANDO
-        ].includes(estado);
-
-        if (caminando) {
-            const usaGLB = activarCaminarGLB();
-
-            if (!usaGLB) {
-                detenerAccionesGLB();
-            }
-        } else if (animacionProcedural) {
-            detenerAccionesGLB();
-        } else {
-            detenerAccionesGLB();
-            activarReposoGLB();
-        }
-
-        if (
-            !caminando &&
-            nuevoEstado !== ESTADOS.DEVOLVIENDO &&
-            nuevoEstado !== ESTADOS.INSPECCIONANDO &&
-            nuevoEstado !== ESTADOS.RECOGIENDO
-        ) {
-            restaurarPoseCompleta();
-        }
-
-        try {
-            config.alCambiarEstado?.({
-                cliente: api,
-                anterior,
-                estado: nuevoEstado
-            });
-        } catch (error) {
-            console.error(error);
-        }
+    if (nuevoEstado !== ESTADOS.GUARDANDO) {
+        animacionDeposito.preparada = false;
     }
+
+    if (
+        nuevoEstado !== ESTADOS.INSPECCIONANDO &&
+        poseAgarreInspeccion.activa
+    ) {
+        poseAgarreInspeccion.activa = false;
+        poseAgarreInspeccion.huesos.length = 0;
+    }
+
+    // Actualizar el seguimiento según el nuevo estado.
+    console.log('[ACTUALIZANDO CARRITO POR CAMBIO DE ESTADO]', {
+        estado,
+        ladoAgarre
+    });
+
+    actualizarSeguimientoCarrito();
+
+    intentosMovimiento = 0;
+    tiempoRecalculoRuta = 0;
+    tiempoSinMovimiento = 0;
+
+    ultimaPosicionMovimiento.set(
+        grupo.position.x,
+        grupo.position.y,
+        grupo.position.z
+    );
+
+    const caminando = estaCaminando();
+
+    const animacionProcedural = [
+        ESTADOS.RECOGIENDO,
+        ESTADOS.INSPECCIONANDO,
+        ESTADOS.GUARDANDO,
+        ESTADOS.DEVOLVIENDO,
+        ESTADOS.PAGANDO
+    ].includes(estado);
+
+    if (caminando) {
+        const usaGLB = activarCaminarGLB();
+
+        if (!usaGLB) {
+            detenerAccionesGLB();
+        }
+    } else if (animacionProcedural) {
+        detenerAccionesGLB();
+    } else {
+        detenerAccionesGLB();
+        activarReposoGLB();
+    }
+
+    if (
+        !caminando &&
+        nuevoEstado !== ESTADOS.DEVOLVIENDO &&
+        nuevoEstado !== ESTADOS.INSPECCIONANDO &&
+        nuevoEstado !== ESTADOS.RECOGIENDO
+    ) {
+        restaurarPoseCompleta();
+    }
+
+    try {
+        config.alCambiarEstado?.({
+            cliente: api,
+            anterior,
+            estado: nuevoEstado
+        });
+    } catch (error) {
+        console.error(
+            '[ERROR AL CAMBIAR ESTADO CLIENTE]',
+            error
+        );
+    }
+}
+
 
     
     
