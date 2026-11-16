@@ -57,7 +57,7 @@ const CONFIG_BASE = {
     probabilidadDejarEnOtroRack: 0.42,
 
     distanciaProducto: 0.20,
-    distanciaFrenteProducto: 0.45,
+    distanciaFrenteProducto: 0.30,
     distanciaContactoMano: 0.05,
 
     tiempoRecoger: 1.5,
