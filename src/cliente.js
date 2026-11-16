@@ -2679,7 +2679,7 @@ function actualizarSeguimientoCarrito() {
         ESTADOS.INSPECCIONANDO
     ];
 
-    // Seguimiento normal: el carrito acompaña al cliente.
+    // Seguimiento normal: conserva la distancia de 0.95.
     if (estadosSeguimiento.includes(estado)) {
         carrito.seguirObjetivo?.(
             grupo,
@@ -2689,8 +2689,8 @@ function actualizarSeguimientoCarrito() {
         return;
     }
 
-    // Recogida e inspección: el carrito se coloca
-    // al costado de la mano que utiliza el cliente.
+    // Recogida e inspección: coloca el carrito
+    // a un costado del cliente, del lado de la mano de agarre.
     if (estadosJuntoAlCliente.includes(estado)) {
         const desplazamiento =
             ladoAgarre === 'derecho'
@@ -2705,7 +2705,55 @@ function actualizarSeguimientoCarrito() {
         return;
     }
 
-    // En los demás estados, el carrito se queda quieto.
+    // En los demás estados, detiene el seguimiento.
+    if (carrito.siguiendo) {
+        carrito.detenerSeguimiento?.();
+    }
+}function actualizarSeguimientoCarrito() {
+    const carrito = config.carrito;
+
+    if (!carrito) return;
+
+    const estadosSeguimiento = [
+        ESTADOS.ENTRANDO,
+        ESTADOS.ACERCANDO,
+        ESTADOS.RUTA,
+        ESTADOS.CAJA,
+        ESTADOS.REGRESANDO
+    ];
+
+    const estadosJuntoAlCliente = [
+        ESTADOS.RECOGIENDO,
+        ESTADOS.INSPECCIONANDO
+    ];
+
+    // Seguimiento normal: conserva la distancia de 0.95.
+    if (estadosSeguimiento.includes(estado)) {
+        carrito.seguirObjetivo?.(
+            grupo,
+            0.95,
+            0
+        );
+        return;
+    }
+
+    // Recogida e inspección: coloca el carrito
+    // a un costado del cliente, del lado de la mano de agarre.
+    if (estadosJuntoAlCliente.includes(estado)) {
+        const desplazamiento =
+            ladoAgarre === 'derecho'
+                ? distanciaLateralCarrito
+                : -distanciaLateralCarrito;
+
+        carrito.seguirObjetivo?.(
+            grupo,
+            0.1,
+            desplazamiento
+        );
+        return;
+    }
+
+    // En los demás estados, detiene el seguimiento.
     if (carrito.siguiendo) {
         carrito.detenerSeguimiento?.();
     }
