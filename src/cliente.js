@@ -344,7 +344,7 @@ export function crearClienteSupermercado(scene, opciones = {}) {
     let posicionClienteAntesDeReubicar = new THREE.Vector3();
 
 let tienePosicionClienteAntesDeReubicar = false;
-
+let productoEsSuperior = false;
 let productoReubicadoPendiente = false;
     let tiempoEstado = 0;
     let tiempoActualizarObstaculos = 0;
@@ -1274,7 +1274,6 @@ function animarAgacharse(intensidad = 1) {
         numero(config.posicion.y) - 0.13 * curva;
 }
     
-  
 function animarRecogerProcedural() {
     const progreso = limitar(
         tiempoEstado / Math.max(config.tiempoRecoger, 0.01),
@@ -1301,27 +1300,26 @@ function animarRecogerProcedural() {
         )
     );
 
-    // Agacharse solamente cuando el producto está en un estante bajo.
+    // Clasificación de altura del producto.
     const agachado = productoEsInferior ? 1 : 0;
+    const productoArriba = productoEsSuperior ? 1 : 0;
 
-    const intensidadAgacharse =
-        agachado * suavizar(
-            limitar(progreso / 0.72, 0, 1)
-        );
+    // El cuerpo se agacha o se estira según la altura.
+    animarAgacharse(
+        agachado * suavizar(progreso * 1.35)
+    );
 
-    animarAgacharse(intensidadAgacharse);
-
-    // El brazo activo queda reservado exclusivamente para el IK.
     const brazoLibre = obtenerRigBrazo(
         ladoAgarre === 'derecho' ? 'izquierdo' : 'derecho'
     );
 
     const signoLibre = ladoAgarre === 'izquierdo' ? 1 : -1;
 
-    // Brazo libre: acompaña el equilibrio del cuerpo.
+    // Brazo libre: acompaña el movimiento.
     aplicarRotacionEuler(
         brazoLibre.hombro,
-        -0.12 - 0.22 * acercarse,
+        -0.12 - 0.22 * acercarse +
+            0.18 * productoArriba * acercarse,
         0,
         0.06 * acercarse * signoLibre
     );
@@ -1339,30 +1337,51 @@ function animarRecogerProcedural() {
         -0.08 - contacto * 0.16
     );
 
-    // Torso: inclinación adicional al alcanzar el producto.
+    // Torso: se inclina para alcanzar productos bajos
+    // y se estira ligeramente para alcanzar los altos.
     aplicarRotacionEuler(
         rig.torso,
-        0.08 * acercarse + 0.16 * agachado * acercarse,
+        0.08 * acercarse +
+            0.16 * agachado * acercarse -
+            0.12 * productoArriba * acercarse,
         -0.10 * acercarse,
         -0.04 * acercarse
     );
 
-    // Cabeza: dirige la mirada hacia el producto.
+    // Cabeza: mira hacia el producto.
     aplicarRotacionEuler(
         rig.cabeza,
-        0.14 + 0.12 * acercarse +
+        0.14 + 0.12 * acercarse -
+            0.18 * productoArriba * acercarse +
             Math.sin(tiempoEstado * 2.1) * 0.018,
         -0.12 * acercarse,
         0.025 * Math.sin(tiempoEstado * 1.6)
     );
 
-    // Cuello: acompaña suavemente la inclinación.
     aplicarRotacion(
         rig.cuello,
         EJE_X,
-        0.08 + 0.08 * acercarse
+        0.08 + 0.08 * acercarse -
+            0.10 * productoArriba * acercarse
     );
 }
+
+function esProductoSuperior(producto) {
+    if (!producto) return false;
+
+    grupo.updateMatrixWorld(true);
+
+    const posicion = new THREE.Vector3();
+    producto.getWorldPosition(posicion);
+
+    const posicionCliente = new THREE.Vector3();
+    grupo.getWorldPosition(posicionCliente);
+
+    const alturaRelativa = posicion.y - posicionCliente.y;
+
+    return alturaRelativa > 1.35;
+}
+
 function orientarHuesoHaciaDireccion(
     hueso,
     direccionActual,
@@ -5829,7 +5848,7 @@ function actualizar(delta) {
                             }
                         }
                     );
-
+productoEsSuperior = esProductoSuperior(producto);
                     if (
                         brazoSeleccionado &&
                         obtenerRigBrazo().mano
