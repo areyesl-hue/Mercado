@@ -44,8 +44,8 @@ const CONFIG_BASE = {
     limiteZMax: 55,
 
     radioColision: 0.20,
-    margenObstaculos: 0.7,
-    tamanoCelda: 0.65,
+    margenObstaculos: 0.14,
+    tamanoCelda: 0.50,
 
     puertaCentroX: 0,
     puertaAncho: 8.5,
@@ -57,7 +57,7 @@ const CONFIG_BASE = {
     probabilidadDejarEnOtroRack: 0.42,
 
     distanciaProducto: 0.20,
-    distanciaFrenteProducto: 0.50,
+    distanciaFrenteProducto: 0.45,
     distanciaContactoMano: 0.9,
 
     tiempoRecoger: 1.1,
@@ -2973,19 +2973,17 @@ function puntoLibre(x, z, productoObjetivo = null) {
     ) {
         return false;
     }
-
-    const margenNormal = Math.max(
-        0.05,
+const margenNormal = Math.max(
+    0.05,
+    (
         numero(config.radioColision, 0.34) +
         numero(config.margenObstaculos, 0.12)
-    ) * 0.65;
+    ) * 0.65
+);
 
-    // Durante la aproximación reducimos el margen,
-    // pero no desactivamos las colisiones.
-    const margen = productoObjetivo
-        ? 0.055
-        : margenNormal;
-
+const margen = productoObjetivo
+    ? 0.055
+    : margenNormal;
     const dentroPuerta = estaEnCorredorPuerta(x, z);
 
     for (const obstaculo of obstaculosCache) {
@@ -3022,25 +3020,29 @@ function puntoLibre(x, z, productoObjetivo = null) {
 }
 
 
-    function segmentoLibre(a, b) {
-        const distancia = distanciaXZ(a, b);
 
-        const pasos = Math.max(
-            1,
-            Math.ceil(distancia / 0.30)
-        );
+function segmentoLibre(a, b, productoObjetivo = null) {
+    const distancia = distanciaXZ(a, b);
 
-        for (let i = 0; i <= pasos; i++) {
-            const t = i / pasos;
+    const pasos = Math.max(
+        1,
+        Math.ceil(distancia / 0.15)
+    );
 
-            const x = THREE.MathUtils.lerp(a.x, b.x, t);
-            const z = THREE.MathUtils.lerp(a.z, b.z, t);
+    for (let i = 0; i <= pasos; i++) {
+        const t = i / pasos;
 
-            if (!puntoLibre(x, z)) return false;
+        const x = THREE.MathUtils.lerp(a.x, b.x, t);
+        const z = THREE.MathUtils.lerp(a.z, b.z, t);
+
+        if (!puntoLibre(x, z, productoObjetivo)) {
+            return false;
         }
-
-        return true;
     }
+
+    return true;
+}
+
 
     
     
