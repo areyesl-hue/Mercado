@@ -1297,41 +1297,69 @@ function animarRecogerProcedural() {
         0.08 + 0.08 * acercarse
     );
 }
+function orientarHuesoHaciaDireccion(
+    hueso,
+    direccionActual,
+    direccionDeseada
+) {
+    if (
+        !hueso?.parent ||
+        !direccionActual ||
+        !direccionDeseada ||
+        direccionActual.lengthSq() < 0.000001 ||
+        direccionDeseada.lengthSq() < 0.000001
+    ) {
+        return false;
+    }
 
-    function orientarHuesoHaciaDireccion(hueso, direccionActual, direccionDeseada) {
-        if (
-            !hueso?.parent ||
-            direccionActual.lengthSq() < 0.000001 ||
-            direccionDeseada.lengthSq() < 0.000001
-        ) {
-            return false;
-        }
+    // Actualizar matrices del rig.
+    grupo.updateMatrixWorld(true);
 
-        ikAgarre.direccionActual.copy(direccionActual).normalize();
-        ikAgarre.direccionDeseada.copy(direccionDeseada).normalize();
+    // Normalizar las direcciones.
+    ikAgarre.direccionActual
+        .copy(direccionActual)
+        .normalize();
 
-        ikAgarre.quaternionDeltaMundo.setFromUnitVectors(
+    ikAgarre.direccionDeseada
+        .copy(direccionDeseada)
+        .normalize();
+
+    // Obtener la rotación mundial actual del hueso.
+    hueso.getWorldQuaternion(
+        ikAgarre.quaternionPadre
+    );
+
+    // Calcular la rotación necesaria en espacio mundial.
+    ikAgarre.quaternionDeltaMundo
+        .setFromUnitVectors(
             ikAgarre.direccionActual,
             ikAgarre.direccionDeseada
         );
 
-        hueso.parent.getWorldQuaternion(ikAgarre.quaternionPadre);
-        ikAgarre.quaternionPadreInversa
-            .copy(ikAgarre.quaternionPadre)
-            .invert();
+    // Convertir la rotación mundial a espacio local.
+    hueso.parent.getWorldQuaternion(
+        ikAgarre.quaternionPadre
+    );
 
-        ikAgarre.quaternionDeltaLocal
-            .copy(ikAgarre.quaternionPadreInversa)
-            .multiply(ikAgarre.quaternionDeltaMundo)
-            .multiply(ikAgarre.quaternionPadre);
+    ikAgarre.quaternionPadreInversa
+        .copy(ikAgarre.quaternionPadre)
+        .invert();
 
-        hueso.quaternion
-            .premultiply(ikAgarre.quaternionDeltaLocal)
-            .normalize();
+    ikAgarre.quaternionDeltaLocal
+        .copy(ikAgarre.quaternionPadreInversa)
+        .multiply(ikAgarre.quaternionDeltaMundo)
+        .multiply(ikAgarre.quaternionPadre);
 
-        return true;
-    }
+    // Aplicar la corrección a la orientación local.
+    hueso.quaternion
+        .premultiply(ikAgarre.quaternionDeltaLocal)
+        .normalize();
 
+    // Actualizar el rig.
+    grupo.updateMatrixWorld(true);
+
+    return true;
+}
 
 
 function resolverIKBrazo(brazo, objetivo) {
