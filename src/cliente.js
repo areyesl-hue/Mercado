@@ -4490,9 +4490,7 @@ if (destino) {
         new THREE.Vector3()
     );
 
-    const palmaLocal = mano.worldToLocal(
-        palmaMundo.clone()
-    );
+
 
     // --------------------------------------------------
     // 3. COMPROBAR CONTACTO CON EL PRODUCTO
@@ -4565,59 +4563,36 @@ if (destino) {
     mano.updateMatrixWorld(true);
     producto.updateMatrixWorld(true);
 
-    // --------------------------------------------------
-    // 6. POSICIÓN FINAL DEL PRODUCTO
-    // --------------------------------------------------
+ // --------------------------------------------------
+// 6. CONSERVAR LA POSICIÓN REAL DEL PRODUCTO
+// --------------------------------------------------
 
-    const posicionFinal = palmaLocal.clone();
+const posicionFinal = producto.position.clone();
+const quaternionFinal = producto.quaternion.clone();
+const escalaFinal = producto.scale.clone();
+  animacionAgarre.posicionInicial.copy(
+    producto.position
+);
 
-    // --------------------------------------------------
-    // 7. CONFIGURAR ANIMACIÓN DE AGARRE
-    // --------------------------------------------------
+animacionAgarre.posicionFinal.copy(
+    posicionFinal
+);
 
-    animacionAgarre.activa = true;
-    animacionAgarre.tiempo = 0;
+animacionAgarre.quaternionInicial.copy(
+    producto.quaternion
+);
 
-    animacionAgarre.duracion = Math.max(
-        numero(config.tiempoAnimacionAgarre, 0.38),
-        0.05
-    );
+animacionAgarre.quaternionFinal.copy(
+    quaternionFinal
+);
 
-    animacionAgarre.posicionInicial.copy(
-        producto.position
-    );
+animacionAgarre.escalaInicial.copy(
+    producto.scale
+);
 
-    animacionAgarre.posicionFinal.copy(
-        posicionFinal
-    );
-
-    animacionAgarre.quaternionInicial.copy(
-        producto.quaternion
-    );
-
-    animacionAgarre.quaternionFinal.copy(
-        producto.quaternion
-    );
-
-    animacionAgarre.escalaInicial.copy(
-        producto.scale
-    );
-
-    animacionAgarre.escalaFinal.copy(
-        producto.scale
-    );
-
-    animacionAgarre.puntoContactoLocal =
-        puntoContactoLocal.clone();
-
-    animacionAgarre.normalContactoLocal =
-        normalContactoLocal.clone();
-
-    producto.visible = true;
-    productoEnMano = producto;
-
-    productoConCajaAgarre = null;
-
+animacionAgarre.escalaFinal.copy(
+    escalaFinal
+);
     // --------------------------------------------------
     // 8. PREPARAR POSE DE INSPECCIÓN
     // --------------------------------------------------
