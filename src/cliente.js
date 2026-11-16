@@ -119,7 +119,7 @@ const CONFIG_BASE = {
     repetirRuta: false,
     inactivo: false,
 
-    aceleracionMovimiento: 3.35,
+    aceleracionMovimiento: 5.85,
     suavizadoGiro: 7,
 
     productos: null,
