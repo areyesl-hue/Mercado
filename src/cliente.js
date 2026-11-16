@@ -1216,22 +1216,61 @@ function seleccionarBrazoAgarre(producto) {
     
     
     
+function animarAgacharse(intensidad = 1) {
+    intensidad = limitar(intensidad, 0, 1);
 
-    function animarAgacharse(intensidad = 1) {
-        intensidad = limitar(intensidad, 0, 1);
-        const curva = suavizar(intensidad);
+    const curva = suavizar(intensidad);
 
-        aplicarRotacion(rig.cadera, EJE_X, 0.34 * curva);
-        aplicarRotacion(rig.torso, EJE_X, 0.28 * curva);
+    // Intensidad de cada articulación.
+    const flexionCadera = 0.42 * curva;
+    const inclinacionTorso = 0.36 * curva;
+    const flexionMuslos = -0.82 * curva;
+    const flexionPantorrillas = 0.48 * curva;
 
-        aplicarRotacion(rig.piernaIzquierda, EJE_X, -0.72 * curva);
-        aplicarRotacion(rig.piernaDerecha, EJE_X, -0.72 * curva);
-        aplicarRotacion(rig.pantorrillaIzquierda, EJE_X, 0.38 * curva);
-        aplicarRotacion(rig.pantorrillaDerecha, EJE_X, 0.38 * curva);
+    // Cadera: baja y comienza a inclinarse.
+    aplicarRotacion(
+        rig.cadera,
+        EJE_X,
+        flexionCadera
+    );
 
-        grupo.position.y = numero(config.posicion.y) - 0.16 * curva;
-    }
+    // Torso: se inclina hacia delante para alcanzar el producto.
+    aplicarRotacion(
+        rig.torso,
+        EJE_X,
+        inclinacionTorso
+    );
 
+    // Piernas: flexión de ambas rodillas.
+    aplicarRotacion(
+        rig.piernaIzquierda,
+        EJE_X,
+        flexionMuslos
+    );
+
+    aplicarRotacion(
+        rig.piernaDerecha,
+        EJE_X,
+        flexionMuslos
+    );
+
+    // Pantorrillas: compensan la flexión de las piernas.
+    aplicarRotacion(
+        rig.pantorrillaIzquierda,
+        EJE_X,
+        flexionPantorrillas
+    );
+
+    aplicarRotacion(
+        rig.pantorrillaDerecha,
+        EJE_X,
+        flexionPantorrillas
+    );
+
+    // Descenso del cuerpo.
+    grupo.position.y =
+        numero(config.posicion.y) - 0.22 * curva;
+}
     
     
   
@@ -1261,11 +1300,15 @@ function animarRecogerProcedural() {
         )
     );
 
+    // Agacharse solamente cuando el producto está en un estante bajo.
     const agachado = productoEsInferior ? 1 : 0;
 
-    animarAgacharse(
-        agachado * suavizar(progreso * 1.35)
-    );
+    const intensidadAgacharse =
+        agachado * suavizar(
+            limitar(progreso / 0.72, 0, 1)
+        );
+
+    animarAgacharse(intensidadAgacharse);
 
     // El brazo activo queda reservado exclusivamente para el IK.
     const brazoLibre = obtenerRigBrazo(
@@ -1274,7 +1317,7 @@ function animarRecogerProcedural() {
 
     const signoLibre = ladoAgarre === 'izquierdo' ? 1 : -1;
 
-    // Brazo libre.
+    // Brazo libre: acompaña el equilibrio del cuerpo.
     aplicarRotacionEuler(
         brazoLibre.hombro,
         -0.12 - 0.22 * acercarse,
@@ -1295,14 +1338,15 @@ function animarRecogerProcedural() {
         -0.08 - contacto * 0.16
     );
 
-    // Movimiento natural del torso y la cabeza.
+    // Torso: inclinación adicional al alcanzar el producto.
     aplicarRotacionEuler(
         rig.torso,
-        0.08 * acercarse + 0.28 * agachado * acercarse,
+        0.08 * acercarse + 0.16 * agachado * acercarse,
         -0.10 * acercarse,
         -0.04 * acercarse
     );
 
+    // Cabeza: dirige la mirada hacia el producto.
     aplicarRotacionEuler(
         rig.cabeza,
         0.14 + 0.12 * acercarse +
@@ -1311,6 +1355,7 @@ function animarRecogerProcedural() {
         0.025 * Math.sin(tiempoEstado * 1.6)
     );
 
+    // Cuello: acompaña suavemente la inclinación.
     aplicarRotacion(
         rig.cuello,
         EJE_X,
