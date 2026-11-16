@@ -99,7 +99,7 @@ export function crearCarrito(scene, opciones = {}) {
         desplazamientoLateral: 0,
         modoLateral: false,
 
-        anguloObjetivo: null,
+        // Estado de la maniobra de estacionamiento.
         ladoEstacionamiento: 0,
 
         productos: [],
@@ -107,7 +107,7 @@ export function crearCarrito(scene, opciones = {}) {
     };
 
     // ========================================================
-    // VECTORES REUTILIZABLES
+    // VECTORES Y QUATERNIONS REUTILIZABLES
     // ========================================================
 
     const posicionObjetivo = new THREE.Vector3();
@@ -122,6 +122,10 @@ export function crearCarrito(scene, opciones = {}) {
     const quaternionMundo = new THREE.Quaternion();
     const quaternionDeseado = new THREE.Quaternion();
     const quaternionLocalDeseado = new THREE.Quaternion();
+
+    // Orientación fija que debe alcanzar el carrito.
+    const quaternionEstacionamiento = new THREE.Quaternion();
+    const quaternionGiroEstacionamiento = new THREE.Quaternion();
 
     const eulerCarrito = new THREE.Euler();
     const ejeVertical = new THREE.Vector3(0, 1, 0);
@@ -762,15 +766,13 @@ export function crearCarrito(scene, opciones = {}) {
 
         estado.siguiendo = true;
 
-        // INICIO DE LA MANIOBRA LATERAL.
+        // ====================================================
+        // INICIO DEL ESTACIONAMIENTO
+        // ====================================================
+
         if (estado.modoLateral && !eraLateral) {
             grupo.updateWorldMatrix(true, false);
             grupo.getWorldQuaternion(quaternionMundo);
-
-            eulerCarrito.setFromQuaternion(
-                quaternionMundo,
-                'YXZ'
-            );
 
             const signo = Math.sign(
                 estado.desplazamientoLateral
@@ -778,20 +780,31 @@ export function crearCarrito(scene, opciones = {}) {
 
             estado.ladoEstacionamiento = signo;
 
-            estado.anguloObjetivo =
-                eulerCarrito.y +
-                config.giroEstacionamiento * signo;
+            // Giro de 180 grados alrededor del eje vertical mundial.
+            quaternionGiroEstacionamiento.setFromAxisAngle(
+                ejeVertical,
+                Math.PI * signo
+            );
 
-            console.log('[GIRO CARRITO INICIADO]', {
-                anguloInicial: eulerCarrito.y,
-                anguloObjetivo: estado.anguloObjetivo,
-                lado: signo
+            // Guardar una orientación final fija.
+            quaternionEstacionamiento
+                .copy(quaternionGiroEstacionamiento)
+                .multiply(quaternionMundo)
+                .normalize();
+
+            console.log('[GIRO 180 CARRITO INICIADO]', {
+                lado: signo,
+                giroGrados: 180,
+                orientacionInicial: quaternionMundo.toArray(),
+                orientacionObjetivo: quaternionEstacionamiento.toArray()
             });
         }
 
-        // VOLVER A SEGUIMIENTO NORMAL.
+        // ====================================================
+        // REGRESAR A SEGUIMIENTO NORMAL
+        // ====================================================
+
         if (!estado.modoLateral) {
-            estado.anguloObjetivo = null;
             estado.ladoEstacionamiento = 0;
         }
 
@@ -799,7 +812,7 @@ export function crearCarrito(scene, opciones = {}) {
             distancia: estado.distancia,
             desplazamientoLateral: estado.desplazamientoLateral,
             modoLateral: estado.modoLateral,
-            anguloObjetivo: estado.anguloObjetivo
+            giroGrados: estado.modoLateral ? 180 : 0
         });
 
         return true;
@@ -810,7 +823,6 @@ export function crearCarrito(scene, opciones = {}) {
         estado.objetivo = null;
         estado.desplazamientoLateral = 0;
         estado.modoLateral = false;
-        estado.anguloObjetivo = null;
         estado.ladoEstacionamiento = 0;
     }
 
@@ -877,7 +889,7 @@ export function crearCarrito(scene, opciones = {}) {
     }
 
     // ========================================================
-    // ACTUALIZAR POSICIÓN DEL CARRITO
+    // ACTUALIZAR POSICIÓN Y ROTACIÓN DEL CARRITO
     // ========================================================
 
     function actualizar(delta) {
@@ -900,7 +912,10 @@ export function crearCarrito(scene, opciones = {}) {
         objetivo.getWorldPosition(posicionObjetivo);
         objetivo.getWorldQuaternion(quaternionObjetivo);
 
-        // DIRECCIÓN FRONTAL DEL CLIENTE.
+        // ====================================================
+        // DIRECCIÓN FRONTAL DEL CLIENTE
+        // ====================================================
+
         direccion
             .set(0, 0, 1)
             .applyQuaternion(quaternionObjetivo);
@@ -913,7 +928,10 @@ export function crearCarrito(scene, opciones = {}) {
 
         direccion.normalize();
 
-        // LATERAL DEL CLIENTE.
+        // ====================================================
+        // LATERAL DEL CLIENTE
+        // ====================================================
+
         lateral.set(
             direccion.z,
             0,
@@ -923,7 +941,7 @@ export function crearCarrito(scene, opciones = {}) {
         posicionDeseada.copy(posicionObjetivo);
 
         // ====================================================
-        // ESTACIONAMIENTO LATERAL
+        // POSICIÓN LATERAL DURANTE LA RECOGIDA
         // ====================================================
 
         if (estado.modoLateral) {
@@ -941,14 +959,12 @@ export function crearCarrito(scene, opciones = {}) {
                 distanciaLateral * signo
             );
 
-            console.log('[POSICIÓN LATERAL CARRITO]', {
-                cliente: posicionObjetivo.toArray(),
-                posicionDeseada: posicionDeseada.toArray(),
-                distanciaLateral,
-                lado: signo
-            });
         } else {
-            // SEGUIMIENTO NORMAL.
+
+            // =================================================
+            // SEGUIMIENTO NORMAL
+            // =================================================
+
             posicionDeseada.addScaledVector(
                 direccion,
                 estado.distancia * config.ladoDelante
@@ -966,13 +982,19 @@ export function crearCarrito(scene, opciones = {}) {
 
         posicionDeseada.y = config.posicion.y;
 
-        // CONVERTIR POSICIÓN MUNDIAL A LOCAL.
+        // ====================================================
+        // CONVERTIR POSICIÓN MUNDIAL A LOCAL
+        // ====================================================
+
         if (grupo.parent) {
             grupo.parent.updateWorldMatrix(true, false);
             grupo.parent.worldToLocal(posicionDeseada);
         }
 
-        // MOVIMIENTO SUAVIZADO.
+        // ====================================================
+        // MOVIMIENTO SUAVIZADO
+        // ====================================================
+
         const factorMovimiento = 1 - Math.exp(
             -Math.max(0.1, config.suavizado) * dt
         );
@@ -983,48 +1005,41 @@ export function crearCarrito(scene, opciones = {}) {
         );
 
         // ====================================================
-        // GIRO PROGRESIVO DE 90 GRADOS
+        // GIRO PROGRESIVO DE 180 GRADOS
         // ====================================================
 
         if (estado.modoLateral) {
-            if (estado.anguloObjetivo !== null) {
-                grupo.updateWorldMatrix(true, false);
 
-                grupo.getWorldQuaternion(quaternionMundo);
+            grupo.updateWorldMatrix(true, false);
 
-                eulerCarrito.setFromQuaternion(
-                    quaternionMundo,
-                    'YXZ'
+            // Orientación mundial actual.
+            grupo.getWorldQuaternion(quaternionMundo);
+
+            // Suavizado de la rotación.
+            const factorGiro = 1 - Math.exp(
+                -Math.max(0.1, config.suavizadoGiro) * dt
+            );
+
+            // Interpolar hacia la orientación final fija.
+            quaternionDeseado
+                .copy(quaternionMundo)
+                .slerp(
+                    quaternionEstacionamiento,
+                    factorGiro
                 );
 
-                const anguloActual = eulerCarrito.y;
+            quaternionDeseado.normalize();
 
-                const diferencia =
-                    THREE.MathUtils.euclideanModulo(
-                        estado.anguloObjetivo -
-                        anguloActual +
-                        Math.PI,
-                        Math.PI * 2
-                    ) - Math.PI;
+            aplicarQuaternionMundial(
+                quaternionDeseado
+            );
 
-                const factorGiro = 1 - Math.exp(
-                    -Math.max(0.1, config.suavizadoGiro) * dt
-                );
-
-                eulerCarrito.y =
-                    anguloActual +
-                    diferencia * factorGiro;
-
-                quaternionDeseado.setFromEuler(
-                    eulerCarrito
-                );
-
-                aplicarQuaternionMundial(
-                    quaternionDeseado
-                );
-            }
         } else {
-            // ORIENTACIÓN NORMAL HACIA EL CLIENTE.
+
+            // =================================================
+            // ORIENTACIÓN NORMAL HACIA EL CLIENTE
+            // =================================================
+
             grupo.updateWorldMatrix(true, false);
             grupo.getWorldPosition(posicionCarritoMundial);
 
@@ -1046,7 +1061,9 @@ export function crearCarrito(scene, opciones = {}) {
                     anguloMundial
                 );
 
-                quaternionLocalDeseado.copy(quaternionMundo);
+                quaternionLocalDeseado.copy(
+                    quaternionMundo
+                );
 
                 if (grupo.parent) {
                     grupo.parent.getWorldQuaternion(
@@ -1474,7 +1491,7 @@ export function crearCarrito(scene, opciones = {}) {
         estado.siguiendo = false;
         estado.objetivo = null;
         estado.modoLateral = false;
-        estado.anguloObjetivo = null;
+        estado.ladoEstacionamiento = 0;
 
         const productos = [...estado.productos];
 
