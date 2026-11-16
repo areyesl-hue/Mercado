@@ -1221,57 +1221,58 @@ function animarAgacharse(intensidad = 1) {
 
     const curva = suavizar(intensidad);
 
-    // Intensidad de cada articulación.
-    const flexionCadera = 0.42 * curva;
-    const inclinacionTorso = 0.36 * curva;
-    const flexionMuslos = -0.82 * curva;
-    const flexionPantorrillas = 0.48 * curva;
+    // Sentadilla progresiva.
+    const flexionMuslos = 0.48 * curva;
+    const flexionRodillas = 0.62 * curva;
 
-    // Cadera: baja y comienza a inclinarse.
-    aplicarRotacion(
+    // Cadera: ligera inclinación hacia delante.
+    aplicarRotacionEuler(
         rig.cadera,
-        EJE_X,
-        flexionCadera
+        0.16 * curva,
+        0,
+        0
     );
 
-    // Torso: se inclina hacia delante para alcanzar el producto.
-    aplicarRotacion(
+    // Torso: compensa el movimiento de las piernas.
+    aplicarRotacionEuler(
         rig.torso,
-        EJE_X,
-        inclinacionTorso
+        -0.20 * curva,
+        0,
+        0
     );
 
-    // Piernas: flexión de ambas rodillas.
-    aplicarRotacion(
+    // Muslos: flexión hacia delante.
+    aplicarRotacionEuler(
         rig.piernaIzquierda,
-        EJE_X,
-        flexionMuslos
+        flexionMuslos,
+        0,
+        0
     );
 
-    aplicarRotacion(
+    aplicarRotacionEuler(
         rig.piernaDerecha,
-        EJE_X,
-        flexionMuslos
+        flexionMuslos,
+        0,
+        0
     );
 
-    // Pantorrillas: compensan la flexión de las piernas.
+    // Rodillas: flexión de las pantorrillas.
     aplicarRotacion(
         rig.pantorrillaIzquierda,
         EJE_X,
-        flexionPantorrillas
+        flexionRodillas
     );
 
     aplicarRotacion(
         rig.pantorrillaDerecha,
         EJE_X,
-        flexionPantorrillas
+        flexionRodillas
     );
 
-    // Descenso del cuerpo.
+    // Bajar el cuerpo sin hundirlo demasiado.
     grupo.position.y =
-        numero(config.posicion.y) - 0.22 * curva;
+        numero(config.posicion.y) - 0.13 * curva;
 }
-    
     
   
 function animarRecogerProcedural() {
