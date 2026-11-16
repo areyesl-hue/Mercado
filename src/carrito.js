@@ -18,7 +18,7 @@ const CONFIG_DEFAULT = {
     desplazamientoLateralInspeccion: 1.25,
 
     // Maniobra de estacionamiento.
-    giroEstacionamiento: Math.PI / 2,
+    giroEstacionamiento: Math.PI,
     suavizadoGiro: 5,
     distanciaEstacionamiento: 1.25,
 
