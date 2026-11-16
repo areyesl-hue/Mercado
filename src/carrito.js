@@ -800,100 +800,97 @@ export function crearCarrito(scene, opciones = {}) {
     // ACTUALIZAR POSICIÓN DEL CARRITO
     // ========================================================
 
-    function actualizar(delta) {
-        if (
-            estado.eliminado ||
-            !estado.siguiendo ||
-            !estado.objetivo
-        ) {
-            return;
-        }
 
-        const dt = Math.min(
-            Math.max(delta || 0, 0),
-            0.05
+function actualizar(delta) {
+    if (
+        estado.eliminado ||
+        !estado.siguiendo ||
+        !estado.objetivo
+    ) {
+        return;
+    }
+
+    const dt = Math.min(
+        Math.max(delta || 0, 0),
+        0.05
+    );
+
+    const objetivo = estado.objetivo;
+
+    objetivo.updateWorldMatrix(true, false);
+    objetivo.getWorldPosition(posicionObjetivo);
+    objetivo.getWorldQuaternion(quaternionObjetivo);
+
+    // Dirección frontal mundial del cliente.
+    direccion
+        .set(0, 0, 1)
+        .applyQuaternion(quaternionObjetivo);
+
+    direccion.y = 0;
+
+    if (direccion.lengthSq() < 0.0001) {
+        direccion.set(0, 0, 1);
+    }
+
+    direccion.normalize();
+
+    // Lateral mundial del cliente.
+    lateral
+        .set(1, 0, 0)
+        .applyQuaternion(quaternionObjetivo);
+
+    lateral.y = 0;
+
+    if (lateral.lengthSq() < 0.0001) {
+        lateral.set(
+            direccion.z,
+            0,
+            -direccion.x
         );
+    }
 
-        const objetivo = estado.objetivo;
+    lateral.normalize();
 
-        objetivo.updateWorldMatrix(true, false);
+    posicionDeseada.copy(posicionObjetivo);
 
-        // Posición mundial del cliente.
-        objetivo.getWorldPosition(posicionObjetivo);
-
-        // Rotación mundial del cliente.
-        objetivo.getWorldQuaternion(quaternionObjetivo);
-
-        // Dirección frontal del cliente.
-        direccion
-            .set(0, 0, 1)
-            .applyQuaternion(quaternionObjetivo);
-
-        direccion.y = 0;
-
-        if (direccion.lengthSq() < 0.0001) {
-            direccion.set(0, 0, 1);
-        }
-
-        direccion.normalize();
-
-        // Eje lateral derecho del cliente.
-        lateral
-            .set(1, 0, 0)
-            .applyQuaternion(quaternionObjetivo);
-
-        lateral.y = 0;
-
-        if (lateral.lengthSq() < 0.0001) {
-            lateral.set(
-                direccion.z,
-                0,
-                -direccion.x
-            );
-        }
-
-        lateral.normalize();
-
-        // Posición deseada del carrito.
-        posicionDeseada.copy(posicionObjetivo);
-
-        // Distancia frontal.
+    // Solo aplicar distancia frontal cuando no hay
+    // desplazamiento lateral de recogida/inspección.
+    if (Math.abs(estado.desplazamientoLateral) < 0.001) {
         posicionDeseada.addScaledVector(
             direccion,
             estado.distancia * config.ladoDelante
         );
+    }
 
-        // Desplazamiento lateral.
-        posicionDeseada.addScaledVector(
-            lateral,
-            estado.desplazamientoLateral
-        );
+    // Durante recogida e inspección, colocar al costado.
+    posicionDeseada.addScaledVector(
+        lateral,
+        estado.desplazamientoLateral
+    );
 
-        // Mantener la altura configurada.
-        posicionDeseada.y = config.posicion.y;
+    posicionDeseada.y = config.posicion.y;
 
-        // Convertir la posición mundial a local
-        // si el carrito tiene un padre transformado.
-        if (grupo.parent) {
-            grupo.parent.updateWorldMatrix(true, false);
-            grupo.parent.worldToLocal(posicionDeseada);
-        }
+    // Convertir de coordenadas mundiales a locales.
+    if (grupo.parent) {
+        grupo.parent.updateWorldMatrix(true, false);
+        grupo.parent.worldToLocal(posicionDeseada);
+    }
 
-        // Movimiento suave.
-        const factorMovimiento = 1 - Math.exp(
-            -Math.max(0.1, config.suavizado) * dt
-        );
+    const factorMovimiento = 1 - Math.exp(
+        -Math.max(0.1, config.suavizado) * dt
+    );
 
-        grupo.position.lerp(
-            posicionDeseada,
-            factorMovimiento
-        );
+    grupo.position.lerp(
+        posicionDeseada,
+        factorMovimiento
+    );
 
-        // Obtener posición mundial actual del carrito.
+    // Mantener la orientación actual del carrito.
+    // No girarlo hacia el cliente durante la inspección.
+    if (Math.abs(estado.desplazamientoLateral) < 0.001) {
         grupo.updateWorldMatrix(true, false);
         grupo.getWorldPosition(posicionCarritoMundial);
 
-        // Orientar el carrito hacia el cliente.
         haciaCliente.subVectors(
             posicionObjetivo,
             posicionCarritoMundial
@@ -927,6 +924,7 @@ export function crearCarrito(scene, opciones = {}) {
             }
         }
     }
+}
 
     // ========================================================
     // POSICIÓN DE LOS PRODUCTOS
