@@ -35,9 +35,9 @@ const CONFIG_BASE = {
     altura: 1.05,
     escala: 1,
 
-    velocidad: 3.7,
-    velocidadEntrada: 3.4,
-    velocidadRegreso: 3.4,
+    velocidad: 4.5,
+    velocidadEntrada: 3.9,
+    velocidadRegreso: 3.9,
 
     limiteX: 29,
     limiteZMin: -27,
