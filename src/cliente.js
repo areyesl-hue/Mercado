@@ -1214,80 +1214,89 @@ function seleccionarBrazoAgarre(producto) {
 
     
     
-    
+  
+function animarRecogerProcedural() {
+    const progreso = limitar(
+        tiempoEstado / Math.max(config.tiempoRecoger, 0.01),
+        0,
+        1
+    );
 
-    function animarRecogerProcedural() {
-        const progreso = limitar(
-            tiempoEstado / Math.max(config.tiempoRecoger, 0.01), 0, 1
-        );
-        const contactoObjetivo = limitar(
-            numero(config.progresoContactoProducto, 0.78), 0.55, 0.88
-        );
-        const acercarse = suavizar(limitar(progreso / contactoObjetivo, 0, 1));
-        const contacto = suavizar(limitar(
-            (progreso - contactoObjetivo) / Math.max(1 - contactoObjetivo, 0.12), 0, 1
-        ));
-        const retirada = suavizar(Math.max(0, Math.min(progreso, 1)));
-        const agachado = productoEsInferior ? 1 : 0;
+    const contactoObjetivo = limitar(
+        numero(config.progresoContactoProducto, 0.78),
+        0.55,
+        0.88
+    );
 
-        animarAgacharse(agachado * suavizar(progreso * 1.35));
+    const acercarse = suavizar(
+        limitar(progreso / contactoObjetivo, 0, 1)
+    );
 
-        const hombro = THREE.MathUtils.lerp(-0.08, -1.08 * (productoEsInferior ? 0.72 : 1), acercarse);
-        const antebrazo = THREE.MathUtils.lerp(-0.08, -0.78, acercarse);
-
-        const brazoActivo = obtenerRigBrazo();
-        const brazoLibre = obtenerRigBrazo(
-            ladoAgarre === 'derecho' ? 'izquierdo' : 'derecho'
-        );
-        const signoActivo = ladoAgarre === 'izquierdo' ? -1 : 1;
-        const signoLibre = -signoActivo;
-
-        aplicarRotacionEuler(
-            brazoActivo.hombro,
-            hombro,
-            -0.06 * acercarse * signoActivo,
-            0.08 * acercarse * signoActivo
-        );
-        aplicarRotacionEuler(
-            brazoActivo.codo,
-            antebrazo,
-            -0.12 * acercarse * signoActivo,
-            0.06 * signoActivo
-        );
-        aplicarRotacionEuler(
-            brazoActivo.mano,
-            -0.18 - contacto * 0.58,
-            contacto * 0.08 * signoActivo,
-            -0.18 * contacto * signoActivo
-        );
-
-        aplicarRotacionEuler(brazoLibre.hombro,
-            -0.12 - 0.22 * retirada,
+    const contacto = suavizar(
+        limitar(
+            (progreso - contactoObjetivo) /
+            Math.max(1 - contactoObjetivo, 0.12),
             0,
-            0.06 * retirada * signoLibre
-        );
-        aplicarRotacionEuler(
-            brazoLibre.codo,
-            -0.12 - 0.28 * retirada,
-            0.04 * signoLibre,
-            -0.04 * signoLibre
-        );
-        aplicarRotacion(
-            brazoLibre.mano,
-            EJE_X,
-            -0.08 - contacto * 0.16
-        );
+            1
+        )
+    );
 
-        aplicarRotacionEuler(rig.torso,
-            0.08 * acercarse + 0.28 * agachado * acercarse,
-            -0.10 * acercarse,
-            -0.04 * acercarse);
-        aplicarRotacionEuler(rig.cabeza,
-            0.14 + 0.12 * acercarse + Math.sin(tiempoEstado * 2.1) * 0.018,
-            -0.12 * acercarse,
-            0.025 * Math.sin(tiempoEstado * 1.6));
-        aplicarRotacion(rig.cuello, EJE_X, 0.08 + 0.08 * acercarse);
-    }
+    const agachado = productoEsInferior ? 1 : 0;
+
+    animarAgacharse(
+        agachado * suavizar(progreso * 1.35)
+    );
+
+    // El brazo activo queda reservado exclusivamente para el IK.
+    const brazoLibre = obtenerRigBrazo(
+        ladoAgarre === 'derecho' ? 'izquierdo' : 'derecho'
+    );
+
+    const signoLibre = ladoAgarre === 'izquierdo' ? 1 : -1;
+
+    // Brazo libre.
+    aplicarRotacionEuler(
+        brazoLibre.hombro,
+        -0.12 - 0.22 * acercarse,
+        0,
+        0.06 * acercarse * signoLibre
+    );
+
+    aplicarRotacionEuler(
+        brazoLibre.codo,
+        -0.12 - 0.28 * acercarse,
+        0.04 * signoLibre,
+        -0.04 * signoLibre
+    );
+
+    aplicarRotacion(
+        brazoLibre.mano,
+        EJE_X,
+        -0.08 - contacto * 0.16
+    );
+
+    // Movimiento natural del torso y la cabeza.
+    aplicarRotacionEuler(
+        rig.torso,
+        0.08 * acercarse + 0.28 * agachado * acercarse,
+        -0.10 * acercarse,
+        -0.04 * acercarse
+    );
+
+    aplicarRotacionEuler(
+        rig.cabeza,
+        0.14 + 0.12 * acercarse +
+            Math.sin(tiempoEstado * 2.1) * 0.018,
+        -0.12 * acercarse,
+        0.025 * Math.sin(tiempoEstado * 1.6)
+    );
+
+    aplicarRotacion(
+        rig.cuello,
+        EJE_X,
+        0.08 + 0.08 * acercarse
+    );
+}
 
     function orientarHuesoHaciaDireccion(hueso, direccionActual, direccionDeseada) {
         if (
