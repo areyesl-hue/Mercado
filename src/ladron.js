@@ -18,7 +18,7 @@ export function crearLadron(scene, productos, opciones = {}) {
         velocidadCaminar: 1.8,
         velocidadHuida: 5.8,
         productosRobados: 2,
-        distanciaProducto: 0.75,
+        distanciaProducto: 0.35,
         tiempoRobo: 1.6,
         tiempoObservacion: 1.8,
         tiempoAtascado: 4,
@@ -1607,12 +1607,12 @@ function encontrarPosicionDeRobo(producto) {
 
     const radios = [
         radioInicial,
+        0.42,
+        0.50,
+        0.70,
         0.90,
-        1.00,
         1.10,
-        1.20,
-        1.30,
-        1.40
+        1.30
     ];
 
     let mejorRuta = null;
