@@ -1339,46 +1339,24 @@ function resolverIKBrazo(brazo, objetivo) {
     codo.getWorldPosition(ikAgarre.codo);
     mano.getWorldPosition(ikAgarre.muneca);
 
-    // DIAGNÓSTICO DE GEOMETRÍA ANTES DEL IK.
-    console.log('[GEOMETRÍA DEL AGARRE]', {
-        cliente: grupo.position.toArray().map(
-            v => Number(v.toFixed(3))
-        ),
-
-        hombro: ikAgarre.hombro.toArray().map(
-            v => Number(v.toFixed(3))
-        ),
-
-        codo: ikAgarre.codo.toArray().map(
-            v => Number(v.toFixed(3))
-        ),
-
-        muñeca: ikAgarre.muneca.toArray().map(
-            v => Number(v.toFixed(3))
-        ),
-
-        objetivo: objetivo.toArray().map(
-            v => Number(v.toFixed(3))
-        ),
-
-        distanciaHombroObjetivo: Number(
-            ikAgarre.hombro.distanceTo(objetivo).toFixed(3)
-        )
-    });
+    // --------------------------------------------------
+    // 1. CALCULAR DIRECCIÓN HACIA EL OBJETIVO
+    // --------------------------------------------------
 
     ikAgarre.direccion.subVectors(
         objetivo,
         ikAgarre.hombro
     );
 
-    const distanciaObjetivo =
-        ikAgarre.direccion.length();
+    const distanciaObjetivo = ikAgarre.direccion.length();
 
-    const longitudBrazo =
-        ikAgarre.hombro.distanceTo(ikAgarre.codo);
+    const longitudBrazo = ikAgarre.hombro.distanceTo(
+        ikAgarre.codo
+    );
 
-    const longitudAntebrazo =
-        ikAgarre.codo.distanceTo(ikAgarre.muneca);
+    const longitudAntebrazo = ikAgarre.codo.distanceTo(
+        ikAgarre.muneca
+    );
 
     if (
         distanciaObjetivo < 0.0001 ||
@@ -1391,20 +1369,16 @@ function resolverIKBrazo(brazo, objetivo) {
     const distanciaMinima =
         Math.abs(longitudBrazo - longitudAntebrazo) + 0.005;
 
-    const distanciaMaxima = Math.max(
-        distanciaMinima + 0.001,
-        longitudBrazo + longitudAntebrazo - 0.005
-    );
+    const distanciaMaxima =
+        longitudBrazo + longitudAntebrazo - 0.005;
 
     const distanciaAjustada = limitar(
         distanciaObjetivo,
         distanciaMinima,
-        distanciaMaxima
+        Math.max(distanciaMinima + 0.001, distanciaMaxima)
     );
 
-    ikAgarre.direccion.multiplyScalar(
-        1 / distanciaObjetivo
-    );
+    ikAgarre.direccion.normalize();
 
     ikAgarre.objetivo
         .copy(ikAgarre.hombro)
@@ -1412,6 +1386,10 @@ function resolverIKBrazo(brazo, objetivo) {
             ikAgarre.direccion,
             distanciaAjustada
         );
+
+    // --------------------------------------------------
+    // 2. CALCULAR PLANO DE FLEXIÓN DEL CODO
+    // --------------------------------------------------
 
     ikAgarre.codoActual.subVectors(
         ikAgarre.codo,
@@ -1428,32 +1406,43 @@ function resolverIKBrazo(brazo, objetivo) {
             -proyeccionCodo
         );
 
-    if (
-        ikAgarre.perpendicular.lengthSq() <
-        0.000001
-    ) {
-        ikAgarre.perpendicular
-            .set(0, 1, 0)
-            .cross(ikAgarre.direccion);
+    // --------------------------------------------------
+    // 3. EVITAR CAMBIOS BRUSCOS DE DIRECCIÓN
+    // --------------------------------------------------
+
+    if (ikAgarre.perpendicular.lengthSq() < 0.000001) {
+        ikAgarre.perpendicular.set(
+            0,
+            0,
+            ladoAgarre === 'derecho' ? 1 : -1
+        );
+
+        ikAgarre.perpendicular.addScaledVector(
+            ikAgarre.direccion,
+            -ikAgarre.perpendicular.dot(ikAgarre.direccion)
+        );
     }
 
-    if (
-        ikAgarre.perpendicular.lengthSq() <
-        0.000001
-    ) {
-        ikAgarre.perpendicular
-            .set(1, 0, 0)
-            .cross(ikAgarre.direccion);
+    if (ikAgarre.perpendicular.lengthSq() < 0.000001) {
+        ikAgarre.perpendicular.set(0, 1, 0);
+
+        ikAgarre.perpendicular.addScaledVector(
+            ikAgarre.direccion,
+            -ikAgarre.perpendicular.dot(ikAgarre.direccion)
+        );
     }
 
     ikAgarre.perpendicular.normalize();
 
-    const distanciaCodo =
-        (
-            longitudBrazo * longitudBrazo -
-            longitudAntebrazo * longitudAntebrazo +
-            distanciaAjustada * distanciaAjustada
-        ) / (2 * distanciaAjustada);
+    // --------------------------------------------------
+    // 4. POSICIÓN OBJETIVO DEL CODO
+    // --------------------------------------------------
+
+    const distanciaCodo = (
+        longitudBrazo * longitudBrazo -
+        longitudAntebrazo * longitudAntebrazo +
+        distanciaAjustada * distanciaAjustada
+    ) / (2 * distanciaAjustada);
 
     const alturaCodo = Math.sqrt(Math.max(
         0,
@@ -1471,6 +1460,10 @@ function resolverIKBrazo(brazo, objetivo) {
             ikAgarre.perpendicular,
             alturaCodo
         );
+
+    // --------------------------------------------------
+    // 5. ORIENTAR BRAZO SUPERIOR
+    // --------------------------------------------------
 
     ikAgarre.direccionActual.subVectors(
         ikAgarre.codo,
@@ -1491,6 +1484,10 @@ function resolverIKBrazo(brazo, objetivo) {
     }
 
     grupo.updateMatrixWorld(true);
+
+    // --------------------------------------------------
+    // 6. ORIENTAR ANTEBRAZO
+    // --------------------------------------------------
 
     codo.getWorldPosition(ikAgarre.codo);
     mano.getWorldPosition(ikAgarre.muneca);
@@ -1515,50 +1512,6 @@ function resolverIKBrazo(brazo, objetivo) {
 
     grupo.updateMatrixWorld(true);
     mano.updateMatrixWorld(true);
-
-    mano.getWorldPosition(ikAgarre.muneca);
-
-    const errorIK = ikAgarre.muneca.distanceTo(
-        ikAgarre.objetivo
-    );
-
-    console.log(
-        `[DIAGNÓSTICO IK CLIENTE ${id}]`,
-        {
-            lado: ladoAgarre,
-
-            objetivo: ikAgarre.objetivo.toArray().map(
-                v => Number(v.toFixed(3))
-            ),
-
-            muñecaFinal: ikAgarre.muneca.toArray().map(
-                v => Number(v.toFixed(3))
-            ),
-
-            errorIK: Number(errorIK.toFixed(3)),
-
-            distanciaSolicitada: Number(
-                distanciaObjetivo.toFixed(3)
-            ),
-
-            distanciaAjustada: Number(
-                distanciaAjustada.toFixed(3)
-            ),
-
-            longitudBrazo: Number(
-                longitudBrazo.toFixed(3)
-            ),
-
-            longitudAntebrazo: Number(
-                longitudAntebrazo.toFixed(3)
-            ),
-
-            objetivoLimitado:
-                Math.abs(
-                    distanciaObjetivo - distanciaAjustada
-                ) > 0.001
-        }
-    );
 
     return true;
 }
