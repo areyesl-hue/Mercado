@@ -62,10 +62,6 @@ export function crearCarrito(scene, opciones = {}) {
         }
     };
 
-    // ========================================================
-    // GRUPOS
-    // ========================================================
-
     const grupo = new THREE.Group();
     grupo.name = 'CARRITO_SUPERMERCADO';
 
@@ -335,13 +331,12 @@ export function crearCarrito(scene, opciones = {}) {
                 modelo,
                 'Rejilla_trasera',
                 { x: xIzquierdo, y, z: zTrasero },
-                { x: xDerecho, y: zTrasero, z: zTrasero },
+                { x: xDerecho, y, z: zTrasero },
                 0.012,
                 materiales.metal
             );
         }
 
-        // Fondo de la cesta.
         for (let i = 0; i <= 7; i++) {
             const x = -0.35 + i * 0.1;
 
@@ -729,6 +724,12 @@ export function crearCarrito(scene, opciones = {}) {
 
         estado.siguiendo = true;
 
+        console.log('[DIAGNÓSTICO CARRITO]', {
+            distancia: estado.distancia,
+            desplazamientoLateral: estado.desplazamientoLateral,
+            modoLateral: estado.modoLateral
+        });
+
         return true;
     }
 
@@ -838,20 +839,16 @@ export function crearCarrito(scene, opciones = {}) {
 
         direccion.normalize();
 
-        // Vector lateral estrictamente perpendicular
-        // a la dirección frontal del cliente.
+        // Vector lateral perpendicular a la dirección frontal.
         lateral.set(
             direccion.z,
             0,
             -direccion.x
         ).normalize();
 
-        // Posición base del carrito.
         posicionDeseada.copy(posicionObjetivo);
 
         if (estado.modoLateral) {
-            // En inspección y recogida NO se aplica
-            // ninguna distancia frontal.
             const magnitudLateral = Math.max(
                 Math.abs(estado.desplazamientoLateral),
                 config.desplazamientoLateralInspeccion
@@ -864,9 +861,15 @@ export function crearCarrito(scene, opciones = {}) {
                 lateral,
                 magnitudLateral * signoLateral
             );
+
+            console.log('[POSICIÓN LATERAL CARRITO]', {
+                cliente: posicionObjetivo.toArray(),
+                direccion: direccion.toArray(),
+                lateral: lateral.toArray(),
+                desplazamiento: estado.desplazamientoLateral,
+                posicionDeseada: posicionDeseada.toArray()
+            });
         } else {
-            // Seguimiento normal: conserva la distancia
-            // que recibe desde cliente.js, incluido 0.95.
             posicionDeseada.addScaledVector(
                 direccion,
                 estado.distancia * config.ladoDelante
@@ -882,13 +885,11 @@ export function crearCarrito(scene, opciones = {}) {
 
         posicionDeseada.y = config.posicion.y;
 
-        // Convertir de coordenadas mundiales a locales.
         if (grupo.parent) {
             grupo.parent.updateWorldMatrix(true, false);
             grupo.parent.worldToLocal(posicionDeseada);
         }
 
-        // Movimiento suave.
         const factorMovimiento = 1 - Math.exp(
             -Math.max(0.1, config.suavizado) * dt
         );
@@ -899,8 +900,6 @@ export function crearCarrito(scene, opciones = {}) {
         );
 
         // Orientación del carrito.
-        // En modo lateral no se gira hacia el cliente,
-        // para evitar que vuelva a adoptar una posición frontal.
         if (!estado.modoLateral) {
             grupo.updateWorldMatrix(true, false);
             grupo.getWorldPosition(posicionCarritoMundial);
