@@ -1278,6 +1278,8 @@ function animarAgacharse(intensidad = 1) {
 }
 
 
+
+    
 function animarRecogerProcedural() {
     const progreso = limitar(
         tiempoEstado / Math.max(config.tiempoRecoger, 0.01),
@@ -1304,16 +1306,15 @@ function animarRecogerProcedural() {
         )
     );
 
+    // Clasificación de altura del producto.
     const agachado = productoEsInferior ? 1 : 0;
+    animarAgacharse(agachado);
     const productoArriba = productoEsSuperior ? 1 : 0;
 
-    // La sentadilla aumenta al acercarse al producto.
-    const intensidadAgachado =
-        agachado * suavizar(
-            limitar(progreso * 1.5, 0, 1)
-        );
-
-    animarAgacharse(intensidadAgachado);
+    // El cuerpo se agacha o se estira según la altura.
+    animarAgacharse(
+        agachado * suavizar(progreso * 1.35)
+    );
 
     const brazoLibre = obtenerRigBrazo(
         ladoAgarre === 'derecho' ? 'izquierdo' : 'derecho'
@@ -1321,11 +1322,11 @@ function animarRecogerProcedural() {
 
     const signoLibre = ladoAgarre === 'izquierdo' ? 1 : -1;
 
-    // Brazo libre.
+    // Brazo libre: acompaña el movimiento.
     aplicarRotacionEuler(
         brazoLibre.hombro,
         -0.12 - 0.22 * acercarse +
-        0.18 * productoArriba * acercarse,
+            0.18 * productoArriba * acercarse,
         0,
         0.06 * acercarse * signoLibre
     );
@@ -1343,23 +1344,23 @@ function animarRecogerProcedural() {
         -0.08 - contacto * 0.16
     );
 
-    // Torso: inclinarse hacia el producto.
-    // La flexión adicional se aplica solamente a productos bajos.
+    // Torso: se inclina para alcanzar productos bajos
+    // y se estira ligeramente para alcanzar los altos.
     aplicarRotacionEuler(
         rig.torso,
         0.08 * acercarse +
-        0.16 * agachado * acercarse -
-        0.12 * productoArriba * acercarse,
+            0.16 * agachado * acercarse -
+            0.12 * productoArriba * acercarse,
         -0.10 * acercarse,
         -0.04 * acercarse
     );
 
-    // Cabeza: mirar hacia el producto.
+    // Cabeza: mira hacia el producto.
     aplicarRotacionEuler(
         rig.cabeza,
         0.14 + 0.12 * acercarse -
-        0.18 * productoArriba * acercarse +
-        Math.sin(tiempoEstado * 2.1) * 0.018,
+            0.18 * productoArriba * acercarse +
+            Math.sin(tiempoEstado * 2.1) * 0.018,
         -0.12 * acercarse,
         0.025 * Math.sin(tiempoEstado * 1.6)
     );
@@ -1368,7 +1369,7 @@ function animarRecogerProcedural() {
         rig.cuello,
         EJE_X,
         0.08 + 0.08 * acercarse -
-        0.10 * productoArriba * acercarse
+            0.10 * productoArriba * acercarse
     );
 }
 
