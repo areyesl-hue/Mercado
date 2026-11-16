@@ -462,14 +462,20 @@ const esBlusaOSudadera =
     nombre.toLowerCase().includes('blusa') ||
     nombre.toLowerCase().includes('sudadera negra');
 
+const esCarne =
+    nombre.toLowerCase().includes('pollo') ||
+    nombre.toLowerCase().includes('filete');
+
 const dimensionMaximaEstandar =
     esBlusaOSudadera
         ? 1.00
-        : categoria === 'Ropa'
-            ? 0.80
-            : categoria === 'Frutas y verduras'
-                ? 0.46
-                : 0.32;
+        : esCarne
+            ? 0.65
+            : categoria === 'Ropa'
+                ? 0.72
+                : categoria === 'Frutas y verduras'
+                    ? 0.46
+                    : 0.32;
 
         const escala = dimensionMaximaEstandar / Math.max(
             dimensionesRotadas.x,
