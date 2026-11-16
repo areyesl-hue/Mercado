@@ -2660,16 +2660,10 @@ productoReubicadoPendiente =
     
     
 
-
-
 function actualizarSeguimientoCarrito() {
     const carrito = config.carrito;
 
     if (!carrito || !grupo) return;
-
-    // ========================================================
-    // ESTADOS DE SEGUIMIENTO NORMAL
-    // ========================================================
 
     const estadosSeguimiento = [
         ESTADOS.ENTRANDO,
@@ -2679,130 +2673,44 @@ function actualizarSeguimientoCarrito() {
         ESTADOS.REGRESANDO
     ];
 
-    // ========================================================
-    // ESTADOS DE ESTACIONAMIENTO LATERAL
-    // ========================================================
-
     const estadosJuntoAlCliente = [
         ESTADOS.RECOGIENDO,
-        ESTADOS.INSPECCIONANDO
+        ESTADOS.INSPECCIONANDO,
+        ESTADOS.DEVOLVIENDO
     ];
 
-    // ========================================================
-    // SEGUIMIENTO NORMAL DEL CLIENTE
-    // ========================================================
+    console.log('[SOLICITUD DE SEGUIMIENTO]', {
+        estadoActual: estado,
+        recogiendo: ESTADOS.RECOGIENDO,
+        inspeccionando: ESTADOS.INSPECCIONANDO,
+        devolviendo: ESTADOS.DEVOLVIENDO,
+        ladoAgarre,
+        esSeguimientoNormal: estadosSeguimiento.includes(estado),
+        esEstacionamientoLateral:
+            estadosJuntoAlCliente.includes(estado)
+    });
 
+    // SEGUIMIENTO NORMAL
     if (estadosSeguimiento.includes(estado)) {
-        console.log('[CARRITO] Seguimiento normal', {
-            estado,
-            distancia: 0.95
-        });
+        console.trace('[ORDEN DE SEGUIMIENTO NORMAL]');
 
-        carrito.seguirObjetivo(
-            grupo,
-            0.95,
-            0
-        );
-
+        carrito.seguirObjetivo(grupo, 0.95, 0);
         return;
     }
 
-    // ========================================================
-    // ESTACIONAMIENTO LATERAL Y GIRO DE 90 GRADOS
-    // ========================================================
-
+    // ESTACIONAMIENTO LATERAL
     if (estadosJuntoAlCliente.includes(estado)) {
-
         const distanciaLateral = 1.25;
 
-        // Determinar el lado donde el cliente agarra
-        // el producto.
         const desplazamiento =
             ladoAgarre === 'derecho'
                 ? distanciaLateral
                 : -distanciaLateral;
 
-        console.log('[ESTACIONAMIENTO LATERAL CARRITO]', {
+        console.log('[ORDEN DE ESTACIONAMIENTO LATERAL]', {
             estado,
             ladoAgarre,
-            distanciaLateral,
-            desplazamiento,
-            giro: 90
-        });
-
-        carrito.seguirObjetivo(
-            grupo,
-            0,
-            desplazamiento
-        );
-
-        return;
-    }
-
-    // ========================================================
-    // DETENER SEGUIMIENTO EN LOS DEMÁS ESTADOS
-    // ========================================================
-
-    if (carrito.siguiendo) {
-        console.log('[CARRITO] Seguimiento detenido', {
-            estado
-        });
-
-        carrito.detenerSeguimiento();
-    }
-}
-
-function actualizarSeguimientoCarrito() {
-    const carrito = config.carrito;
-
-    if (!carrito || !grupo) return;
-
-    const estadosSeguimiento = [
-        ESTADOS.ENTRANDO,
-        ESTADOS.ACERCANDO,
-        ESTADOS.RUTA,
-        ESTADOS.CAJA,
-        ESTADOS.REGRESANDO
-    ];
-
-    const estadosJuntoAlCliente = [
-        ESTADOS.RECOGIENDO,
-        ESTADOS.INSPECCIONANDO
-    ];
-
-    // ========================================================
-    // SEGUIMIENTO NORMAL
-    // ========================================================
-
-    if (estadosSeguimiento.includes(estado)) {
-        carrito.seguirObjetivo(
-            grupo,
-            0.95,
-            0
-        );
-
-        return;
-    }
-
-    // ========================================================
-    // RECOGIDA E INSPECCIÓN
-    // ========================================================
-
-    if (estadosJuntoAlCliente.includes(estado)) {
-        const distanciaLateral = Math.max(
-            1.25,
-            Number(distanciaLateralCarrito) || 1.25
-        );
-
-        const desplazamiento =
-            ladoAgarre === 'derecho'
-                ? distanciaLateral
-                : -distanciaLateral;
-
-        console.log('[SEGUIMIENTO DESDE CLIENTE]', {
-            estado,
-            ladoAgarre,
-            distanciaLateral,
+            distancia: 0,
             desplazamiento
         });
 
@@ -2815,11 +2723,9 @@ function actualizarSeguimientoCarrito() {
         return;
     }
 
-    // ========================================================
-    // OTROS ESTADOS
-    // ========================================================
-
+    // DETENER EN OTROS ESTADOS
     if (carrito.siguiendo) {
+        console.log('[DETENIENDO SEGUIMIENTO CARRITO]', estado);
         carrito.detenerSeguimiento();
     }
 }
