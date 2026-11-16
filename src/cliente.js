@@ -835,8 +835,9 @@ function actualizarRig() {
         };
     }
 
+
 function medirAlcanceBrazo(brazo, cajaProducto) {
-    if (!brazo?.mano || !cajaProducto) {
+    if (!brazo?.mano || !cajaProducto || cajaProducto.isEmpty()) {
         return null;
     }
 
@@ -844,27 +845,27 @@ function medirAlcanceBrazo(brazo, cajaProducto) {
         new THREE.Vector3()
     );
 
-    const contacto = cajaProducto.getCenter(
-        new THREE.Vector3()
+    // Punto más cercano de la superficie del producto.
+    const contacto = new THREE.Vector3(
+        THREE.MathUtils.clamp(
+            posicionMano.x,
+            cajaProducto.min.x,
+            cajaProducto.max.x
+        ),
+        THREE.MathUtils.clamp(
+            posicionMano.y,
+            cajaProducto.min.y,
+            cajaProducto.max.y
+        ),
+        THREE.MathUtils.clamp(
+            posicionMano.z,
+            cajaProducto.min.z,
+            cajaProducto.max.z
+        )
     );
-
-    const diferenciaX = posicionMano.x - contacto.x;
-    const diferenciaZ = posicionMano.z - contacto.z;
-
-    // Seleccionar la cara del producto más cercana a la mano.
-    if (Math.abs(diferenciaX) > Math.abs(diferenciaZ)) {
-        contacto.x = diferenciaX >= 0
-            ? cajaProducto.max.x
-            : cajaProducto.min.x;
-    } else {
-        contacto.z = diferenciaZ >= 0
-            ? cajaProducto.max.z
-            : cajaProducto.min.z;
-    }
 
     const distanciaMano = posicionMano.distanceTo(contacto);
 
-    // Comprobar que existan hombro y codo.
     if (!brazo.hombro || !brazo.codo) {
         return {
             contacto,
@@ -882,15 +883,20 @@ function medirAlcanceBrazo(brazo, cajaProducto) {
         new THREE.Vector3()
     );
 
+    // Longitud real de los segmentos del brazo.
+    const longitudSuperior = hombro.distanceTo(codo);
+    const longitudInferior = codo.distanceTo(posicionMano);
+
     const alcanceMaximo =
-        hombro.distanceTo(codo) +
-        codo.distanceTo(posicionMano);
+        longitudSuperior + longitudInferior;
 
     const distanciaHombro = hombro.distanceTo(contacto);
 
+    const margenAlcance = 0.08;
+
     const deficit = Math.max(
         0,
-        distanciaHombro - alcanceMaximo + 0.02
+        distanciaHombro - alcanceMaximo + margenAlcance
     );
 
     return {
