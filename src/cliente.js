@@ -1333,6 +1333,7 @@ function animarRecogerProcedural() {
     }
 
 
+
 function resolverIKBrazo(brazo, objetivo) {
     const hombro = brazo?.hombro;
     const codo = brazo?.codo;
@@ -1348,30 +1349,25 @@ function resolverIKBrazo(brazo, objetivo) {
     codo.getWorldPosition(ikAgarre.codo);
     mano.getWorldPosition(ikAgarre.muneca);
 
-    // --------------------------------------------------
-    // 1. CALCULAR DIRECCIÓN HACIA EL OBJETIVO
-    // --------------------------------------------------
+    const longitudBrazo =
+        ikAgarre.hombro.distanceTo(ikAgarre.codo);
 
+    const longitudAntebrazo =
+        ikAgarre.codo.distanceTo(ikAgarre.muneca);
+
+    if (longitudBrazo < 0.0001 || longitudAntebrazo < 0.0001) {
+        return false;
+    }
+
+    // Dirección del hombro hacia la muñeca objetivo.
     ikAgarre.direccion.subVectors(
         objetivo,
         ikAgarre.hombro
     );
 
-    const distanciaObjetivo = ikAgarre.direccion.length();
+    const distanciaOriginal = ikAgarre.direccion.length();
 
-    const longitudBrazo = ikAgarre.hombro.distanceTo(
-        ikAgarre.codo
-    );
-
-    const longitudAntebrazo = ikAgarre.codo.distanceTo(
-        ikAgarre.muneca
-    );
-
-    if (
-        distanciaObjetivo < 0.0001 ||
-        longitudBrazo < 0.0001 ||
-        longitudAntebrazo < 0.0001
-    ) {
+    if (distanciaOriginal < 0.0001) {
         return false;
     }
 
@@ -1381,59 +1377,36 @@ function resolverIKBrazo(brazo, objetivo) {
     const distanciaMaxima =
         longitudBrazo + longitudAntebrazo - 0.005;
 
-    const distanciaAjustada = limitar(
-        distanciaObjetivo,
+    const distancia = limitar(
+        distanciaOriginal,
         distanciaMinima,
-        Math.max(distanciaMinima + 0.001, distanciaMaxima)
+        distanciaMaxima
     );
 
     ikAgarre.direccion.normalize();
 
     ikAgarre.objetivo
         .copy(ikAgarre.hombro)
-        .addScaledVector(
-            ikAgarre.direccion,
-            distanciaAjustada
-        );
+        .addScaledVector(ikAgarre.direccion, distancia);
 
-    // --------------------------------------------------
-    // 2. CALCULAR PLANO DE FLEXIÓN DEL CODO
-    // --------------------------------------------------
+    // Dirección de flexión estable: hacia abajo y hacia afuera.
+    const signo = ladoAgarre === 'izquierdo' ? -1 : 1;
 
-    ikAgarre.codoActual.subVectors(
-        ikAgarre.codo,
-        ikAgarre.hombro
+    ikAgarre.perpendicular.set(
+        signo * 0.65,
+        -0.75,
+        0
     );
 
-    const proyeccionCodo =
-        ikAgarre.codoActual.dot(ikAgarre.direccion);
-
-    ikAgarre.perpendicular
-        .copy(ikAgarre.codoActual)
-        .addScaledVector(
-            ikAgarre.direccion,
-            -proyeccionCodo
-        );
-
-    // --------------------------------------------------
-    // 3. EVITAR CAMBIOS BRUSCOS DE DIRECCIÓN
-    // --------------------------------------------------
+    // Proyectar la dirección sobre el plano perpendicular
+    // al eje hombro-muñeca.
+    ikAgarre.perpendicular.addScaledVector(
+        ikAgarre.direccion,
+        -ikAgarre.perpendicular.dot(ikAgarre.direccion)
+    );
 
     if (ikAgarre.perpendicular.lengthSq() < 0.000001) {
-        ikAgarre.perpendicular.set(
-            0,
-            0,
-            ladoAgarre === 'derecho' ? 1 : -1
-        );
-
-        ikAgarre.perpendicular.addScaledVector(
-            ikAgarre.direccion,
-            -ikAgarre.perpendicular.dot(ikAgarre.direccion)
-        );
-    }
-
-    if (ikAgarre.perpendicular.lengthSq() < 0.000001) {
-        ikAgarre.perpendicular.set(0, 1, 0);
+        ikAgarre.perpendicular.set(0, 0, 1);
 
         ikAgarre.perpendicular.addScaledVector(
             ikAgarre.direccion,
@@ -1443,15 +1416,12 @@ function resolverIKBrazo(brazo, objetivo) {
 
     ikAgarre.perpendicular.normalize();
 
-    // --------------------------------------------------
-    // 4. POSICIÓN OBJETIVO DEL CODO
-    // --------------------------------------------------
-
+    // Posición geométrica del codo.
     const distanciaCodo = (
         longitudBrazo * longitudBrazo -
         longitudAntebrazo * longitudAntebrazo +
-        distanciaAjustada * distanciaAjustada
-    ) / (2 * distanciaAjustada);
+        distancia * distancia
+    ) / (2 * distancia);
 
     const alturaCodo = Math.sqrt(Math.max(
         0,
@@ -1470,10 +1440,7 @@ function resolverIKBrazo(brazo, objetivo) {
             alturaCodo
         );
 
-    // --------------------------------------------------
-    // 5. ORIENTAR BRAZO SUPERIOR
-    // --------------------------------------------------
-
+    // Orientar brazo superior.
     ikAgarre.direccionActual.subVectors(
         ikAgarre.codo,
         ikAgarre.hombro
@@ -1494,10 +1461,7 @@ function resolverIKBrazo(brazo, objetivo) {
 
     grupo.updateMatrixWorld(true);
 
-    // --------------------------------------------------
-    // 6. ORIENTAR ANTEBRAZO
-    // --------------------------------------------------
-
+    // Actualizar y orientar antebrazo.
     codo.getWorldPosition(ikAgarre.codo);
     mano.getWorldPosition(ikAgarre.muneca);
 
@@ -1520,10 +1484,10 @@ function resolverIKBrazo(brazo, objetivo) {
     }
 
     grupo.updateMatrixWorld(true);
-    mano.updateMatrixWorld(true);
 
     return true;
 }
+
 
     function animarEmpujarCarrito() {
         const carrito = config.carrito;
