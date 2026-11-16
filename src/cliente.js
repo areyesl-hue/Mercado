@@ -53,12 +53,12 @@ const CONFIG_BASE = {
     puertaZUmbral: 29,
     puertaZExterior: 31.5,
 
-    probabilidadCompra: 0.85,
-    probabilidadDejarEnOtroRack: 0.32,
+    probabilidadCompra: 0.90,
+    probabilidadDejarEnOtroRack: 0.42,
 
-    distanciaProducto: 0.30,
-    distanciaFrenteProducto: 1.0,
-    distanciaContactoMano: 0.009,
+    distanciaProducto: 0.20,
+    distanciaFrenteProducto: 0.70,
+    distanciaContactoMano: 0.10,
 
     tiempoRecoger: 1.1,
     progresoContactoProducto: 0.78,
