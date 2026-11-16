@@ -35,7 +35,7 @@ const CONFIG_BASE = {
     altura: 1.05,
     escala: 1,
 
-    velocidad: 7.2,
+    velocidad: 8.2,
     velocidadEntrada: 4.0,
     velocidadRegreso: 4.0,
 
@@ -43,9 +43,9 @@ const CONFIG_BASE = {
     limiteZMin: -27,
     limiteZMax: 55,
 
-    radioColision: 0.28,
-    margenObstaculos: 0.8,
-    tamanoCelda: 0.75,
+    radioColision: 0.20,
+    margenObstaculos: 0.7,
+    tamanoCelda: 0.65,
 
     puertaCentroX: 0,
     puertaAncho: 8.5,
@@ -56,9 +56,9 @@ const CONFIG_BASE = {
     probabilidadCompra: 0.90,
     probabilidadDejarEnOtroRack: 0.42,
 
-    distanciaProducto: 0.18,
-    distanciaFrenteProducto: 0.40,
-    distanciaContactoMano: 0.08,
+    distanciaProducto: 0.20,
+    distanciaFrenteProducto: 0.50,
+    distanciaContactoMano: 0.9,
 
     tiempoRecoger: 1.1,
     progresoContactoProducto: 0.78,
