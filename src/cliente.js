@@ -2662,7 +2662,12 @@ productoReubicadoPendiente =
 
 function actualizarSeguimientoCarrito() {
     const carrito = config.carrito;
-
+console.log('[ESTADO SEGUIMIENTO CLIENTE]', {
+    estado,
+    ladoAgarre,
+    esRecogida: estado === ESTADOS.RECOGIENDO,
+    esInspeccion: estado === ESTADOS.INSPECCIONANDO
+});
     if (!carrito) return;
 
     const estadosSeguimiento = [
