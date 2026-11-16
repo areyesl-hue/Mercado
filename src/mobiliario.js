@@ -181,7 +181,7 @@ registrarColision(
     nombre,
     x,
     z,
-    0.90,
+    0.80,
     5.45,
     { tipo: 'gondola' }
 );
