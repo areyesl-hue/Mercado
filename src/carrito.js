@@ -13,9 +13,9 @@ const CONFIG_DEFAULT = {
     posicion: { x: 0, y: 0, z: 0 },
     escala: 1,
 
-    distancia: 0.10,
-    desplazamientoLateral: 0.50,
-    desplazamientoLateralInspeccion: 0.30,
+    distancia: 0.03,
+    desplazamientoLateral: 0.35,
+    desplazamientoLateralInspeccion: 0.20,
 
     giroEstacionamiento: Math.PI,
     suavizadoGiro: 3.0,
