@@ -2259,7 +2259,10 @@ function ajustarBrazoAlProducto(
     
 
 function actualizarAnimacionAgarre(delta) {
-    if (!animacionAgarre.activa || !productoEnMano) {
+    if (
+        !animacionAgarre.activa ||
+        !productoEnMano
+    ) {
         return false;
     }
 
@@ -2280,6 +2283,8 @@ function actualizarAnimacionAgarre(delta) {
 
     const suave = suavizar(t);
 
+    // Desplazar el producto desde el contacto
+    // hasta la posición correcta en la palma.
     producto.position.lerpVectors(
         animacionAgarre.posicionInicial,
         animacionAgarre.posicionFinal,
@@ -2313,6 +2318,8 @@ function actualizarAnimacionAgarre(delta) {
 
         animacionAgarre.activa = false;
         animacionAgarre.tiempo = 0;
+
+        grupo.updateMatrixWorld(true);
 
         return true;
     }
@@ -3969,7 +3976,6 @@ if (destino) {
     }
 
     
-
 function tomarProducto(agarreResuelto = false) {
     if (
         !productoObjetivo ||
@@ -3983,6 +3989,7 @@ function tomarProducto(agarreResuelto = false) {
     const producto = productoObjetivo;
 
     producto.updateMatrixWorld(true);
+    grupo.updateMatrixWorld(true);
 
     productoEsInferior =
         productoEstaEnEstanteInferior(producto);
@@ -4004,14 +4011,7 @@ function tomarProducto(agarreResuelto = false) {
     const brazo = obtenerRigBrazo();
     const mano = brazo?.mano;
 
-    if (!mano) {
-        productoOriginal = null;
-        liberarReserva();
-        cambiarEstado(ESTADOS.BUSCANDO);
-        return;
-    }
-
-    if (!agarreResuelto) {
+    if (!mano || !agarreResuelto) {
         productoOriginal = null;
         liberarReserva();
         cambiarEstado(ESTADOS.BUSCANDO);
@@ -4027,19 +4027,19 @@ function tomarProducto(agarreResuelto = false) {
     producto.updateMatrixWorld(true);
 
     // --------------------------------------------------
-    // 2. CALCULAR POSICIÓN REAL DE LA PALMA
+    // 2. OBTENER POSICIÓN DE LA PALMA
     // --------------------------------------------------
-
-    const muneca = mano.getWorldPosition(
-        new THREE.Vector3()
-    );
 
     const palmaMundo = ikAgarre.offsetPalmaLocal
         .clone()
         .applyMatrix4(mano.matrixWorld);
 
+    const palmaLocal = mano.worldToLocal(
+        palmaMundo.clone()
+    );
+
     // --------------------------------------------------
-    // 3. COMPROBAR CONTACTO CON EL PRODUCTO
+    // 3. COMPROBAR CONTACTO
     // --------------------------------------------------
 
     const cajaProducto = new THREE.Box3()
@@ -4052,14 +4052,6 @@ function tomarProducto(agarreResuelto = false) {
         return;
     }
 
-    const centroProducto = cajaProducto.getCenter(
-        new THREE.Vector3()
-    );
-
-    const dimensionesProducto = cajaProducto.getSize(
-        new THREE.Vector3()
-    );
-
     const errorContacto = palmaMundo.distanceTo(
         ikAgarre.objetivoContacto
     );
@@ -4069,10 +4061,6 @@ function tomarProducto(agarreResuelto = false) {
         0.04,
         0.18
     );
-
-    // --------------------------------------------------
-    // 4. ESPERAR SI TODAVÍA NO EXISTE CONTACTO
-    // --------------------------------------------------
 
     if (errorContacto > toleranciaContacto) {
         const tiempoMaximo =
@@ -4092,13 +4080,12 @@ function tomarProducto(agarreResuelto = false) {
     }
 
     // --------------------------------------------------
-    // 5. GUARDAR CONTACTO EN COORDENADAS LOCALES
+    // 4. CALCULAR EL PUNTO DE CONTACTO DEL PRODUCTO
     // --------------------------------------------------
 
-    const puntoContactoLocal =
-        producto.worldToLocal(
-            ikAgarre.puntoContacto.clone()
-        );
+    const puntoContactoLocal = producto.worldToLocal(
+        ikAgarre.puntoContacto.clone()
+    );
 
     const normalContactoLocal =
         ikAgarre.normalContacto
@@ -4109,7 +4096,7 @@ function tomarProducto(agarreResuelto = false) {
             .normalize();
 
     // --------------------------------------------------
-    // 6. UNIR EL PRODUCTO A LA MANO
+    // 5. UNIR EL PRODUCTO A LA MANO
     // --------------------------------------------------
 
     grupo.updateMatrixWorld(true);
@@ -4122,21 +4109,36 @@ function tomarProducto(agarreResuelto = false) {
     mano.updateMatrixWorld(true);
     producto.updateMatrixWorld(true);
 
-    productoConCajaAgarre = null;
-
     // --------------------------------------------------
-    // 7. PREPARAR ANIMACIÓN DE AGARRE
+    // 6. CALCULAR LA POSICIÓN FINAL DEL AGARRE
     // --------------------------------------------------
 
-    animacionAgarre.activa = false;
+    const contactoTransformado = puntoContactoLocal
+        .clone()
+        .multiply(producto.scale)
+        .applyQuaternion(producto.quaternion);
+
+    const posicionFinal = palmaLocal
+        .clone()
+        .sub(contactoTransformado);
+
+    // --------------------------------------------------
+    // 7. CONFIGURAR ANIMACIÓN DEL PRODUCTO
+    // --------------------------------------------------
+
     animacionAgarre.tiempo = 0;
+
+    animacionAgarre.duracion = Math.max(
+        numero(config.tiempoAnimacionAgarre, 0.38),
+        0.05
+    );
 
     animacionAgarre.posicionInicial.copy(
         producto.position
     );
 
     animacionAgarre.posicionFinal.copy(
-        producto.position
+        posicionFinal
     );
 
     animacionAgarre.quaternionInicial.copy(
@@ -4155,14 +4157,19 @@ function tomarProducto(agarreResuelto = false) {
         producto.scale
     );
 
-    producto.visible = true;
-    productoEnMano = producto;
-
     animacionAgarre.puntoContactoLocal =
         puntoContactoLocal.clone();
 
     animacionAgarre.normalContactoLocal =
         normalContactoLocal.clone();
+
+    // IMPORTANTE: activar la animación.
+    animacionAgarre.activa = true;
+
+    producto.visible = true;
+    productoEnMano = producto;
+
+    productoConCajaAgarre = null;
 
     // --------------------------------------------------
     // 8. PREPARAR POSE DE INSPECCIÓN
@@ -4190,7 +4197,7 @@ function tomarProducto(agarreResuelto = false) {
         poseAgarreInspeccion.huesos.length > 0;
 
     // --------------------------------------------------
-    // 9. REGISTRAR PRODUCTO Y CAMBIAR ESTADO
+    // 9. REGISTRAR PRODUCTO
     // --------------------------------------------------
 
     productosExaminados.add(producto);
