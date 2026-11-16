@@ -2700,7 +2700,7 @@ function actualizarSeguimientoCarrito() {
 
     // ESTACIONAMIENTO LATERAL
     if (estadosJuntoAlCliente.includes(estado)) {
-        const distanciaLateral = 1.25;
+        const distanciaLateral = 1.05;
 
         const desplazamiento =
             ladoAgarre === 'derecho'
