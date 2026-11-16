@@ -1361,7 +1361,6 @@ function orientarHuesoHaciaDireccion(
     return true;
 }
 
-
 function resolverIKBrazo(brazo, objetivo) {
     const hombro = brazo?.hombro;
     const codo = brazo?.codo;
@@ -1373,102 +1372,144 @@ function resolverIKBrazo(brazo, objetivo) {
 
     grupo.updateMatrixWorld(true);
 
+    // --------------------------------------------------
+    // 1. POSICIONES ACTUALES
+    // --------------------------------------------------
+
     hombro.getWorldPosition(ikAgarre.hombro);
     codo.getWorldPosition(ikAgarre.codo);
     mano.getWorldPosition(ikAgarre.muneca);
 
-    const longitudBrazo =
-        ikAgarre.hombro.distanceTo(ikAgarre.codo);
+    const longitudBrazo = ikAgarre.hombro.distanceTo(
+        ikAgarre.codo
+    );
 
-    const longitudAntebrazo =
-        ikAgarre.codo.distanceTo(ikAgarre.muneca);
+    const longitudAntebrazo = ikAgarre.codo.distanceTo(
+        ikAgarre.muneca
+    );
 
-    if (longitudBrazo < 0.0001 || longitudAntebrazo < 0.0001) {
-        return false;
-    }
-
-    // Dirección del hombro hacia la muñeca objetivo.
     ikAgarre.direccion.subVectors(
         objetivo,
         ikAgarre.hombro
     );
 
-    const distanciaOriginal = ikAgarre.direccion.length();
+    const distanciaObjetivo = ikAgarre.direccion.length();
 
-    if (distanciaOriginal < 0.0001) {
+    if (
+        distanciaObjetivo < 0.0001 ||
+        longitudBrazo < 0.0001 ||
+        longitudAntebrazo < 0.0001
+    ) {
         return false;
     }
 
-    const distanciaMinima =
-        Math.abs(longitudBrazo - longitudAntebrazo) + 0.005;
+    // --------------------------------------------------
+    // 2. LIMITAR DISTANCIA DEL OBJETIVO
+    // --------------------------------------------------
+
+    const distanciaMinima = Math.abs(
+        longitudBrazo - longitudAntebrazo
+    ) + 0.005;
 
     const distanciaMaxima =
         longitudBrazo + longitudAntebrazo - 0.005;
 
-    const distancia = limitar(
-        distanciaOriginal,
+    const distanciaAjustada = limitar(
+        distanciaObjetivo,
         distanciaMinima,
         distanciaMaxima
     );
 
     ikAgarre.direccion.normalize();
 
-    ikAgarre.objetivo
-        .copy(ikAgarre.hombro)
-        .addScaledVector(ikAgarre.direccion, distancia);
-
-    // Dirección de flexión estable: hacia abajo y hacia afuera.
-    const signo = ladoAgarre === 'izquierdo' ? -1 : 1;
-
-    ikAgarre.perpendicular.set(
-        signo * 0.65,
-        -0.75,
-        0
-    );
-
-    // Proyectar la dirección sobre el plano perpendicular
-    // al eje hombro-muñeca.
-    ikAgarre.perpendicular.addScaledVector(
+    ikAgarre.objetivo.copy(
+        ikAgarre.hombro
+    ).addScaledVector(
         ikAgarre.direccion,
-        -ikAgarre.perpendicular.dot(ikAgarre.direccion)
+        distanciaAjustada
     );
 
+    // --------------------------------------------------
+    // 3. CALCULAR PLANO DE FLEXIÓN DEL CODO
+    // --------------------------------------------------
+
+    ikAgarre.codoActual.subVectors(
+        ikAgarre.codo,
+        ikAgarre.hombro
+    );
+
+    const proyeccion = ikAgarre.codoActual.dot(
+        ikAgarre.direccion
+    );
+
+    ikAgarre.perpendicular.copy(
+        ikAgarre.codoActual
+    ).addScaledVector(
+        ikAgarre.direccion,
+        -proyeccion
+    );
+
+    // Conservar la dirección natural del codo.
     if (ikAgarre.perpendicular.lengthSq() < 0.000001) {
-        ikAgarre.perpendicular.set(0, 0, 1);
+        ikAgarre.perpendicular.set(
+            0,
+            0,
+            ladoAgarre === 'derecho' ? 1 : -1
+        );
 
         ikAgarre.perpendicular.addScaledVector(
             ikAgarre.direccion,
-            -ikAgarre.perpendicular.dot(ikAgarre.direccion)
+            -ikAgarre.perpendicular.dot(
+                ikAgarre.direccion
+            )
+        );
+    }
+
+    if (ikAgarre.perpendicular.lengthSq() < 0.000001) {
+        ikAgarre.perpendicular.set(0, 1, 0);
+
+        ikAgarre.perpendicular.addScaledVector(
+            ikAgarre.direccion,
+            -ikAgarre.perpendicular.dot(
+                ikAgarre.direccion
+            )
         );
     }
 
     ikAgarre.perpendicular.normalize();
 
-    // Posición geométrica del codo.
+    // --------------------------------------------------
+    // 4. CALCULAR POSICIÓN OBJETIVO DEL CODO
+    // --------------------------------------------------
+
     const distanciaCodo = (
         longitudBrazo * longitudBrazo -
         longitudAntebrazo * longitudAntebrazo +
-        distancia * distancia
-    ) / (2 * distancia);
+        distanciaAjustada * distanciaAjustada
+    ) / (2 * distanciaAjustada);
 
-    const alturaCodo = Math.sqrt(Math.max(
-        0,
-        longitudBrazo * longitudBrazo -
-        distanciaCodo * distanciaCodo
-    ));
-
-    ikAgarre.codoObjetivo
-        .copy(ikAgarre.hombro)
-        .addScaledVector(
-            ikAgarre.direccion,
-            distanciaCodo
+    const alturaCodo = Math.sqrt(
+        Math.max(
+            0,
+            longitudBrazo * longitudBrazo -
+            distanciaCodo * distanciaCodo
         )
-        .addScaledVector(
-            ikAgarre.perpendicular,
-            alturaCodo
-        );
+    );
 
-    // Orientar brazo superior.
+    ikAgarre.codoObjetivo.copy(
+        ikAgarre.hombro
+    ).addScaledVector(
+        ikAgarre.direccion,
+        distanciaCodo
+    ).addScaledVector(
+        ikAgarre.perpendicular,
+        alturaCodo
+    );
+
+    // --------------------------------------------------
+    // 5. ORIENTAR BRAZO SUPERIOR
+    // --------------------------------------------------
+
     ikAgarre.direccionActual.subVectors(
         ikAgarre.codo,
         ikAgarre.hombro
@@ -1489,7 +1530,10 @@ function resolverIKBrazo(brazo, objetivo) {
 
     grupo.updateMatrixWorld(true);
 
-    // Actualizar y orientar antebrazo.
+    // --------------------------------------------------
+    // 6. ORIENTAR ANTEBRAZO HACIA LA MANO
+    // --------------------------------------------------
+
     codo.getWorldPosition(ikAgarre.codo);
     mano.getWorldPosition(ikAgarre.muneca);
 
