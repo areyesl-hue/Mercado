@@ -3975,8 +3975,7 @@ if (destino) {
         return true;
     }
 
-    
-function tomarProducto(agarreResuelto = false) {
+ function tomarProducto(agarreResuelto = false) {
     if (
         !productoObjetivo ||
         !productoDisponible(productoObjetivo)
@@ -4027,19 +4026,19 @@ function tomarProducto(agarreResuelto = false) {
     producto.updateMatrixWorld(true);
 
     // --------------------------------------------------
-    // 2. OBTENER POSICIÓN DE LA PALMA
+    // 2. OBTENER POSICIÓN REAL DE LA MUÑECA
     // --------------------------------------------------
 
-    const palmaMundo = ikAgarre.offsetPalmaLocal
-        .clone()
-        .applyMatrix4(mano.matrixWorld);
+    const palmaMundo = mano.getWorldPosition(
+        new THREE.Vector3()
+    );
 
     const palmaLocal = mano.worldToLocal(
         palmaMundo.clone()
     );
 
     // --------------------------------------------------
-    // 3. COMPROBAR CONTACTO
+    // 3. COMPROBAR CONTACTO CON EL PRODUCTO
     // --------------------------------------------------
 
     const cajaProducto = new THREE.Box3()
@@ -4080,7 +4079,7 @@ function tomarProducto(agarreResuelto = false) {
     }
 
     // --------------------------------------------------
-    // 4. CALCULAR EL PUNTO DE CONTACTO DEL PRODUCTO
+    // 4. GUARDAR PUNTO DE CONTACTO
     // --------------------------------------------------
 
     const puntoContactoLocal = producto.worldToLocal(
@@ -4110,22 +4109,16 @@ function tomarProducto(agarreResuelto = false) {
     producto.updateMatrixWorld(true);
 
     // --------------------------------------------------
-    // 6. CALCULAR LA POSICIÓN FINAL DEL AGARRE
+    // 6. POSICIÓN FINAL DEL PRODUCTO
     // --------------------------------------------------
 
-    const contactoTransformado = puntoContactoLocal
-        .clone()
-        .multiply(producto.scale)
-        .applyQuaternion(producto.quaternion);
-
-    const posicionFinal = palmaLocal
-        .clone()
-        .sub(contactoTransformado);
+    const posicionFinal = palmaLocal.clone();
 
     // --------------------------------------------------
-    // 7. CONFIGURAR ANIMACIÓN DEL PRODUCTO
+    // 7. CONFIGURAR ANIMACIÓN DE AGARRE
     // --------------------------------------------------
 
+    animacionAgarre.activa = true;
     animacionAgarre.tiempo = 0;
 
     animacionAgarre.duracion = Math.max(
@@ -4162,9 +4155,6 @@ function tomarProducto(agarreResuelto = false) {
 
     animacionAgarre.normalContactoLocal =
         normalContactoLocal.clone();
-
-    // IMPORTANTE: activar la animación.
-    animacionAgarre.activa = true;
 
     producto.visible = true;
     productoEnMano = producto;
