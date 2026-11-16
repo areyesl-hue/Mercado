@@ -18,8 +18,8 @@ export function crearLadron(scene, productos, opciones = {}) {
         velocidadCaminar: 1.8,
         velocidadHuida: 5.8,
         productosRobados: 2,
-        distanciaProducto: 0.85,
-        tiempoRobo: 1.3,
+        distanciaProducto: 0.75,
+        tiempoRobo: 1.6,
         tiempoObservacion: 1.8,
         tiempoAtascado: 4,
         altura: 1.75,
@@ -678,137 +678,134 @@ export function crearLadron(scene, productos, opciones = {}) {
         return mapa;
     }
 
-    function animarCuerpo(delta, corriendoAhora, quieto = false) {
-        if (!modeloCargado || !huesosAnimados.length) return;
+ 
+function animarCuerpo(delta, corriendoAhora, quieto = false) {
+    if (!modeloCargado || !huesosAnimados.length) return;
 
-        tiempoAnimacion += delta;
+    tiempoAnimacion += delta;
 
-        // Alternancia de extremidades.
-        const frecuencia = corriendoAhora ? 19 : 10;
-        const intensidad = estado === 'robando'
-            ? 1
-            : quieto
-                ? 0
-                : corriendoAhora
-                    ? 1
-                    : 0.62;
-
-        const paso = Math.sin(tiempoAnimacion * frecuencia);
-        const pasoContrario = Math.sin(
-            tiempoAnimacion * frecuencia + Math.PI
-        );
-
-        const movimiento = {
-            brazoIzquierdo: pasoContrario * 0.60,
-            brazoDerecho: paso * 0.60,
-
-            antebrazoIzquierdo:
-                0.10 + Math.max(0, paso) * 0.18,
-
-            antebrazoDerecho:
-                0.10 + Math.max(0, pasoContrario) * 0.18,
-
-            piernaIzquierda: paso * 0.48,
-            piernaDerecha: pasoContrario * 0.48,
-
-            pantorrillaIzquierda:
-                Math.max(0, paso) *
-                (corriendoAhora ? 0.9 : 0.55),
-
-            pantorrillaDerecha:
-                Math.max(0, pasoContrario) *
-                (corriendoAhora ? 0.9 : 0.55),
-
-            pieIzquierdo: -Math.max(0, paso) * 0.18,
-            pieDerecho: -Math.max(0, pasoContrario) * 0.18,
-
-            cadera: paso * 0.035,
-            pecho: -paso * 0.025
-        };
-
-        if (estado === 'robando') {
-            const progreso = Math.min(
-                tiempoAnimacionRobo / CONFIG.tiempoRobo,
-                1
-            );
-
-            const movimientoBrazo = Math.sin(
-                progreso * Math.PI / 2
-            );
-
-            movimiento.brazoDerecho = movimientoBrazo * 0.82;
-            movimiento.antebrazoDerecho = movimientoBrazo * 0.58;
-
-            movimiento.brazoIzquierdo = 0;
-            movimiento.piernaIzquierda = 0;
-            movimiento.piernaDerecha = 0;
-            movimiento.pantorrillaIzquierda = 0;
-            movimiento.pantorrillaDerecha = 0;
-            movimiento.pieIzquierdo = 0;
-            movimiento.pieDerecho = 0;
-            movimiento.piernaIzquierda -= movimientoBrazo * 0.12;
-            movimiento.piernaDerecha -= movimientoBrazo * 0.12;
-
-            movimiento.pecho -= movimientoBrazo * 0.12;
-            movimiento.cadera -= movimientoBrazo * 0.08;
-        }
-
-        for (const item of huesosAnimados) {
-            const { hueso, base, nombre } = item;
-            let giro = movimiento[nombre] ?? 0;
-
-            if (estado === 'tomando') {
-                giro = {
-                    brazoDerecho: 0.82,
-                    antebrazoDerecho: 0.58,
-                    manoDerecha: 0.12
-                }[nombre] ?? 0;
-
-                const poseInicial = poseBrazoTomando?.get(hueso);
-
-                if (poseInicial) {
-                    const progreso = THREE.MathUtils.clamp(
-                        tiempoEstado / 0.32,
-                        0,
-                        1
-                    );
-                    const mezcla = progreso * progreso *
-                        (3 - 2 * progreso);
-
-                    ikRobo.quaternionObjetivo.setFromEuler(
-                        new THREE.Euler(
-                            base.x + giro,
-                            base.y,
-                            base.z
-                        )
-                    );
-                    hueso.quaternion
-                        .copy(poseInicial)
-                        .slerp(ikRobo.quaternionObjetivo, mezcla);
-
-                    continue;
-                }
-            }
-
-            hueso.rotation.x = base.x + giro *
-                (estado === 'tomando' ? 1 : intensidad);
-            hueso.rotation.y = base.y;
-            hueso.rotation.z = base.z;
-        }
-
-        const rebote = quieto
+    const frecuencia = corriendoAhora ? 19 : 10;
+    const intensidad = estado === 'robando'
+        ? 0
+        : quieto
             ? 0
-            : Math.max(
-                0,
-                Math.sin(tiempoAnimacion * frecuencia * 2)
-            ) * (corriendoAhora ? 0.045 : 0.014);
+            : corriendoAhora
+                ? 1
+                : 0.62;
 
-        grupo.position.y = CONFIG.posicion.y + (
-            estado === 'robando'
-                ? -Math.sin(tiempoAnimacionRobo * 2) * 0.015
-                : rebote
-        );
+    const paso = Math.sin(tiempoAnimacion * frecuencia);
+    const pasoContrario = Math.sin(
+        tiempoAnimacion * frecuencia + Math.PI
+    );
+
+    const movimiento = {
+        brazoIzquierdo: pasoContrario * 0.60,
+        brazoDerecho: paso * 0.60,
+
+        antebrazoIzquierdo:
+            0.10 + Math.max(0, paso) * 0.18,
+
+        antebrazoDerecho:
+            0.10 + Math.max(0, pasoContrario) * 0.18,
+
+        piernaIzquierda: paso * 0.48,
+        piernaDerecha: pasoContrario * 0.48,
+
+        pantorrillaIzquierda:
+            Math.max(0, paso) *
+            (corriendoAhora ? 0.9 : 0.55),
+
+        pantorrillaDerecha:
+            Math.max(0, pasoContrario) *
+            (corriendoAhora ? 0.9 : 0.55),
+
+        pieIzquierdo: -Math.max(0, paso) * 0.18,
+        pieDerecho: -Math.max(0, pasoContrario) * 0.18,
+
+        cadera: paso * 0.035,
+        pecho: -paso * 0.025
+    };
+
+    if (estado === 'robando') {
+        // El IK se encarga del brazo que alcanza el producto.
+        movimiento.brazoDerecho = 0;
+        movimiento.antebrazoDerecho = 0;
+        movimiento.brazoIzquierdo = 0;
+        movimiento.antebrazoIzquierdo = 0;
+
+        // Evitar que las piernas se levanten.
+        movimiento.piernaIzquierda = 0;
+        movimiento.piernaDerecha = 0;
+        movimiento.pantorrillaIzquierda = 0;
+        movimiento.pantorrillaDerecha = 0;
+        movimiento.pieIzquierdo = 0;
+        movimiento.pieDerecho = 0;
+
+        // Evitar que el ladrón incline la cabeza hacia arriba
+        // por una rotación exagerada del torso.
+        movimiento.cadera = 0;
+        movimiento.pecho = 0;
     }
+
+    for (const item of huesosAnimados) {
+        const { hueso, base, nombre } = item;
+
+        let giro = movimiento[nombre] ?? 0;
+
+        if (estado === 'tomando') {
+            giro = {
+                brazoDerecho: 0.35,
+                antebrazoDerecho: 0.25,
+                manoDerecha: 0.08
+            }[nombre] ?? 0;
+
+            const poseInicial = poseBrazoTomando?.get(hueso);
+
+            if (poseInicial) {
+                const progreso = THREE.MathUtils.clamp(
+                    tiempoEstado / 0.32,
+                    0,
+                    1
+                );
+
+                const mezcla =
+                    progreso * progreso * (3 - 2 * progreso);
+
+                ikRobo.quaternionObjetivo.setFromEuler(
+                    new THREE.Euler(
+                        base.x + giro,
+                        base.y,
+                        base.z
+                    )
+                );
+
+                hueso.quaternion
+                    .copy(poseInicial)
+                    .slerp(ikRobo.quaternionObjetivo, mezcla);
+
+                continue;
+            }
+        }
+
+        hueso.rotation.x = base.x + giro * intensidad;
+        hueso.rotation.y = base.y;
+        hueso.rotation.z = base.z;
+    }
+
+    // Sin rebote durante el contacto con el producto.
+    const rebote = quieto || estado === 'robando'
+        ? 0
+        : Math.max(
+            0,
+            Math.sin(tiempoAnimacion * frecuencia * 2)
+        ) * (corriendoAhora ? 0.045 : 0.014);
+
+    grupo.position.y = CONFIG.posicion.y + (
+        estado === 'robando'
+            ? 0
+            : rebote
+    );
+}
 
     // =========================================================
     // PRODUCTOS EN LA MANO
@@ -1059,37 +1056,93 @@ export function crearLadron(scene, productos, opciones = {}) {
         );
     }
 
-    function ajustarBrazoAlProducto(progreso) {
-        if (!contactoProductoRobo || !soporteProducto) return false;
 
-        const mano = rigModelo?.manoDerecha;
+function restablecerPoseBrazoDerecho() {
+    const nombres = [
+        'brazoDerecho',
+        'antebrazoDerecho',
+        'manoDerecha'
+    ];
 
-        if (!mano) return false;
+    for (const nombre of nombres) {
+        const item = huesosAnimados.find(
+            elemento => elemento.nombre === nombre
+        );
 
-        grupo.updateMatrixWorld(true);
-        mano.getWorldPosition(ikRobo.muneca);
+        if (!item) continue;
 
-        const offsetPalmaLocal = soporteProducto.position
-            .clone()
-            .add(obtenerOffsetProductoEnMano(productosEnMano.length));
-        const puntoPalmaMundo = mano.localToWorld(offsetPalmaLocal);
-        const offsetPalmaMundo = puntoPalmaMundo
-            .sub(ikRobo.muneca);
-        const objetivoPalma = contactoProductoRobo.punto
-            .clone()
-            .addScaledVector(contactoProductoRobo.normal, 0.025);
+        const { hueso, base } = item;
 
-        ikRobo.objetivoMuneca.copy(objetivoPalma)
-            .sub(offsetPalmaMundo);
-
-        const extension = THREE.MathUtils.clamp(progreso, 0, 1);
-        const peso = extension * extension * (3 - 2 * extension);
-
-        ikRobo.objetivoFinal.copy(ikRobo.muneca)
-            .lerp(ikRobo.objetivoMuneca, peso);
-
-        return resolverIKBrazoDerecho(ikRobo.objetivoFinal);
+        hueso.rotation.set(
+            base.x,
+            base.y,
+            base.z
+        );
     }
+
+    grupo.updateMatrixWorld(true);
+}
+
+
+function ajustarBrazoAlProducto(progreso) {
+    if (!contactoProductoRobo || !soporteProducto) {
+        return false;
+    }
+
+    const mano = rigModelo?.manoDerecha;
+
+    if (!mano) return false;
+
+    // Reiniciar la pose para que el IK no acumule rotaciones.
+    restablecerPoseBrazoDerecho();
+
+    grupo.updateMatrixWorld(true);
+
+    mano.getWorldPosition(ikRobo.muneca);
+
+    const offsetPalmaLocal = soporteProducto.position
+        .clone()
+        .add(
+            obtenerOffsetProductoEnMano(
+                productosEnMano.length
+            )
+        );
+
+    const puntoPalmaMundo = mano.localToWorld(
+        offsetPalmaLocal
+    );
+
+    const offsetPalmaMundo = puntoPalmaMundo
+        .sub(ikRobo.muneca);
+
+    const objetivoPalma = contactoProductoRobo.punto
+        .clone()
+        .addScaledVector(
+            contactoProductoRobo.normal,
+            0.015
+        );
+
+    ikRobo.objetivoMuneca
+        .copy(objetivoPalma)
+        .sub(offsetPalmaMundo);
+
+    const extension = THREE.MathUtils.clamp(
+        progreso,
+        0,
+        1
+    );
+
+    const peso = extension * extension * (3 - 2 * extension);
+
+    ikRobo.objetivoFinal
+        .copy(ikRobo.muneca)
+        .lerp(ikRobo.objetivoMuneca, peso);
+
+    return resolverIKBrazoDerecho(
+        ikRobo.objetivoFinal
+    );
+}
+
 
     function prepararSoporteProducto() {
         if (!modeloCargado) return false;
@@ -1147,85 +1200,143 @@ export function crearLadron(scene, productos, opciones = {}) {
         );
     }
 
-    function colocarProductoEnMano(producto) {
-        if (
-            !producto ||
-            !modeloCargado ||
-            !prepararSoporteProducto()
-        ) {
-            return false;
-        }
 
-        const mano = rigModelo?.manoDerecha;
-        const contacto =
-            contactoProductoRobo ??
-            calcularContactoProducto(producto);
-
-        if (!mano || !contacto) return false;
-
-        const indice = productosEnMano.length;
-        const offsetMano = soporteProducto.position
-            .clone()
-            .add(obtenerOffsetProductoEnMano(indice));
-
-        producto.updateMatrixWorld(true);
-        mano.updateWorldMatrix(true, false);
-
-        const puntoContactoLocal = producto.worldToLocal(
-            contacto.punto.clone()
-        );
-        const puntoPalmaMundo = mano.localToWorld(offsetMano);
-        const puntoProductoObjetivoMundo = puntoPalmaMundo
-            .clone()
-            .addScaledVector(contacto.normal, -0.025);
-
-        scene.updateMatrixWorld(true);
-        mano.attach(producto);
-        mano.updateWorldMatrix(true, false);
-        producto.updateWorldMatrix(true, false);
-
-        const puntoProductoActualEnMano = mano.worldToLocal(
-            producto.localToWorld(puntoContactoLocal.clone())
-        );
-        const puntoProductoObjetivoEnMano = mano.worldToLocal(
-            puntoProductoObjetivoMundo
-        );
-
-        producto.position.add(
-            puntoProductoObjetivoEnMano.sub(
-                puntoProductoActualEnMano
-            )
-        );
-        producto.updateMatrixWorld(true);
-        producto.visible = true;
-        productosEnMano.push(producto);
-        guardarPoseBrazoTomando();
-
-        animacionProductoRobado = {
-            producto,
-            tiempo: 0,
-            duracion: 0.32
-        };
-
-        return true;
+function colocarProductoEnMano(producto) {
+    if (
+        !producto ||
+        !modeloCargado ||
+        !prepararSoporteProducto()
+    ) {
+        return false;
     }
 
-    function actualizarAnimacionProductoRobado(delta) {
-        const animacion = animacionProductoRobado;
+    const mano = rigModelo?.manoDerecha;
 
-        if (!animacion) return false;
+    const contacto =
+        contactoProductoRobo ??
+        calcularContactoProducto(producto);
 
-        animacion.tiempo += delta;
+    if (!mano || !contacto) return false;
 
-        if (animacion.tiempo < animacion.duracion) return false;
+    const indice = productosEnMano.length;
 
-        animacionProductoRobado = null;
-        contactoProductoRobo = null;
-        poseBrazoTomando = null;
-        completarRoboProducto(animacion.producto);
+    // Guardar la transformación antes de cambiar de padre.
+    scene.updateMatrixWorld(true);
+    producto.updateMatrixWorld(true);
 
-        return true;
+    const posicionMundoInicial = new THREE.Vector3();
+    const rotacionMundoInicial = new THREE.Quaternion();
+    const escalaMundoInicial = new THREE.Vector3();
+
+    producto.getWorldPosition(posicionMundoInicial);
+    producto.getWorldQuaternion(rotacionMundoInicial);
+    producto.getWorldScale(escalaMundoInicial);
+
+    // Adjuntar conservando la transformación mundial.
+    mano.attach(producto);
+
+    mano.updateMatrixWorld(true);
+    producto.updateMatrixWorld(true);
+
+    // Posición local inicial después del attach.
+    const posicionInicial = producto.position.clone();
+    const rotacionInicial = producto.quaternion.clone();
+    const escalaInicial = producto.scale.clone();
+
+    // Destino gradual en la palma.
+    const posicionObjetivo = soporteProducto.position
+        .clone()
+        .add(obtenerOffsetProductoEnMano(indice));
+
+    // Conservamos la orientación original para no girar
+    // bruscamente productos con formas diferentes.
+    const rotacionObjetivo = rotacionInicial.clone();
+
+    const escalaObjetivo = escalaInicial.clone();
+
+    producto.visible = true;
+
+    productosEnMano.push(producto);
+
+    guardarPoseBrazoTomando();
+
+    animacionProductoRobado = {
+        producto,
+
+        tiempo: 0,
+        duracion: 0.38,
+
+        posicionInicial,
+        posicionObjetivo,
+
+        rotacionInicial,
+        rotacionObjetivo,
+
+        escalaInicial,
+        escalaObjetivo
+    };
+
+    return true;
+}
+
+
+function actualizarAnimacionProductoRobado(delta) {
+    const animacion = animacionProductoRobado;
+
+    if (!animacion) return false;
+
+    animacion.tiempo += delta;
+
+    const progreso = THREE.MathUtils.clamp(
+        animacion.tiempo / animacion.duracion,
+        0,
+        1
+    );
+
+    // Curva suave de entrada y salida.
+    const suavizado =
+        progreso * progreso * (3 - 2 * progreso);
+
+    const producto = animacion.producto;
+
+    if (producto) {
+        producto.position.lerpVectors(
+            animacion.posicionInicial,
+            animacion.posicionObjetivo,
+            suavizado
+        );
+
+        producto.quaternion.slerpQuaternions(
+            animacion.rotacionInicial,
+            animacion.rotacionObjetivo,
+            suavizado
+        );
+
+        producto.scale.lerpVectors(
+            animacion.escalaInicial,
+            animacion.escalaObjetivo,
+            suavizado
+        );
+
+        producto.updateMatrixWorld(true);
     }
+
+    if (progreso < 1) return false;
+
+    if (producto) {
+        producto.position.copy(animacion.posicionObjetivo);
+        producto.quaternion.copy(animacion.rotacionObjetivo);
+        producto.scale.copy(animacion.escalaObjetivo);
+    }
+
+    animacionProductoRobado = null;
+    contactoProductoRobo = null;
+    poseBrazoTomando = null;
+
+    completarRoboProducto(producto);
+
+    return true;
+}
 
     function limpiarProductosVisuales() {
         for (const producto of productosEnMano) {
@@ -1482,70 +1593,90 @@ export function crearLadron(scene, productos, opciones = {}) {
         contactoProductoRobo = null;
     }
 
-    function encontrarPosicionDeRobo(producto) {
-        const posicion = new THREE.Vector3();
-        producto.getWorldPosition(posicion);
 
-        const radios = [
-            CONFIG.distanciaProducto,
-            1.05,
-            1.25,
-            1.45,
-            1.65
-        ];
+function encontrarPosicionDeRobo(producto) {
+    const posicion = new THREE.Vector3();
 
-        let mejorRuta = null;
-        let mejorDistancia = Infinity;
+    producto.getWorldPosition(posicion);
 
-        for (const radio of radios) {
-            for (let i = 0; i < 16; i++) {
-                const angulo = i * Math.PI * 2 / 16;
+    const radioInicial = THREE.MathUtils.clamp(
+        CONFIG.distanciaProducto,
+        0.60,
+        0.95
+    );
 
-                const candidato = {
-                    x: posicion.x + Math.cos(angulo) * radio,
-                    z: posicion.z + Math.sin(angulo) * radio
-                };
+    const radios = [
+        radioInicial,
+        0.90,
+        1.00,
+        1.10,
+        1.20,
+        1.30,
+        1.40
+    ];
 
-                const celda = aCelda(
-                    candidato.x,
-                    candidato.z
+    let mejorRuta = null;
+    let mejorDistancia = Infinity;
+
+    for (const radio of radios) {
+        mejorRuta = null;
+        mejorDistancia = Infinity;
+
+        // Más direcciones para encontrar un espacio accesible
+        // frente al producto.
+        for (let i = 0; i < 32; i++) {
+            const angulo = i * Math.PI * 2 / 32;
+
+            const candidato = {
+                x: posicion.x + Math.cos(angulo) * radio,
+                z: posicion.z + Math.sin(angulo) * radio
+            };
+
+            const celda = aCelda(
+                candidato.x,
+                candidato.z
+            );
+
+            if (bloqueada(celda.x, celda.z)) continue;
+
+            const rutaCandidata = encontrarRuta(
+                grupo.position,
+                candidato
+            );
+
+            if (!rutaCandidata.length) continue;
+
+            let distanciaRuta = 0;
+
+            for (
+                let j = 1;
+                j < rutaCandidata.length;
+                j++
+            ) {
+                distanciaRuta += Math.hypot(
+                    rutaCandidata[j].x -
+                        rutaCandidata[j - 1].x,
+                    rutaCandidata[j].z -
+                        rutaCandidata[j - 1].z
                 );
-
-                if (bloqueada(celda.x, celda.z)) continue;
-
-                const rutaCandidata = encontrarRuta(
-                    grupo.position,
-                    candidato
-                );
-
-                if (!rutaCandidata.length) continue;
-
-                let distanciaRuta = 0;
-
-                for (
-                    let j = 1;
-                    j < rutaCandidata.length;
-                    j++
-                ) {
-                    distanciaRuta += Math.hypot(
-                        rutaCandidata[j].x -
-                            rutaCandidata[j - 1].x,
-                        rutaCandidata[j].z -
-                            rutaCandidata[j - 1].z
-                    );
-                }
-
-                if (distanciaRuta < mejorDistancia) {
-                    mejorDistancia = distanciaRuta;
-                    mejorRuta = rutaCandidata;
-                }
             }
 
-            if (mejorRuta) break;
+            if (distanciaRuta < mejorDistancia) {
+                mejorDistancia = distanciaRuta;
+                mejorRuta = rutaCandidata;
+            }
         }
 
-        return mejorRuta;
+        // Si existe una posición accesible en este radio,
+        // no hace falta alejarse más del producto.
+        if (mejorRuta) {
+            return mejorRuta;
+        }
     }
+
+    return null;
+}
+
 
     function buscarYReservarProducto() {
         const disponibles = obtenerProductosDisponibles();
