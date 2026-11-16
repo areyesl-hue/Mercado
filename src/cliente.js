@@ -503,13 +503,33 @@ let productoReubicadoPendiente = false;
         quaternionPadreTemporal: new THREE.Quaternion()
     };
 
-    const animacionDeposito = {
-        preparada: false,
-        alturaProducto: 0,
-        centroDesdePalmaLocal: new THREE.Vector3(),
-        objetivoCentro: new THREE.Vector3(),
-        objetivoPalma: new THREE.Vector3()
-    };
+const animacionDeposito = {
+    preparada: false,
+
+    fase: null,
+    liberado: false,
+    completada: false,
+    error: false,
+
+    compra: null,
+
+    alturaProducto: 0,
+
+    centroDesdePalmaLocal: new THREE.Vector3(),
+
+    objetivoCentro: new THREE.Vector3(),
+    objetivoPalma: new THREE.Vector3(),
+
+    palmaInicial: new THREE.Vector3(),
+    palmaFinal: new THREE.Vector3(),
+
+    progresoDescenso: 0,
+
+    duracionPreparacion: 0.16,
+    duracionDescenso: 0.56,
+    duracionLiberacion: 0.10,
+    duracionRetirada: 0.18
+};
 
     
     
@@ -2036,145 +2056,506 @@ function mezclarPoseAgarreInspeccion() {
     
     
     
+function prepararDepositoProducto() {
 
-    function prepararDepositoProducto() {
-        const producto = productoEnMano;
-        const mano = obtenerRigBrazo().mano;
+    const producto = productoEnMano;
+    const mano = obtenerRigBrazo()?.mano;
 
-        if (
-            !producto ||
-            !mano ||
-            typeof config.carrito?.obtenerPuntoDeposito !== 'function'
-        ) {
+    if (
+        !producto ||
+        !mano ||
+        typeof config.carrito?.obtenerPuntoDeposito !== 'function'
+    ) {
+        return false;
+    }
+
+    grupo.updateMatrixWorld(true);
+    mano.updateMatrixWorld(true);
+    producto.updateMatrixWorld(true);
+
+    cajaTemporal.setFromObject(producto);
+
+    if (cajaTemporal.isEmpty()) return false;
+
+    cajaTemporal.getCenter(vectorTemporal);
+    cajaTemporal.getSize(tamanoTemporal);
+
+    animacionDeposito.alturaProducto = tamanoTemporal.y;
+
+    // Capturar el centro del producto respecto a la palma.
+    mano.worldToLocal(vectorTemporal);
+
+    animacionDeposito.centroDesdePalmaLocal
+        .copy(vectorTemporal)
+        .sub(ikAgarre.offsetPalmaLocal);
+
+    // Capturar la posición mundial inicial de la mano.
+    mano.getWorldPosition(
+        animacionDeposito.palmaInicial
+    );
+
+    // Obtener el centro final previsto del producto.
+    const puntoDeposito =
+        config.carrito.obtenerPuntoDeposito(
+            undefined,
+            producto
+        );
+
+    if (
+        !puntoDeposito?.isVector3 ||
+        !Number.isFinite(puntoDeposito.x) ||
+        !Number.isFinite(puntoDeposito.y) ||
+        !Number.isFinite(puntoDeposito.z)
+    ) {
+        return false;
+    }
+
+    animacionDeposito.objetivoCentro.copy(
+        puntoDeposito
+    );
+
+    // Calcular el desplazamiento entre la muñeca
+    // y el centro del producto.
+    mano.getWorldPosition(ikAgarre.muneca);
+
+    ikAgarre.offsetPalmaMundo
+        .copy(animacionDeposito.centroDesdePalmaLocal)
+        .applyMatrix4(mano.matrixWorld)
+        .sub(ikAgarre.muneca);
+
+    // La palma debe llegar al punto que permite
+    // colocar el centro del producto en la cesta.
+    animacionDeposito.palmaFinal
+        .copy(animacionDeposito.objetivoCentro)
+        .sub(ikAgarre.offsetPalmaMundo);
+
+    animacionDeposito.preparada = true;
+
+    return true;
+}
+
+  function animarDepositoProducto(progreso = 0) {
+
+    const producto = productoEnMano;
+
+    if (!producto) return false;
+
+    if (!animacionDeposito.preparada) {
+        if (!prepararDepositoProducto()) {
             return false;
         }
+    }
 
-        grupo.updateMatrixWorld(true);
-        mano.updateMatrixWorld(true);
-        producto.updateMatrixWorld(true);
+    progreso = suavizar(
+        limitar(progreso, 0, 1)
+    );
 
-        cajaTemporal.setFromObject(producto);
+    grupo.updateMatrixWorld(true);
 
-        if (cajaTemporal.isEmpty()) return false;
+    // Interpolar la palma desde su posición original
+    // hasta el punto de depósito.
+    animacionDeposito.objetivoPalma.lerpVectors(
+        animacionDeposito.palmaInicial,
+        animacionDeposito.palmaFinal,
+        progreso
+    );
 
-        cajaTemporal.getCenter(vectorTemporal);
-        cajaTemporal.getSize(tamanoTemporal);
-        mano.worldToLocal(vectorTemporal);
+    animacionDeposito.progresoDescenso = progreso;
 
-        animacionDeposito.centroDesdePalmaLocal
-            .copy(vectorTemporal)
-            .sub(ikAgarre.offsetPalmaLocal);
-        animacionDeposito.alturaProducto = tamanoTemporal.y;
-        animacionDeposito.preparada = true;
+    return ajustarBrazoAlProducto(
+        producto,
+        0,
+        animacionDeposito.objetivoPalma,
+        progreso
+    );
+}
 
+function liberarProductoEnCarrito() {
+
+    if (animacionDeposito.liberado) {
         return true;
     }
 
-    function animarDepositoProducto() {
-        const producto = productoEnMano;
-        const mano = obtenerRigBrazo().mano;
+    const producto = productoEnMano;
 
-        if (!producto || !mano) return false;
+    if (!producto) {
+        animacionDeposito.error = true;
+        return false;
+    }
 
-        if (
-            !animacionDeposito.preparada &&
-            !prepararDepositoProducto()
-        ) {
-            return false;
+    const datos = producto.userData ?? {};
+
+    const compra = {
+        objeto: producto,
+
+        nombre:
+            datos.nombre ??
+            producto.name ??
+            'Producto',
+
+        codigo: datos.codigo ?? '',
+
+        precio: numero(datos.precio, 0)
+    };
+
+    let agregado = false;
+
+    try {
+
+        if (config.carrito?.agregarProducto) {
+
+            agregado = config.carrito.agregarProducto(
+                producto,
+                {
+                    nombre: compra.nombre,
+                    precio: compra.precio,
+                    cantidad: 1
+                }
+            ) === true;
+
+        } else if (config.carrito?.agregar) {
+
+            agregado =
+                config.carrito.agregar(producto) === true;
         }
 
-        const puntoDeposito =
-            config.carrito?.obtenerPuntoDeposito?.();
+    } catch (error) {
 
-        if (
-            !puntoDeposito?.isVector3 ||
-            !Number.isFinite(puntoDeposito.x) ||
-            !Number.isFinite(puntoDeposito.y) ||
-            !Number.isFinite(puntoDeposito.z)
-        ) {
-            return false;
+        console.error(
+            `[CLIENTE ${id}] Error liberando producto:`,
+            error
+        );
+    }
+
+    if (!agregado) {
+
+        console.error(
+            `[CLIENTE ${id}] No se pudo depositar ${compra.nombre}.`
+        );
+
+        animacionDeposito.error = true;
+
+        return false;
+    }
+
+    // Registrar que el producto ya pertenece al carrito.
+    compra.objeto.userData.enCarrito = true;
+    compra.objeto.userData.reservado = false;
+
+    delete compra.objeto.userData.reservadoPor;
+
+    animacionDeposito.compra = compra;
+    animacionDeposito.liberado = true;
+
+    // A partir de aquí el producto ya no depende de la mano.
+    productoEnMano = null;
+
+    productoOriginal = null;
+
+    animacionAgarre.activa = false;
+    animacionAgarre.tiempo = 0;
+
+    animacionProducto.activa = false;
+    animacionProducto.tipo = null;
+    animacionProducto.fase = null;
+
+    liberarReserva();
+
+    console.log(
+        `[CLIENTE ${id}] Producto liberado en carrito: ${compra.nombre}`
+    );
+
+    return true;
+}
+
+function animarGuardarProcedural() {
+
+    const duracion = Math.max(
+        numero(config.tiempoGuardar, 2.0),
+        0.1
+    );
+
+    const progreso = limitar(
+        tiempoEstado / duracion,
+        0,
+        1
+    );
+
+    const brazoActivo = obtenerRigBrazo();
+    const brazoLibre = obtenerRigBrazo(
+        ladoAgarre === 'derecho'
+            ? 'izquierdo'
+            : 'derecho'
+    );
+
+    if (!brazoActivo?.mano || !brazoLibre) {
+        animacionDeposito.error = true;
+        return;
+    }
+
+    const signoActivo =
+        ladoAgarre === 'izquierdo' ? -1 : 1;
+
+    const signoLibre = -signoActivo;
+
+    const fasePreparacion = 0.16;
+    const faseDescenso = 0.56;
+    const faseLiberacion = 0.10;
+    const faseRetirada = 0.18;
+
+    const inicioDescenso = fasePreparacion;
+
+    const inicioLiberacion =
+        fasePreparacion + faseDescenso;
+
+    const inicioRetirada =
+        inicioLiberacion + faseLiberacion;
+
+    // =========================================
+    // PREPARAR
+    // =========================================
+
+    if (progreso < inicioDescenso) {
+
+        animacionDeposito.fase = 'PREPARAR';
+
+        if (!animacionDeposito.preparada) {
+
+            if (!prepararDepositoProducto()) {
+                animacionDeposito.error = true;
+                return;
+            }
         }
 
-        grupo.updateMatrixWorld(true);
-        mano.getWorldPosition(ikAgarre.muneca);
+        const p = suavizar(
+            progreso / fasePreparacion
+        );
 
-        animacionDeposito.objetivoCentro
-            .copy(puntoDeposito)
-            .y += animacionDeposito.alturaProducto / 2;
+        aplicarRotacionEuler(
+            brazoLibre.hombro,
+            -0.50,
+            0.05 * signoLibre,
+            -0.08 * signoLibre
+        );
 
-        ikAgarre.offsetPalmaMundo
-            .copy(animacionDeposito.centroDesdePalmaLocal)
-            .applyMatrix4(mano.matrixWorld)
-            .sub(ikAgarre.muneca);
+        aplicarRotacionEuler(
+            brazoLibre.codo,
+            -0.58,
+            0,
+            -0.04 * signoLibre
+        );
 
-        animacionDeposito.objetivoPalma
-            .copy(animacionDeposito.objetivoCentro)
-            .sub(ikAgarre.offsetPalmaMundo);
+        aplicarRotacionEuler(
+            rig.torso,
+            0.08 + p * 0.07,
+            0,
+            -0.025
+        );
 
-        const progreso = suavizar(
+        aplicarRotacionEuler(
+            rig.cabeza,
+            0.14 + p * 0.08,
+            -0.08,
+            0
+        );
+
+        return;
+    }
+
+    // =========================================
+    // DESCENDER
+    // =========================================
+
+    if (progreso < inicioLiberacion) {
+
+        animacionDeposito.fase = 'DESCENDER';
+
+        const progresoDescenso = suavizar(
             limitar(
-                tiempoEstado / Math.max(config.tiempoGuardar, 0.01),
+                (progreso - inicioDescenso) /
+                faseDescenso,
                 0,
                 1
             )
         );
 
-        return ajustarBrazoAlProducto(
-            producto,
-            0,
-            animacionDeposito.objetivoPalma,
-            progreso
+        animarDepositoProducto(
+            progresoDescenso
         );
-    }
 
-    function animarGuardarProcedural() {
-        const progreso = limitar(tiempoEstado / Math.max(config.tiempoGuardar, 0.01), 0, 1);
-        const bajar = suavizar(limitar(progreso / 0.72, 0, 1));
-        const subir = suavizar(limitar((progreso - 0.72) / 0.28, 0, 1));
-        const vacilar = Math.sin(tiempoEstado * 5) * 0.025;
-
-        const brazoActivo = obtenerRigBrazo();
-        const brazoLibre = obtenerRigBrazo(
-            ladoAgarre === 'derecho' ? 'izquierdo' : 'derecho'
-        );
-        const signoActivo = ladoAgarre === 'izquierdo' ? -1 : 1;
-        const signoLibre = -signoActivo;
-
-        aplicarRotacionEuler(brazoActivo.hombro,
-            THREE.MathUtils.lerp(-0.92, -0.36, subir) + vacilar,
-            -0.08 * signoActivo, 0.08 * signoActivo);
-        aplicarRotacionEuler(
-            brazoActivo.codo,
-            THREE.MathUtils.lerp(-0.88, -0.55, subir),
-            0,
-            0.05 * signoActivo
-        );
-        aplicarRotacionEuler(
-            brazoActivo.mano,
-            -0.25 + vacilar,
-            0,
-            0.10 * signoActivo
-        );
+        const inclinacion = progresoDescenso;
 
         aplicarRotacionEuler(
             brazoLibre.hombro,
-            -0.50 + bajar * 0.18,
+            -0.50 + inclinacion * 0.12,
             0.05 * signoLibre,
             -0.08 * signoLibre
         );
+
         aplicarRotacionEuler(
             brazoLibre.codo,
-            -0.58 + subir * 0.12,
+            -0.58 + inclinacion * 0.10,
             0,
             -0.04 * signoLibre
         );
 
-        aplicarRotacionEuler(rig.torso, 0.08 + bajar * 0.16, 0, -0.025);
-        aplicarRotacionEuler(rig.cabeza, 0.14 + bajar * 0.10,
-            -0.08, Math.sin(tiempoEstado * 2.3) * 0.02);
+        aplicarRotacionEuler(
+            rig.torso,
+            0.15 + inclinacion * 0.12,
+            0,
+            -0.025
+        );
 
-        animarDepositoProducto();
+        aplicarRotacionEuler(
+            rig.cabeza,
+            0.20 + inclinacion * 0.08,
+            -0.08,
+            0
+        );
+
+        return;
     }
+
+    // =========================================
+    // LIBERAR PRODUCTO
+    // =========================================
+
+    if (progreso < inicioRetirada) {
+
+        animacionDeposito.fase = 'LIBERAR';
+
+        // Mantener el brazo en el punto de depósito
+        // durante el breve instante de liberación.
+        if (!animacionDeposito.liberado) {
+
+            if (!liberarProductoEnCarrito()) {
+                return;
+            }
+        }
+
+        aplicarRotacionEuler(
+            brazoLibre.hombro,
+            -0.38,
+            0,
+            -0.05 * signoLibre
+        );
+
+        aplicarRotacionEuler(
+            brazoLibre.codo,
+            -0.48,
+            0,
+            0
+        );
+
+        aplicarRotacionEuler(
+            rig.torso,
+            0.25,
+            0,
+            -0.02
+        );
+
+        return;
+    }
+
+    // =========================================
+    // RETIRAR BRAZO
+    // =========================================
+
+    animacionDeposito.fase = 'RETIRAR';
+
+    const retirada = suavizar(
+        limitar(
+            (progreso - inicioRetirada) /
+            faseRetirada,
+            0,
+            1
+        )
+    );
+
+    aplicarRotacionEuler(
+        brazoActivo.hombro,
+        THREE.MathUtils.lerp(
+            -0.92,
+            -0.25,
+            retirada
+        ),
+        -0.08 * signoActivo,
+        0.08 * signoActivo * (1 - retirada)
+    );
+
+    aplicarRotacionEuler(
+        brazoActivo.codo,
+        THREE.MathUtils.lerp(
+            -0.55,
+            -0.12,
+            retirada
+        ),
+        0,
+        0.05 * signoActivo * (1 - retirada)
+    );
+
+    aplicarRotacionEuler(
+        brazoActivo.mano,
+        THREE.MathUtils.lerp(
+            -0.25,
+            0,
+            retirada
+        ),
+        0,
+        0.10 * signoActivo * (1 - retirada)
+    );
+
+    aplicarRotacionEuler(
+        brazoLibre.hombro,
+        THREE.MathUtils.lerp(
+            -0.38,
+            -0.12,
+            retirada
+        ),
+        0,
+        -0.05 * signoLibre * (1 - retirada)
+    );
+
+    aplicarRotacionEuler(
+        brazoLibre.codo,
+        THREE.MathUtils.lerp(
+            -0.48,
+            -0.12,
+            retirada
+        ),
+        0,
+        0
+    );
+
+    aplicarRotacionEuler(
+        rig.torso,
+        THREE.MathUtils.lerp(
+            0.25,
+            0,
+            retirada
+        ),
+        0,
+        0
+    );
+
+    aplicarRotacionEuler(
+        rig.cabeza,
+        THREE.MathUtils.lerp(
+            0.28,
+            0,
+            retirada
+        ),
+        -0.08 * (1 - retirada),
+        0
+    );
+
+    if (progreso >= 1) {
+
+        animacionDeposito.fase = 'COMPLETADO';
+
+        animacionDeposito.completada = true;
+    }
+}
 
     
     
@@ -2779,7 +3160,23 @@ function cambiarEstado(nuevoEstado) {
     // Actualizar el estado antes de modificar el carrito.
     estado = nuevoEstado;
     tiempoEstado = 0;
+// Reiniciar el depósito cuando comienza una compra.
+if (nuevoEstado === ESTADOS.GUARDANDO) {
 
+    animacionDeposito.preparada = false;
+
+    animacionDeposito.fase = 'PREPARAR';
+
+    animacionDeposito.liberado = false;
+    animacionDeposito.completada = false;
+    animacionDeposito.error = false;
+
+    animacionDeposito.finalizado = false;
+
+    animacionDeposito.compra = null;
+
+    animacionDeposito.progresoDescenso = 0;
+}
     console.log('[CAMBIO DE ESTADO CLIENTE]', {
         anterior,
         nuevo: nuevoEstado,
@@ -4673,119 +5070,90 @@ function devolverProductoAlEstante() {
 }
 
     
+function guardarProducto() {
 
-    function guardarProducto() {
-        animacionDeposito.preparada = false;
+    if (animacionDeposito.finalizado) return;
 
-        if (!productoEnMano) {
-            liberarReserva();
-            cambiarEstado(ESTADOS.BUSCANDO);
-            return;
-        }
+    animacionDeposito.preparada = false;
+
+    // =========================================
+    // COMPROBAR SI SE PUDO LIBERAR EL PRODUCTO
+    // =========================================
+
+    if (
+        animacionDeposito.error ||
+        !animacionDeposito.liberado ||
+        !animacionDeposito.compra
+    ) {
 
         const producto = productoEnMano;
-        const datos = producto.userData ?? {};
 
-        animacionAgarre.activa = false;
-        animacionAgarre.tiempo = 0;
-
-        const compra = {
-            objeto: producto,
-
-            nombre:
-                datos.nombre ??
-                producto.name ??
-                'Producto',
-
-            codigo: datos.codigo ?? '',
-
-            precio: numero(datos.precio, 0)
-        };
-
-        let agregado = false;
-
-        try {
-            if (config.carrito?.agregarProducto) {
-                agregado =
-                    config.carrito.agregarProducto(producto, {
-                        nombre: compra.nombre,
-                        precio: compra.precio,
-                        cantidad: 1
-                    }) === true;
-
-            } else if (config.carrito?.agregar) {
-                agregado =
-                    config.carrito.agregar(producto) === true;
-            }
-        } catch (error) {
-            console.error(
-                `[CLIENTE ${id}] Error al agregar al carrito:`,
-                error
-            );
-        }
-
-        if (!agregado) {
-            console.error(
-                `[CLIENTE ${id}] No se pudo agregar ${compra.nombre} al carrito.`
-            );
-
-            if (productoOriginal) {
-                animacionProducto.tipo = 'DEVOLVER';
-
-                devolverProductoAlEstante();
-
-                cambiarEstado(ESTADOS.DEVOLVIENDO);
-            } else {
-                productoEnMano = null;
-                productoOriginal = null;
-
-                liberarReserva();
-
-                cambiarEstado(ESTADOS.BUSCANDO);
-            }
-
-            return;
-        }
-
-        compras.push(compra);
-
-        producto.userData.enCarrito = true;
-        producto.userData.reservado = false;
-
-        delete producto.userData.reservadoPor;
-
-        productoEnMano = null;
-        productoOriginal = null;
-
-        animacionProducto.activa = false;
-        animacionProducto.tipo = null;
-        animacionProducto.fase = null;
-
-        liberarReserva();
-
-        try {
-            config.alComprar?.({
-                cliente: api,
-                producto: compra,
-                totalProductos: compras.length
-            });
-        } catch (error) {
-            console.error(
-                `[CLIENTE ${id}] Error en alComprar:`,
-                error
-            );
-        }
-
-        console.log(
-            `[CLIENTE ${id}] Producto agregado: ${compra.nombre}`,
-            `| Total: ${config.carrito?.cantidadProductos ?? 'N/D'}`
+        console.warn(
+            `[CLIENTE ${id}] El depósito no se completó correctamente.`
         );
 
-        cambiarEstado(ESTADOS.BUSCANDO);
+        if (producto && productoOriginal) {
+
+            animacionProducto.tipo = 'DEVOLVER';
+
+            devolverProductoAlEstante();
+
+            cambiarEstado(ESTADOS.DEVOLVIENDO);
+
+        } else {
+
+            productoEnMano = null;
+            productoOriginal = null;
+
+            liberarReserva();
+
+            cambiarEstado(ESTADOS.BUSCANDO);
+        }
+
+        return;
     }
 
-    
-    
+    // =========================================
+    // REGISTRAR COMPRA
+    // =========================================
+
+    const compra = animacionDeposito.compra;
+
+    compras.push(compra);
+
+    animacionDeposito.finalizado = true;
+
+    try {
+
+        config.alComprar?.({
+            cliente: api,
+            producto: compra,
+            totalProductos: compras.length
+        });
+
+    } catch (error) {
+
+        console.error(
+            `[CLIENTE ${id}] Error en alComprar:`,
+            error
+        );
+    }
+
+    console.log(
+        `[CLIENTE ${id}] Producto depositado: ${compra.nombre}`,
+        `| Total: ${compras.length}`
+    );
+
+    // Limpiar animación.
+    animacionDeposito.fase = null;
+    animacionDeposito.compra = null;
+
+    animacionDeposito.liberado = false;
+    animacionDeposito.completada = false;
+    animacionDeposito.error = false;
+
+    cambiarEstado(ESTADOS.BUSCANDO);
+}
     
 
     function decidirCompra() {
@@ -5700,16 +6068,19 @@ function actualizar(delta) {
         // GUARDAR PRODUCTO
         // =========================================
 
-        case ESTADOS.GUARDANDO: {
+case ESTADOS.GUARDANDO: {
 
-            animarGuardarProcedural();
+    animarGuardarProcedural();
 
-            if (tiempoEstado >= config.tiempoGuardar) {
-                guardarProducto();
-            }
+    if (
+        animacionDeposito.error ||
+        animacionDeposito.completada
+    ) {
+        guardarProducto();
+    }
 
-            break;
-        }
+    break;
+}
 
         // =========================================
         // DEVOLVER PRODUCTO
