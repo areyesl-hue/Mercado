@@ -2660,15 +2660,11 @@ productoReubicadoPendiente =
     
     
 
+
 function actualizarSeguimientoCarrito() {
     const carrito = config.carrito;
-console.log('[ESTADO SEGUIMIENTO CLIENTE]', {
-    estado,
-    ladoAgarre,
-    esRecogida: estado === ESTADOS.RECOGIENDO,
-    esInspeccion: estado === ESTADOS.INSPECCIONANDO
-});
-    if (!carrito) return;
+
+    if (!carrito || !grupo) return;
 
     const estadosSeguimiento = [
         ESTADOS.ENTRANDO,
@@ -2683,35 +2679,46 @@ console.log('[ESTADO SEGUIMIENTO CLIENTE]', {
         ESTADOS.INSPECCIONANDO
     ];
 
-    // Seguimiento normal: conserva la distancia de 0.95.
+    // SEGUIMIENTO NORMAL
     if (estadosSeguimiento.includes(estado)) {
-        carrito.seguirObjetivo?.(
+        carrito.seguirObjetivo(
             grupo,
             0.95,
             0
         );
+
         return;
     }
 
-    // Recogida e inspección: coloca el carrito
-    // a un costado del cliente, del lado de la mano de agarre.
+    // CARRITO AL COSTADO DURANTE LA RECOGIDA
+    // Y LA INSPECCIÓN DEL PRODUCTO
     if (estadosJuntoAlCliente.includes(estado)) {
+        const distanciaLateral = 1.25;
+
         const desplazamiento =
             ladoAgarre === 'derecho'
-                ? distanciaLateralCarrito
-                : -distanciaLateralCarrito;
+                ? distanciaLateral
+                : -distanciaLateral;
 
-        carrito.seguirObjetivo?.(
+        console.log('[SEGUIMIENTO LATERAL CARRITO]', {
+            estado,
+            ladoAgarre,
+            distanciaLateral,
+            desplazamiento
+        });
+
+        carrito.seguirObjetivo(
             grupo,
-            0.1,
+            0,
             desplazamiento
         );
+
         return;
     }
 
-    // En los demás estados, detiene el seguimiento.
+    // DETENER SEGUIMIENTO EN LOS DEMÁS ESTADOS
     if (carrito.siguiendo) {
-        carrito.detenerSeguimiento?.();
+        carrito.detenerSeguimiento();
     }
 }
 
