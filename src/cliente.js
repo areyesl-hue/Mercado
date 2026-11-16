@@ -1218,68 +1218,77 @@ function seleccionarBrazoAgarre(producto) {
 
 
 
+
 function animarAgacharse(intensidad = 1) {
     const t = suavizar(limitar(intensidad, 0, 1));
 
-    if (!rig.cadera || !rig.piernaIzquierda ||
-        !rig.piernaDerecha) return;
-
-    // Descenso de la pelvis.
-    if (!rig.cadera.userData.posicionBaseAgachado) {
+    // Guardar la posición original de la pelvis una sola vez.
+    if (rig.cadera && !rig.cadera.userData.posicionBaseAgachado) {
         rig.cadera.userData.posicionBaseAgachado =
             rig.cadera.position.clone();
     }
 
-    const base = rig.cadera.userData.posicionBaseAgachado;
+    // Descenso progresivo de la pelvis.
+    if (rig.cadera) {
+        const base = rig.cadera.userData.posicionBaseAgachado;
 
-    rig.cadera.position.set(
-        base.x,
-        base.y - 0.30 * t,
-        base.z
-    );
+        rig.cadera.position.set(
+            base.x,
+            base.y - 0.22 * t,
+            base.z
+        );
 
-    // Muslos: flexión hacia delante.
-    aplicarRotacionEuler(
-        rig.piernaIzquierda,
-        0.55 * t,
-        0,
-        0
-    );
+        aplicarRotacionEuler(
+            rig.cadera,
+            -0.10 * t,
+            0,
+            0
+        );
+    }
 
-    aplicarRotacionEuler(
-        rig.piernaDerecha,
-        0.55 * t,
-        0,
-        0
-    );
+    // Muslos.
+    if (rig.piernaIzquierda) {
+        aplicarRotacionEuler(
+            rig.piernaIzquierda,
+            0.42 * t,
+            0,
+            0
+        );
+    }
 
-    // Rodillas: flexión progresiva.
-    aplicarRotacionEuler(
-        rig.pantorrillaIzquierda,
-        -0.95 * t,
-        0,
-        0
-    );
+    if (rig.piernaDerecha) {
+        aplicarRotacionEuler(
+            rig.piernaDerecha,
+            0.42 * t,
+            0,
+            0
+        );
+    }
 
-    aplicarRotacionEuler(
-        rig.pantorrillaDerecha,
-        -0.95 * t,
-        0,
-        0
-    );
+    // Pantorrillas. Se comprueba que los huesos existan
+    // antes de intentar modificarlos.
+    if (rig.pantorrillaIzquierda) {
+        aplicarRotacionEuler(
+            rig.pantorrillaIzquierda,
+            -0.72 * t,
+            0,
+            0
+        );
+    }
 
-    // Compensación de la parte superior.
-    aplicarRotacionEuler(
-        rig.cadera,
-        -0.12 * t,
-        0,
-        0
-    );
+    if (rig.pantorrillaDerecha) {
+        aplicarRotacionEuler(
+            rig.pantorrillaDerecha,
+            -0.72 * t,
+            0,
+            0
+        );
+    }
 }
 
 
-
     
+
 function animarRecogerProcedural() {
     const progreso = limitar(
         tiempoEstado / Math.max(config.tiempoRecoger, 0.01),
@@ -1306,12 +1315,10 @@ function animarRecogerProcedural() {
         )
     );
 
-    // Clasificación de altura del producto.
     const agachado = productoEsInferior ? 1 : 0;
-    animarAgacharse(agachado);
     const productoArriba = productoEsSuperior ? 1 : 0;
 
-    // El cuerpo se agacha o se estira según la altura.
+    // Una sola llamada, con intensidad progresiva.
     animarAgacharse(
         agachado * suavizar(progreso * 1.35)
     );
@@ -1322,30 +1329,29 @@ function animarRecogerProcedural() {
 
     const signoLibre = ladoAgarre === 'izquierdo' ? 1 : -1;
 
-    // Brazo libre: acompaña el movimiento.
-    aplicarRotacionEuler(
-        brazoLibre.hombro,
-        -0.12 - 0.22 * acercarse +
-            0.18 * productoArriba * acercarse,
-        0,
-        0.06 * acercarse * signoLibre
-    );
+    if (brazoLibre) {
+        aplicarRotacionEuler(
+            brazoLibre.hombro,
+            -0.12 - 0.22 * acercarse +
+                0.18 * productoArriba * acercarse,
+            0,
+            0.06 * acercarse * signoLibre
+        );
 
-    aplicarRotacionEuler(
-        brazoLibre.codo,
-        -0.12 - 0.28 * acercarse,
-        0.04 * signoLibre,
-        -0.04 * signoLibre
-    );
+        aplicarRotacionEuler(
+            brazoLibre.codo,
+            -0.12 - 0.28 * acercarse,
+            0.04 * signoLibre,
+            -0.04 * signoLibre
+        );
 
-    aplicarRotacion(
-        brazoLibre.mano,
-        EJE_X,
-        -0.08 - contacto * 0.16
-    );
+        aplicarRotacion(
+            brazoLibre.mano,
+            EJE_X,
+            -0.08 - contacto * 0.16
+        );
+    }
 
-    // Torso: se inclina para alcanzar productos bajos
-    // y se estira ligeramente para alcanzar los altos.
     aplicarRotacionEuler(
         rig.torso,
         0.08 * acercarse +
@@ -1355,7 +1361,6 @@ function animarRecogerProcedural() {
         -0.04 * acercarse
     );
 
-    // Cabeza: mira hacia el producto.
     aplicarRotacionEuler(
         rig.cabeza,
         0.14 + 0.12 * acercarse -
@@ -1372,6 +1377,7 @@ function animarRecogerProcedural() {
             0.10 * productoArriba * acercarse
     );
 }
+
 
 function esProductoSuperior(producto) {
     if (!producto) return false;
