@@ -964,7 +964,6 @@ function seleccionarBrazoAgarre(producto) {
     const elegido = candidatos[0];
 
     ladoAgarre = elegido.lado;
-
     // Guardar el producto y el punto exacto seleccionado.
     if (!ikAgarre.puntoContactoFijado) {
         ikAgarre.puntoContactoFijado =
