@@ -15,11 +15,11 @@ const CONFIG_DEFAULT = {
 
     distancia: 0.10,
     desplazamientoLateral: 0.50,
-    desplazamientoLateralInspeccion: 0.70,
+    desplazamientoLateralInspeccion: 0.50,
 
     giroEstacionamiento: Math.PI,
     suavizadoGiro: 3.0,
-    distanciaEstacionamiento: 0.60,
+    distanciaEstacionamiento: 0.40,
 
     suavizado: 9,
     velocidadMaxima: 5,
