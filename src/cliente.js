@@ -1278,7 +1278,6 @@ function animarAgacharse(intensidad = 1) {
 }
 
 
-
 function animarRecogerProcedural() {
     const progreso = limitar(
         tiempoEstado / Math.max(config.tiempoRecoger, 0.01),
@@ -1308,112 +1307,21 @@ function animarRecogerProcedural() {
     const agachado = productoEsInferior ? 1 : 0;
     const productoArriba = productoEsSuperior ? 1 : 0;
 
-    // Intensidad progresiva de la inclinación.
-    const intensidad =
-        suavizar(limitar(progreso * 1.5, 0, 1)) *
-        agachado;
-
-    // =====================================================
-    // INCLINACIÓN ASIMÉTRICA DE LAS PIERNAS
-    // =====================================================
-
-    // Una pierna se flexiona más que la otra.
-    const piernaFlexionada =
-        ladoAgarre === 'derecho'
-            ? rig.piernaDerecha
-            : rig.piernaIzquierda;
-
-    const piernaApoyo =
-        ladoAgarre === 'derecho'
-            ? rig.piernaIzquierda
-            : rig.piernaDerecha;
-
-    if (piernaFlexionada?.cadera) {
-        aplicarRotacionEuler(
-            piernaFlexionada.cadera,
-            -0.12 * intensidad,
-            0,
-            0.035 * intensidad
+    // La sentadilla aumenta al acercarse al producto.
+    const intensidadAgachado =
+        agachado * suavizar(
+            limitar(progreso * 1.5, 0, 1)
         );
-    }
 
-    if (piernaFlexionada?.rodilla) {
-        aplicarRotacionEuler(
-            piernaFlexionada.rodilla,
-            -0.58 * intensidad,
-            0,
-            0
-        );
-    }
-
-    if (piernaFlexionada?.tobillo) {
-        aplicarRotacionEuler(
-            piernaFlexionada.tobillo,
-            0.20 * intensidad,
-            0,
-            0
-        );
-    }
-
-    // La pierna de apoyo permanece casi extendida.
-    if (piernaApoyo?.cadera) {
-        aplicarRotacionEuler(
-            piernaApoyo.cadera,
-            0.08 * intensidad,
-            0,
-            -0.025 * intensidad
-        );
-    }
-
-    if (piernaApoyo?.rodilla) {
-        aplicarRotacionEuler(
-            piernaApoyo.rodilla,
-            -0.08 * intensidad,
-            0,
-            0
-        );
-    }
-
-    // =====================================================
-    // BAJAR LA CADERA
-    // =====================================================
-
-    if (rig.cadera) {
-        const alturaBase = huesosBase.get(rig.cadera);
-
-        if (alturaBase) {
-            rig.cadera.position.y =
-                alturaBase.position.y -
-                0.16 * intensidad;
-        }
-    }
-
-    // =====================================================
-    // INCLINACIÓN DEL TORSO
-    // =====================================================
-
-    aplicarRotacionEuler(
-        rig.torso,
-        0.10 * acercarse +
-        0.28 * intensidad -
-        0.12 * productoArriba * acercarse,
-        -0.10 * acercarse,
-        -0.04 * acercarse
-    );
-
-    // =====================================================
-    // BRAZO LIBRE
-    // =====================================================
+    animarAgacharse(intensidadAgachado);
 
     const brazoLibre = obtenerRigBrazo(
-        ladoAgarre === 'derecho'
-            ? 'izquierdo'
-            : 'derecho'
+        ladoAgarre === 'derecho' ? 'izquierdo' : 'derecho'
     );
 
-    const signoLibre =
-        ladoAgarre === 'izquierdo' ? 1 : -1;
+    const signoLibre = ladoAgarre === 'izquierdo' ? 1 : -1;
 
+    // Brazo libre.
     aplicarRotacionEuler(
         brazoLibre.hombro,
         -0.12 - 0.22 * acercarse +
@@ -1435,10 +1343,18 @@ function animarRecogerProcedural() {
         -0.08 - contacto * 0.16
     );
 
-    // =====================================================
-    // CABEZA Y CUELLO
-    // =====================================================
+    // Torso: inclinarse hacia el producto.
+    // La flexión adicional se aplica solamente a productos bajos.
+    aplicarRotacionEuler(
+        rig.torso,
+        0.08 * acercarse +
+        0.16 * agachado * acercarse -
+        0.12 * productoArriba * acercarse,
+        -0.10 * acercarse,
+        -0.04 * acercarse
+    );
 
+    // Cabeza: mirar hacia el producto.
     aplicarRotacionEuler(
         rig.cabeza,
         0.14 + 0.12 * acercarse -
