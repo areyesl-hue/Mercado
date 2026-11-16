@@ -13,13 +13,13 @@ const CONFIG_DEFAULT = {
     posicion: { x: 0, y: 0, z: 0 },
     escala: 1,
 
-    distancia: 0.25,
-    desplazamientoLateral: 1.05,
-    desplazamientoLateralInspeccion: 1.25,
+    distancia: 0.20,
+    desplazamientoLateral: 1.00,
+    desplazamientoLateralInspeccion: 1.05,
 
     giroEstacionamiento: Math.PI,
-    suavizadoGiro: 5,
-    distanciaEstacionamiento: 1.25,
+    suavizadoGiro: 2.8,
+    distanciaEstacionamiento: 1.10,
 
     suavizado: 9,
     velocidadMaxima: 5,
