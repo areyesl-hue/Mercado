@@ -4626,58 +4626,119 @@ if (destino) {
                 producto.matrixWorld.clone().invert()
             )
             .normalize();
-// --------------------------------------------------
-// 5. UNIR EL PRODUCTO A LA MANO
-// --------------------------------------------------
 
-grupo.updateMatrixWorld(true);
-mano.updateMatrixWorld(true);
-producto.updateMatrixWorld(true);
+    // --------------------------------------------------
+    // 5. GUARDAR LA TRANSFORMACIÓN ORIGINAL
+    // --------------------------------------------------
 
-mano.attach(producto);
+    grupo.updateMatrixWorld(true);
+    mano.updateMatrixWorld(true);
+    producto.updateMatrixWorld(true);
 
-grupo.updateMatrixWorld(true);
-mano.updateMatrixWorld(true);
-producto.updateMatrixWorld(true);
+    const posicionMundoInicial = producto.getWorldPosition(
+        new THREE.Vector3()
+    );
 
-// --------------------------------------------------
-// 6. CONSERVAR LA TRANSFORMACIÓN DEL PRODUCTO
-// --------------------------------------------------
+    const quaternionMundoInicial = producto.getWorldQuaternion(
+        new THREE.Quaternion()
+    );
 
-const posicionFinal = producto.position.clone();
-const quaternionFinal = producto.quaternion.clone();
-const escalaFinal = producto.scale.clone();
+    const escalaMundoInicial = producto.getWorldScale(
+        new THREE.Vector3()
+    );
 
-// --------------------------------------------------
-// 7. CONFIGURAR ANIMACIÓN DE AGARRE
-// --------------------------------------------------
+    // --------------------------------------------------
+    // 6. UNIR EL PRODUCTO A LA MANO SIN TELETRANSPORTARLO
+    // --------------------------------------------------
 
-animacionAgarre.activa = true;
-animacionAgarre.tiempo = 0;
+    mano.attach(producto);
 
-animacionAgarre.duracion = Math.max(
-    numero(config.tiempoAnimacionAgarre, 0.38),
-    0.05
-);
+    grupo.updateMatrixWorld(true);
+    mano.updateMatrixWorld(true);
+    producto.updateMatrixWorld(true);
 
-animacionAgarre.posicionInicial.copy(posicionFinal);
-animacionAgarre.posicionFinal.copy(posicionFinal);
+    // --------------------------------------------------
+    // 7. CALCULAR EL AGARRE REAL EN LA PALMA
+    // --------------------------------------------------
 
-animacionAgarre.quaternionInicial.copy(quaternionFinal);
-animacionAgarre.quaternionFinal.copy(quaternionFinal);
+    // Punto de contacto del producto convertido
+    // a coordenadas locales de la mano.
+    const contactoMundo = ikAgarre.puntoContacto.clone();
 
-animacionAgarre.escalaInicial.copy(escalaFinal);
-animacionAgarre.escalaFinal.copy(escalaFinal);
+    const contactoEnMano = mano.worldToLocal(
+        contactoMundo.clone()
+    );
 
-animacionAgarre.puntoContactoLocal =
-    puntoContactoLocal.clone();
+    // Posición del centro de la palma.
+    const centroPalma = new THREE.Vector3();
 
-animacionAgarre.normalContactoLocal =
-    normalContactoLocal.clone();
+    mano.getWorldPosition(centroPalma);
 
-producto.visible = true;
-productoEnMano = producto;
-productoConCajaAgarre = null;
+    const centroPalmaLocal = mano.worldToLocal(
+        centroPalma.clone()
+    );
+
+    // Desplazamiento pequeño para que el producto
+    // quede sujeto y no suspendido frente a la mano.
+    const ajustePalma = new THREE.Vector3(
+        0,
+        0.025,
+        0.015
+    );
+
+    const posicionFinal = producto.position.clone();
+
+    posicionFinal.add(
+        centroPalmaLocal.clone()
+            .sub(contactoEnMano)
+            .add(ajustePalma)
+    );
+
+    // Conservar la orientación original del producto.
+    const quaternionFinal = producto.quaternion.clone();
+
+    const escalaFinal = producto.scale.clone();
+
+    // --------------------------------------------------
+    // 8. CONFIGURAR LA ANIMACIÓN DEL AGARRE
+    // --------------------------------------------------
+
+    animacionAgarre.activa = true;
+    animacionAgarre.tiempo = 0;
+
+    animacionAgarre.duracion = Math.max(
+        numero(config.tiempoAnimacionAgarre, 0.38),
+        0.05
+    );
+
+    animacionAgarre.posicionInicial.copy(
+        producto.position
+    );
+
+    animacionAgarre.posicionFinal.copy(
+        posicionFinal
+    );
+
+    animacionAgarre.quaternionInicial.copy(
+        producto.quaternion
+    );
+
+    animacionAgarre.quaternionFinal.copy(
+        quaternionFinal
+    );
+
+    animacionAgarre.escalaInicial.copy(
+        producto.scale
+    );
+
+    animacionAgarre.escalaFinal.copy(
+        escalaFinal
+    );
+
+    producto.visible = true;
+    productoEnMano = producto;
+    productoConCajaAgarre = null;
+
     // --------------------------------------------------
     // 8. PREPARAR POSE DE INSPECCIÓN
     // --------------------------------------------------
