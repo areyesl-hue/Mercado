@@ -58,17 +58,17 @@ const CONFIG_BASE = {
 
     distanciaProducto: 0.20,
     distanciaFrenteProducto: 0.45,
-    distanciaContactoMano: 0.9,
+    distanciaContactoMano: 0.05,
 
-    tiempoRecoger: 1.1,
-    progresoContactoProducto: 0.78,
+    tiempoRecoger: 1.5,
+    progresoContactoProducto: 0.85,
     tiempoInspeccionar: 2.5,
     tiempoGuardar: 1.4,
     tiempoDevolver: 1.4,
     tiempoPago: 3.0,
     tiempoEntreProductos: 0.8,
     tiempoReintento: 1.5,
-
+toleranciaAgarre: 0.14,
     tiempoAnimacionAgarre: 0.38,
     escalaProductoMano: 0.65,
 
@@ -1620,6 +1620,10 @@ function ajustarBrazoAlProducto(
         return false;
     }
 
+    // --------------------------------------------------
+    // 1. ACTUALIZAR MATRICES
+    // --------------------------------------------------
+
     grupo.updateMatrixWorld(true);
     mano.updateWorldMatrix(true, false);
     producto.updateMatrixWorld(true);
@@ -1638,11 +1642,12 @@ function ajustarBrazoAlProducto(
         ikAgarre.centroProducto
     );
 
-    const puntoManual = producto.userData?.puntoAgarreLocal;
+    // --------------------------------------------------
+    // 2. CALCULAR PUNTO DE CONTACTO
+    // --------------------------------------------------
 
-    // --------------------------------------------------
-    // 1. CALCULAR PUNTO DE CONTACTO
-    // --------------------------------------------------
+    const puntoManual =
+        producto.userData?.puntoAgarreLocal;
 
     if (
         puntoManual &&
@@ -1656,7 +1661,9 @@ function ajustarBrazoAlProducto(
             puntoManual.z
         );
 
-        producto.localToWorld(ikAgarre.puntoContacto);
+        producto.localToWorld(
+            ikAgarre.puntoContacto
+        );
     } else {
         const caja = cajaAgarreProducto;
 
@@ -1706,7 +1713,7 @@ function ajustarBrazoAlProducto(
     }
 
     // --------------------------------------------------
-    // 2. CALCULAR NORMAL DE CONTACTO
+    // 3. NORMAL DE CONTACTO
     // --------------------------------------------------
 
     const normalManual =
@@ -1752,7 +1759,7 @@ function ajustarBrazoAlProducto(
     ikAgarre.normalContacto.normalize();
 
     // --------------------------------------------------
-    // 3. OFFSET REAL DE LA PALMA
+    // 4. OFFSET DE LA PALMA
     // --------------------------------------------------
 
     ikAgarre.offsetPalmaLocal.copy(
@@ -1786,15 +1793,16 @@ function ajustarBrazoAlProducto(
         .sub(ikAgarre.muneca);
 
     // --------------------------------------------------
-    // 4. OBJETIVO DE CONTACTO
+    // 5. OBJETIVO DE CONTACTO
     // --------------------------------------------------
 
-    const distanciaContacto = Math.max(
-        0,
+    const distanciaContacto = limitar(
         numero(
             producto.userData?.distanciaContactoMano,
-            numero(config.distanciaContactoMano, 0)
-        )
+            numero(config.distanciaContactoMano, 0.03)
+        ),
+        0,
+        0.12
     );
 
     if (objetivoPalmaMundo) {
@@ -1811,7 +1819,7 @@ function ajustarBrazoAlProducto(
     }
 
     // --------------------------------------------------
-    // 5. PROGRESO DE EXTENSIÓN DEL BRAZO
+    // 6. PROGRESO DE EXTENSIÓN
     // --------------------------------------------------
 
     const progreso = limitar(
@@ -1825,7 +1833,10 @@ function ajustarBrazoAlProducto(
     );
 
     const progresoExtension = limitar(
-        numero(config.progresoContactoProducto, 0.78),
+        numero(
+            config.progresoContactoProducto,
+            0.78
+        ),
         0.55,
         0.95
     );
@@ -1847,23 +1858,26 @@ function ajustarBrazoAlProducto(
     }
 
     // --------------------------------------------------
-    // 6. RESOLVER POSICIÓN DEL BRAZO
+    // 7. CALCULAR OBJETIVO DE LA MUÑECA
     // --------------------------------------------------
 
-    ikAgarre.objetivo
+    const objetivoMuneca = new THREE.Vector3()
         .copy(ikAgarre.objetivoContacto)
         .sub(ikAgarre.offsetPalmaMundo);
 
-    ikAgarre.objetivo
-        .multiplyScalar(pesoIK)
-        .addScaledVector(
-            ikAgarre.muneca,
-            1 - pesoIK
-        );
+    // Interpolar desde la posición actual hasta el producto.
+    objetivoMuneca.lerp(
+        ikAgarre.muneca,
+        1 - pesoIK
+    );
+
+    // --------------------------------------------------
+    // 8. RESOLVER IK SIN RECURSIVIDAD
+    // --------------------------------------------------
 
     const agarreResuelto = resolverIKBrazo(
         brazo,
-        ikAgarre.objetivo
+        objetivoMuneca
     );
 
     if (!agarreResuelto) {
@@ -1871,29 +1885,15 @@ function ajustarBrazoAlProducto(
     }
 
     // --------------------------------------------------
-    // 7. SEGUNDA PASADA PARA ACTUALIZAR LA MANO
-    // --------------------------------------------------
-
-    if (correccion === 0) {
-        grupo.updateMatrixWorld(true);
-        mano.updateMatrixWorld(true);
-
-        return ajustarBrazoAlProducto(
-            producto,
-            1,
-            objetivoPalmaMundo,
-            progresoIK
-        );
-    }
-
-    // --------------------------------------------------
-    // 8. COMPROBAR CONTACTO REAL DE LA PALMA
+    // 9. ACTUALIZAR POSICIÓN REAL DE LA MANO
     // --------------------------------------------------
 
     grupo.updateMatrixWorld(true);
-    mano.updateMatrixWorld(true);
+    mano.updateWorldMatrix(true, false);
 
-    mano.getWorldPosition(ikAgarre.muneca);
+    mano.getWorldPosition(
+        ikAgarre.muneca
+    );
 
     ikAgarre.offsetPalmaMundo
         .copy(ikAgarre.offsetPalmaLocal)
@@ -1903,6 +1903,10 @@ function ajustarBrazoAlProducto(
     const posicionPalma = ikAgarre.muneca
         .clone()
         .add(ikAgarre.offsetPalmaMundo);
+
+    // --------------------------------------------------
+    // 10. COMPROBAR CONTACTO
+    // --------------------------------------------------
 
     const errorContacto = posicionPalma.distanceTo(
         ikAgarre.objetivoContacto
@@ -1916,7 +1920,6 @@ function ajustarBrazoAlProducto(
 
     return errorContacto <= toleranciaContacto;
 }
-
 
     function animarInspeccionarProcedural() {
         const entrada = suavizar(Math.min(tiempoEstado / 0.55, 1));
