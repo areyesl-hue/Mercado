@@ -1,4 +1,3 @@
-
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -21,7 +20,7 @@ export function crearProductosLacteos(scene) {
     scene.add(productos);
 
     // ========================================================
-    // Precios configurados en este catálogo.
+    // PRECIOS
     // ========================================================
 
     const PRECIOS = {
@@ -253,6 +252,7 @@ export function crearProductosLacteos(scene) {
                     .clone()
                     .applyMatrix4(grupo.matrices[indice]);
             });
+
             const geometriaCombinada = mergeGeometries(
                 geometrias,
                 false
@@ -469,6 +469,7 @@ export function crearProductosLacteos(scene) {
 
         const dimensionMaximaEstandar =
             categoria === 'Ropa' ? 0.52 : 0.32;
+
         const escala = dimensionMaximaEstandar / Math.max(
             dimensionesRotadas.x,
             dimensionesRotadas.y,
@@ -579,25 +580,13 @@ export function crearProductosLacteos(scene) {
     // 15 unidades en Mesa_frescos_02
     // ========================================================
 
+    // Distribución uniforme: 5 columnas x 3 filas.
+    // Los centros quedan cerca de los cuatro bordes sin sobresalir.
+
     const posicionesPlatanos = [
-        [-0.75, -0.55],
-        [-0.25, -0.55],
-        [ 0.25, -0.55],
-        [ 0.75, -0.55],
-
-        [-0.75, -0.15],
-        [-0.25, -0.15],
-        [ 0.25, -0.15],
-        [ 0.75, -0.15],
-
-        [-0.75,  0.25],
-        [-0.25,  0.25],
-        [ 0.25,  0.25],
-        [ 0.75,  0.25],
-
-        [-0.50,  0.55],
-        [ 0.00,  0.55],
-        [ 0.50,  0.55]
+        [-1.15, -0.48], [-0.575, -0.48], [0.00, -0.48], [0.575, -0.48], [1.15, -0.48],
+        [-1.15,  0.00], [-0.575,  0.00], [0.00,  0.00], [0.575,  0.00], [1.15,  0.00],
+        [-1.15,  0.48], [-0.575,  0.48], [0.00,  0.48], [0.575,  0.48], [1.15,  0.48]
     ];
 
     const MESA_PLATANOS = {
@@ -653,8 +642,10 @@ export function crearProductosLacteos(scene) {
         [9, -13], [9, 0], [9, 13],
         [17, -13], [17, 0]
     ];
+
     const nivelesGondola = [0.4625, 0.8925, 1.3225, 1.7525];
     const offsetsZGondola = [-2.15, -1.075, 0, 1.075, 2.15];
+
     let siguienteFilaGondola = 0;
 
     function obtenerFilaGondola() {
@@ -682,18 +673,24 @@ export function crearProductosLacteos(scene) {
         { x: -25.5, z: 10.8, rack: 'Mesa_frescos_03' },
         { x: -21.7, z: 10.8, rack: 'Mesa_frescos_04' }
     ];
+
+    // 12 posiciones por mesa: 4 columnas x 3 filas.
+    // Los productos quedan repartidos por toda la cubierta, incluidos
+    // los extremos, con espacio para que no sobresalgan.
+
     const offsetsMesaFrutas = [
-        [-1.0, -0.55], [-0.6, -0.55], [-0.2, -0.55],
-        [0.2, -0.55], [0.6, -0.55], [1.0, -0.55],
-        [-1.0, 0.55], [-0.6, 0.55], [-0.2, 0.55],
-        [0.2, 0.55], [0.6, 0.55], [1.0, 0.55]
+        [-1.20, -0.48], [-0.40, -0.48], [0.40, -0.48], [1.20, -0.48],
+        [-1.20,  0.00], [-0.40,  0.00], [0.40,  0.00], [1.20,  0.00],
+        [-1.20,  0.48], [-0.40,  0.48], [0.40,  0.48], [1.20,  0.48]
     ];
+
     const usoMesasFrutas = new Map();
 
     function obtenerPosicionesMesa(indiceMesa) {
         const mesa = mesasFrutas[indiceMesa];
         const inicio = usoMesasFrutas.get(indiceMesa) ?? 0;
         const posiciones = offsetsMesaFrutas.slice(inicio, inicio + 4);
+
         usoMesasFrutas.set(indiceMesa, inicio + posiciones.length);
 
         return {
@@ -725,12 +722,14 @@ export function crearProductosLacteos(scene) {
 
     const nivelesHigiene = [0.4575, 0.8075, 1.1575, 1.5075, 1.8575];
     const offsetsXHigiene = [-0.95, -0.35, 0.35, 0.95];
+
     let siguienteProductoHigiene = 0;
 
     function obtenerPosicionesHigiene() {
         const indice = siguienteProductoHigiene++;
         const nivel = Math.floor(indice / 2);
         const mitad = indice % 2;
+
         const offsets = mitad === 0
             ? offsetsXHigiene.slice(0, 2)
             : offsetsXHigiene.slice(2, 4);
@@ -744,6 +743,10 @@ export function crearProductosLacteos(scene) {
             }))
         };
     }
+
+    // ========================================================
+    // CATÁLOGO DE PRODUCTOS
+    // ========================================================
 
     const catalogoProductosAdicionales = [
         { archivo: '/modelos/Aceite.glb', nombre: 'Aceite', categoria: 'Abarrotes', tipo: 'gondola', alto: 0.36, ancho: 0.26, profundidad: 0.26 },
@@ -862,19 +865,24 @@ export function crearProductosLacteos(scene) {
             { x: -25.7, z: 2, rack: 'Perchero_ropa_02' },
             { x: -25.7, z: 8, rack: 'Perchero_ropa_03' }
         ];
+
         const indice = siguientePerchero++;
         const indicePerchero = indice < 2 ? 0 : indice < 4 ? 1 : 2;
+
         const articuloEnPerchero = indicePerchero === 0
             ? indice
             : indicePerchero === 1
                 ? indice - 2
                 : indice - 4;
+
         const percha = percheros[indicePerchero];
+
         const offsetsPorPerchero = [
             [[-0.9, -0.3], [0.3, 0.9]],
             [[-0.9, -0.3], [0.3, 0.9]],
             [[-1.1, -0.66], [-0.22, 0.22], [0.66, 1.1]]
         ];
+
         const offsets = offsetsPorPerchero[indicePerchero][articuloEnPerchero];
 
         return {
@@ -887,8 +895,13 @@ export function crearProductosLacteos(scene) {
         };
     }
 
+    // ========================================================
+    // COLOCAR PRODUCTOS
+    // ========================================================
+
     function colocarCatalogoProductos(catalogo) {
         const ubicacion = obtenerUbicacion(catalogo);
+
         const clave = catalogo.archivo
             .split('/')
             .pop()
@@ -911,6 +924,7 @@ export function crearProductosLacteos(scene) {
 
                 ubicacion.posiciones.forEach((posicion, indice) => {
                     const fuente = fuentes[indice % fuentes.length];
+
                     crearCopia(
                         fuente,
                         `${clave}_${indice + 1}`,
@@ -976,6 +990,7 @@ export function crearProductosLacteos(scene) {
 
     // Buscar productos por código de catálogo.
     // Ejemplo: obtenerPorCodigo('PLATANO')
+
     productos.userData.obtenerPorCodigo = (codigo) => {
         return unidades.filter((objeto) => {
             return objeto.userData.codigoCatalogo === codigo;
@@ -983,6 +998,7 @@ export function crearProductosLacteos(scene) {
     };
 
     // Obtener plátanos que todavía pueden recogerse.
+
     productos.userData.obtenerPlatanosDisponibles = () => {
         return unidades.filter((objeto) => {
             const datos = objeto.userData;
