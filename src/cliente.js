@@ -1215,33 +1215,39 @@ function seleccionarBrazoAgarre(producto) {
 
     
     
-    
+
 function animarAgacharse(intensidad = 1) {
     intensidad = limitar(intensidad, 0, 1);
 
-    const curva = suavizar(intensidad);
+    // Curva suave para evitar movimientos bruscos.
+    const t = suavizar(intensidad);
+    const t2 = t * t;
 
-    // Sentadilla progresiva.
-    const flexionMuslos = 0.48 * curva;
-    const flexionRodillas = 0.62 * curva;
+    // Flexión de cadera y torso.
+    const flexionCadera = 0.20 * t;
+    const inclinacionTorso = -0.16 * t;
 
-    // Cadera: ligera inclinación hacia delante.
+    // Flexión progresiva de ambas piernas.
+    const flexionMuslos = 0.42 * t;
+    const flexionRodillas = 0.58 * t;
+
+    // Cadera.
     aplicarRotacionEuler(
         rig.cadera,
-        0.16 * curva,
+        flexionCadera,
         0,
         0
     );
 
-    // Torso: compensa el movimiento de las piernas.
+    // Torso: compensa la inclinación de la cadera.
     aplicarRotacionEuler(
         rig.torso,
-        -0.20 * curva,
+        inclinacionTorso,
         0,
         0
     );
 
-    // Muslos: flexión hacia delante.
+    // Muslos: flexión moderada y simétrica.
     aplicarRotacionEuler(
         rig.piernaIzquierda,
         flexionMuslos,
@@ -1256,23 +1262,22 @@ function animarAgacharse(intensidad = 1) {
         0
     );
 
-    // Rodillas: flexión de las pantorrillas.
-    aplicarRotacion(
+    // Rodillas: flexión para formar una sentadilla.
+    aplicarRotacionEuler(
         rig.pantorrillaIzquierda,
-        EJE_X,
-        flexionRodillas
+        flexionRodillas,
+        0,
+        0
     );
 
-    aplicarRotacion(
+    aplicarRotacionEuler(
         rig.pantorrillaDerecha,
-        EJE_X,
-        flexionRodillas
+        flexionRodillas,
+        0,
+        0
     );
-
-    // Bajar el cuerpo sin hundirlo demasiado.
-    grupo.position.y =
-        numero(config.posicion.y) - 0.13 * curva;
 }
+
     
 function animarRecogerProcedural() {
     const progreso = limitar(
