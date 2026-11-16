@@ -17,7 +17,6 @@ const CONFIG_DEFAULT = {
     desplazamientoLateral: 1.05,
     desplazamientoLateralInspeccion: 1.25,
 
-    // Maniobra de estacionamiento.
     giroEstacionamiento: Math.PI,
     suavizadoGiro: 5,
     distanciaEstacionamiento: 1.25,
@@ -99,7 +98,6 @@ export function crearCarrito(scene, opciones = {}) {
         desplazamientoLateral: 0,
         modoLateral: false,
 
-        // Estado de la maniobra de estacionamiento.
         ladoEstacionamiento: 0,
 
         productos: [],
@@ -107,7 +105,7 @@ export function crearCarrito(scene, opciones = {}) {
     };
 
     // ========================================================
-    // VECTORES Y QUATERNIONS REUTILIZABLES
+    // VECTORES Y QUATERNIONS
     // ========================================================
 
     const posicionObjetivo = new THREE.Vector3();
@@ -123,11 +121,9 @@ export function crearCarrito(scene, opciones = {}) {
     const quaternionDeseado = new THREE.Quaternion();
     const quaternionLocalDeseado = new THREE.Quaternion();
 
-    // Orientación fija que debe alcanzar el carrito.
     const quaternionEstacionamiento = new THREE.Quaternion();
     const quaternionGiroEstacionamiento = new THREE.Quaternion();
 
-    const eulerCarrito = new THREE.Euler();
     const ejeVertical = new THREE.Vector3(0, 1, 0);
 
     // ========================================================
@@ -745,7 +741,7 @@ export function crearCarrito(scene, opciones = {}) {
             return false;
         }
 
-        const eraLateral = estado.modoLateral;
+        const estabaEnModoLateral = estado.modoLateral;
 
         estado.objetivo = objetivoReal;
 
@@ -766,11 +762,10 @@ export function crearCarrito(scene, opciones = {}) {
 
         estado.siguiendo = true;
 
-        // ====================================================
-        // INICIO DEL ESTACIONAMIENTO
-        // ====================================================
+        // Iniciar la maniobra solamente al entrar
+        // al estacionamiento lateral.
 
-        if (estado.modoLateral && !eraLateral) {
+        if (estado.modoLateral && !estabaEnModoLateral) {
             grupo.updateWorldMatrix(true, false);
             grupo.getWorldQuaternion(quaternionMundo);
 
@@ -780,39 +775,35 @@ export function crearCarrito(scene, opciones = {}) {
 
             estado.ladoEstacionamiento = signo;
 
-            // Giro de 180 grados alrededor del eje vertical mundial.
             quaternionGiroEstacionamiento.setFromAxisAngle(
                 ejeVertical,
-                Math.PI * signo
+                config.giroEstacionamiento
             );
 
-            // Guardar una orientación final fija.
             quaternionEstacionamiento
                 .copy(quaternionGiroEstacionamiento)
                 .multiply(quaternionMundo)
                 .normalize();
 
-            console.log('[GIRO 180 CARRITO INICIADO]', {
+            console.log('[ESTACIONAMIENTO INICIADO]', {
                 lado: signo,
-                giroGrados: 180,
-                orientacionInicial: quaternionMundo.toArray(),
-                orientacionObjetivo: quaternionEstacionamiento.toArray()
+                giro: THREE.MathUtils.radToDeg(
+                    config.giroEstacionamiento
+                ),
+                posicionInicial: grupo.position.toArray()
             });
         }
 
-        // ====================================================
-        // REGRESAR A SEGUIMIENTO NORMAL
-        // ====================================================
+        // Regresar al modo normal.
 
         if (!estado.modoLateral) {
             estado.ladoEstacionamiento = 0;
         }
 
-        console.log('[DIAGNÓSTICO CARRITO]', {
-            distancia: estado.distancia,
-            desplazamientoLateral: estado.desplazamientoLateral,
-            modoLateral: estado.modoLateral,
-            giroGrados: estado.modoLateral ? 180 : 0
+        console.log('[SEGUIMIENTO CARRITO]', {
+            estadoLateral: estado.modoLateral,
+            desplazamiento: estado.desplazamientoLateral,
+            distancia: estado.distancia
         });
 
         return true;
@@ -889,7 +880,7 @@ export function crearCarrito(scene, opciones = {}) {
     }
 
     // ========================================================
-    // ACTUALIZAR POSICIÓN Y ROTACIÓN DEL CARRITO
+    // ACTUALIZAR POSICIÓN Y ROTACIÓN
     // ========================================================
 
     function actualizar(delta) {
@@ -912,9 +903,7 @@ export function crearCarrito(scene, opciones = {}) {
         objetivo.getWorldPosition(posicionObjetivo);
         objetivo.getWorldQuaternion(quaternionObjetivo);
 
-        // ====================================================
-        // DIRECCIÓN FRONTAL DEL CLIENTE
-        // ====================================================
+        // Dirección frontal del cliente.
 
         direccion
             .set(0, 0, 1)
@@ -928,9 +917,7 @@ export function crearCarrito(scene, opciones = {}) {
 
         direccion.normalize();
 
-        // ====================================================
-        // LATERAL DEL CLIENTE
-        // ====================================================
+        // Lateral del cliente.
 
         lateral.set(
             direccion.z,
@@ -941,7 +928,7 @@ export function crearCarrito(scene, opciones = {}) {
         posicionDeseada.copy(posicionObjetivo);
 
         // ====================================================
-        // POSICIÓN LATERAL DURANTE LA RECOGIDA
+        // POSICIÓN LATERAL
         // ====================================================
 
         if (estado.modoLateral) {
@@ -951,8 +938,9 @@ export function crearCarrito(scene, opciones = {}) {
                 config.desplazamientoLateralInspeccion
             );
 
-            const signo =
-                Math.sign(estado.desplazamientoLateral) || 1;
+            const signo = Math.sign(
+                estado.desplazamientoLateral
+            ) || 1;
 
             posicionDeseada.addScaledVector(
                 lateral,
@@ -960,40 +948,29 @@ export function crearCarrito(scene, opciones = {}) {
             );
 
         } else {
-
-            // =================================================
-            // SEGUIMIENTO NORMAL
-            // =================================================
+            // Seguimiento normal.
 
             posicionDeseada.addScaledVector(
                 direccion,
                 estado.distancia * config.ladoDelante
             );
 
-            if (
-                Math.abs(estado.desplazamientoLateral) > 0.001
-            ) {
-                posicionDeseada.addScaledVector(
-                    lateral,
-                    estado.desplazamientoLateral
-                );
-            }
+            posicionDeseada.addScaledVector(
+                lateral,
+                estado.desplazamientoLateral
+            );
         }
 
         posicionDeseada.y = config.posicion.y;
 
-        // ====================================================
-        // CONVERTIR POSICIÓN MUNDIAL A LOCAL
-        // ====================================================
+        // Convertir posición mundial a local.
 
         if (grupo.parent) {
             grupo.parent.updateWorldMatrix(true, false);
             grupo.parent.worldToLocal(posicionDeseada);
         }
 
-        // ====================================================
-        // MOVIMIENTO SUAVIZADO
-        // ====================================================
+        // Movimiento suavizado.
 
         const factorMovimiento = 1 - Math.exp(
             -Math.max(0.1, config.suavizado) * dt
@@ -1005,22 +982,17 @@ export function crearCarrito(scene, opciones = {}) {
         );
 
         // ====================================================
-        // GIRO PROGRESIVO DE 180 GRADOS
+        // GIRO PROGRESIVO DE ESTACIONAMIENTO
         // ====================================================
 
         if (estado.modoLateral) {
-
             grupo.updateWorldMatrix(true, false);
-
-            // Orientación mundial actual.
             grupo.getWorldQuaternion(quaternionMundo);
 
-            // Suavizado de la rotación.
             const factorGiro = 1 - Math.exp(
                 -Math.max(0.1, config.suavizadoGiro) * dt
             );
 
-            // Interpolar hacia la orientación final fija.
             quaternionDeseado
                 .copy(quaternionMundo)
                 .slerp(
@@ -1035,10 +1007,7 @@ export function crearCarrito(scene, opciones = {}) {
             );
 
         } else {
-
-            // =================================================
-            // ORIENTACIÓN NORMAL HACIA EL CLIENTE
-            // =================================================
+            // Orientación normal hacia el cliente.
 
             grupo.updateWorldMatrix(true, false);
             grupo.getWorldPosition(posicionCarritoMundial);
